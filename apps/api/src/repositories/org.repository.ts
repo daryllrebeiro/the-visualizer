@@ -57,5 +57,20 @@ export class OrgRepository {
       .where(and(eq(memberships.userId, userId), eq(memberships.orgId, orgId)));
     return membership;
   }
+
+  public async getUserOrgs(userId: string) {
+    return db
+      .select({
+        id: organizations.id,
+        slug: organizations.slug,
+        name: organizations.name,
+        createdAt: organizations.createdAt,
+        updatedAt: organizations.updatedAt,
+        role: memberships.role,
+      })
+      .from(memberships)
+      .innerJoin(organizations, eq(memberships.orgId, organizations.id))
+      .where(eq(memberships.userId, userId));
+  }
 }
 export const orgRepository = new OrgRepository();

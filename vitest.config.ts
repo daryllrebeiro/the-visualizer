@@ -31,10 +31,10 @@ export default defineConfig({
       },
     },
     // Run tests in worker threads for isolation
-    pool: 'threads',
+    pool: 'forks',
     poolOptions: {
-      threads: {
-        singleThread: false,
+      forks: {
+        singleFork: true,
       },
     },
     reporter: process.env['CI'] ? 'verbose' : 'default',

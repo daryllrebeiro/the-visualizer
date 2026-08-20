@@ -22,12 +22,13 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@the-visualizer/config": "workspace:*",
-    "@the-visualizer/contracts": "workspace:*",
-    "@the-visualizer/logging": "workspace:*",
+    "@hono/zod-validator": "^0.9.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.54.0",
     "@opentelemetry/sdk-node": "^0.57.1",
+    "@the-visualizer/config": "workspace:*",
+    "@the-visualizer/contracts": "workspace:*",
+    "@the-visualizer/logging": "workspace:*",
     "drizzle-orm": "^0.38.3",
     "hono": "^4.6.17",
     "ioredis": "^5.4.1",
