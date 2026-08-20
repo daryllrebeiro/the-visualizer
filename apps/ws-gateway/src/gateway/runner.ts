@@ -14,6 +14,7 @@ export interface RoomSession {
   tickCount: number;
   timer: NodeJS.Timeout | null;
   isHalted: boolean;
+  isPaused?: boolean;
 }
 
 export class SimulationRunner {
@@ -73,6 +74,7 @@ export class SimulationRunner {
       tickCount: 0,
       timer: null,
       isHalted: false,
+      isPaused: false,
     };
 
     this.activeSessions.set(roomId, session);
@@ -87,7 +89,7 @@ export class SimulationRunner {
    * Drains client intents from Redis queue, steps simulation timeline, and broadcasts diffs.
    */
   private async executeTick(session: RoomSession): Promise<void> {
-    if (session.isHalted) return;
+    if (session.isHalted || session.isPaused) return;
 
     try {
       const { roomId, engine } = session;
@@ -105,12 +107,68 @@ export class SimulationRunner {
         try {
           const intent = JSON.parse(raw) as Record<string, any>;
           if (typeof intent.type === 'string' && intent.payload) {
-            engine.scheduleEvent(
-              engine.currentTick,
-              Math.random().toString(36).substring(7),
-              intent.type as any,
-              intent.payload as Record<string, unknown>,
-            );
+            let normalizedType = intent.type;
+            if (!normalizedType.startsWith('INTENT_')) {
+              normalizedType = `INTENT_${normalizedType}`;
+            }
+
+            // Map client intent to engine event type
+            let engineEventType: string | null = null;
+            let engineEventPayload = intent.payload;
+
+            if (normalizedType === 'INTENT_PRODUCE') {
+              engineEventType = 'RECORD_PRODUCED';
+            } else if (normalizedType === 'INTENT_CONSUMER_JOIN') {
+              engineEventType = 'CONSUMER_JOINED';
+            } else if (normalizedType === 'INTENT_CONSUMER_LEAVE') {
+              engineEventType = 'CONSUMER_LEFT';
+            } else if (normalizedType === 'INTENT_CHAOS_KILL_BROKER') {
+              engineEventType = 'BROKER_STATUS_CHANGED';
+              engineEventPayload = {
+                brokerId: intent.payload.brokerId,
+                status: 'CRASHED',
+              };
+            } else if (normalizedType === 'INTENT_CHAOS_RECOVER_BROKER') {
+              engineEventType = 'BROKER_STATUS_CHANGED';
+              engineEventPayload = {
+                brokerId: intent.payload.brokerId,
+                status: 'ALIVE',
+              };
+            } else if (normalizedType === 'INTENT_SIM_CONTROL') {
+              const action = intent.payload.action;
+              if (action === 'PLAY') {
+                session.isPaused = false;
+              } else if (action === 'PAUSE') {
+                session.isPaused = true;
+              }
+              // Ack control intents immediately
+              await roomManager.publishRoomUpdate(roomId, {
+                type: 'INTENT_ACK',
+                payload: {
+                  intentId: intent.id,
+                  status: 'ACCEPTED',
+                },
+              });
+              continue;
+            }
+
+            if (engineEventType) {
+              engine.scheduleEvent(
+                engine.currentTick,
+                intent.id || Math.random().toString(36).substring(7),
+                engineEventType as any,
+                engineEventPayload as Record<string, unknown>,
+              );
+
+              // Broadcast intent acknowledgement
+              await roomManager.publishRoomUpdate(roomId, {
+                type: 'INTENT_ACK',
+                payload: {
+                  intentId: intent.id || '',
+                  status: 'ACCEPTED',
+                },
+              });
+            }
           }
         } catch {
           // Ignore bad intent parsing
@@ -125,6 +183,33 @@ export class SimulationRunner {
       // 3. Step the engine forward by 1 tick
       engine.step(1);
       session.tickCount++;
+
+      // Guard: Halt session if tick count exceeds hard ceiling (100,000 ticks)
+      if (session.tickCount >= 100_000) {
+        await this.haltSession(
+          roomId,
+          'Maximum simulation tick bounds exceeded (100,000 ticks ceiling).',
+        );
+        return;
+      }
+
+      // Guard: Check heap memory usage to prevent OOM
+      const heapUsedMb = process.memoryUsage().heapUsed / 1024 / 1024;
+      if (heapUsedMb > 128) {
+        logger.warn(
+          { roomId, heapUsedMb },
+          'Simulation session memory threshold exceeded. Purging historical checkpoints.',
+        );
+        engine.clearHistory();
+
+        if (heapUsedMb > 256) {
+          await this.haltSession(
+            roomId,
+            `Worker memory usage critical (${heapUsedMb.toFixed(1)}MB). Halted to prevent crash.`,
+          );
+          return;
+        }
+      }
 
       // 4. Compute delta patch
       const currentState = engine.state;

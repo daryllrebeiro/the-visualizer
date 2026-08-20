@@ -1,9 +1,10 @@
+import * as crypto from 'crypto';
 import type * as http from 'http';
 import { pack, unpack } from 'msgpackr';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 
-import type { KafkaClusterState } from '@the-visualizer/contracts';
+import { ClientIntentSchema, type KafkaClusterState } from '@the-visualizer/contracts';
 
 import { authenticateConnection } from './auth.js';
 import { roomManager } from './room-manager.js';
@@ -13,6 +14,51 @@ import { sequenceReconciler } from './sequence-reconciler.js';
 interface ExtendedWebSocket extends WebSocket {
   isAlive: boolean;
   userId?: string;
+  rateLimitBucket?: {
+    tokens: number;
+    lastRefill: number;
+  };
+  hardLimitBucket?: {
+    tokens: number;
+    lastRefill: number;
+  };
+}
+
+function checkConnectionRateLimit(ws: ExtendedWebSocket): { allowed: boolean; terminate: boolean } {
+  const now = Date.now();
+
+  // 1. Hard system limit (250 msgs/s)
+  if (!ws.hardLimitBucket) {
+    ws.hardLimitBucket = { tokens: 250, lastRefill: now };
+  }
+  const hard = ws.hardLimitBucket;
+  const hardElapsed = now - hard.lastRefill;
+  if (hardElapsed > 0) {
+    hard.tokens = Math.min(250, hard.tokens + hardElapsed * 0.25);
+    hard.lastRefill = now;
+  }
+  if (hard.tokens >= 1) {
+    hard.tokens -= 1;
+  } else {
+    return { allowed: false, terminate: true };
+  }
+
+  // 2. Normal free tier limit (20 msgs/s)
+  if (!ws.rateLimitBucket) {
+    ws.rateLimitBucket = { tokens: 20, lastRefill: now };
+  }
+  const free = ws.rateLimitBucket;
+  const freeElapsed = now - free.lastRefill;
+  if (freeElapsed > 0) {
+    free.tokens = Math.min(20, free.tokens + freeElapsed * 0.02);
+    free.lastRefill = now;
+  }
+  if (free.tokens >= 1) {
+    free.tokens -= 1;
+    return { allowed: true, terminate: false };
+  }
+
+  return { allowed: false, terminate: false };
 }
 
 const DEFAULT_TOPOLOGY: KafkaClusterState = {
@@ -73,7 +119,17 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
       const user = await authenticateConnection(url, cookies);
       if (!user) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.write(
+          'HTTP/1.1 401 Unauthorized\r\n' +
+            'Connection: close\r\n' +
+            'Content-Type: text/plain\r\n' +
+            'X-Frame-Options: DENY\r\n' +
+            'X-Content-Type-Options: nosniff\r\n' +
+            'Referrer-Policy: no-referrer\r\n' +
+            'Strict-Transport-Security: max-age=31536000; includeSubDomains; preload\r\n' +
+            '\r\n' +
+            'Unauthorized',
+        );
         socket.destroy();
         return;
       }
@@ -96,6 +152,37 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
     ws.on('message', (data: Buffer, isBinary: boolean) => {
       void (async () => {
+        // Apply WebSocket message ingress rate-limiting
+        const { allowed, terminate } = checkConnectionRateLimit(ws);
+        if (terminate) {
+          ws.send(
+            pack({
+              type: 'SESSION_ERROR',
+              payload: {
+                code: 'RATE_LIMIT_EXCEEDED',
+                message: 'Hard system message rate limit exceeded. Connection terminated.',
+                fatal: true,
+              },
+            }),
+          );
+          ws.terminate();
+          return;
+        }
+
+        if (!allowed) {
+          ws.send(
+            pack({
+              type: 'SESSION_ERROR',
+              payload: {
+                code: 'RATE_LIMIT_EXCEEDED',
+                message: 'Free tier message rate limit exceeded (20 msgs/sec). Dropping message.',
+                fatal: false,
+              },
+            }),
+          );
+          return;
+        }
+
         try {
           const message = (isBinary ? unpack(data) : JSON.parse(data.toString())) as Record<
             string,
@@ -182,11 +269,40 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             return;
           }
 
-          // C. Publish standard ClientIntents to Redis streams for processing by session workers
+          // C. Normalize and validate other client intents using ClientIntentSchema
+          let normalizedType = type;
+          if (!type.startsWith('INTENT_')) {
+            normalizedType = `INTENT_${type}`;
+          }
+
+          const intentId = (payload?.id as string) || crypto.randomUUID();
+          const flattenedIntent = {
+            id: intentId,
+            type: normalizedType,
+            ...(typeof payload === 'object' && payload !== null ? payload : {}),
+          };
+
+          const parseResult = ClientIntentSchema.safeParse(flattenedIntent);
+          if (!parseResult.success) {
+            ws.send(
+              pack({
+                type: 'MSG_INTENT_ACK',
+                payload: {
+                  intentId,
+                  status: 'REJECTED',
+                  reason: `Invalid intent structure: ${parseResult.error.errors[0]?.message || 'unknown error'}`,
+                },
+              }),
+            );
+            return;
+          }
+
+          // Publish normalized and validated ClientIntents to Redis streams for processing by session workers
           await roomManager.publishIntent(roomId, {
             userId: ws.userId,
-            type,
-            payload,
+            id: intentId,
+            type: normalizedType,
+            payload: parseResult.data,
           });
         } catch {
           // Failed to parse frame payload

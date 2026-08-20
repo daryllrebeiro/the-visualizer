@@ -66,129 +66,171 @@ topologyRouter.post(
 );
 
 // 2. Get unlisted topology by Share Token (requires no auth)
-topologyRouter.get('/share/:token', async (c) => {
-  const token = c.req.param('token');
-  const topology = await topologyRepository.getTopologyByShareToken(token);
+topologyRouter.get(
+  '/share/:token',
+  zValidator(
+    'param',
+    z.object({
+      token: z
+        .string()
+        .length(32)
+        .regex(/^[A-Za-z0-9_-]+$/),
+    }),
+  ),
+  async (c) => {
+    const { token } = c.req.valid('param');
+    const topology = await topologyRepository.getTopologyByShareToken(token);
 
-  if (!topology) {
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Topology not found or link has expired',
+    if (!topology) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Topology not found or link has expired',
+          },
         },
-      },
-      404,
-    );
-  }
+        404,
+      );
+    }
 
-  return c.json({
-    success: true,
-    topology,
-  });
-});
-
-// 3. Get topology by ID (supports optional auth: public topologies are open)
-topologyRouter.get('/:id', async (c) => {
-  const id = c.req.param('id');
-  const user = c.get('user'); // Extract user if authenticate middleware ran
-
-  const topology = await topologyRepository.getTopologyById(id, user?.id);
-  if (!topology) {
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Topology not found',
-        },
-      },
-      404,
-    );
-  }
-
-  return c.json({
-    success: true,
-    topology,
-  });
-});
-
-// 4. Update topology
-// Requires authentication and minimum MEMBER privileges in the topology's organization
-topologyRouter.put('/:id', requireAuth, zValidator('json', updateTopologyBodySchema), async (c) => {
-  const id = c.req.param('id');
-  const updates = c.req.valid('json');
-  const user = c.get('user')!;
-
-  try {
-    const topology = await topologyRepository.updateTopology(id, user.id, updates as any);
     return c.json({
       success: true,
       topology,
     });
-  } catch (err: any) {
-    if (err.message?.includes('Unauthorized') || err.message?.includes('rights')) {
+  },
+);
+
+// 3. Get topology by ID (supports optional auth: public topologies are open)
+topologyRouter.get(
+  '/:id',
+  zValidator(
+    'param',
+    z.object({
+      id: z.string().uuid(),
+    }),
+  ),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const user = c.get('user'); // Extract user if authenticate middleware ran
+
+    const topology = await topologyRepository.getTopologyById(id, user?.id);
+    if (!topology) {
       return c.json(
         {
           success: false,
           error: {
-            code: 'FORBIDDEN',
-            message: err.message,
+            code: 'NOT_FOUND',
+            message: 'Topology not found',
           },
         },
-        403,
+        404,
       );
     }
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: err.message || 'Failed to update topology',
+
+    return c.json({
+      success: true,
+      topology,
+    });
+  },
+);
+
+// 4. Update topology
+// Requires authentication and minimum MEMBER privileges in the topology's organization
+topologyRouter.put(
+  '/:id',
+  requireAuth,
+  zValidator(
+    'param',
+    z.object({
+      id: z.string().uuid(),
+    }),
+  ),
+  zValidator('json', updateTopologyBodySchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const updates = c.req.valid('json');
+    const user = c.get('user')!;
+
+    try {
+      const topology = await topologyRepository.updateTopology(id, user.id, updates as any);
+      return c.json({
+        success: true,
+        topology,
+      });
+    } catch (err: any) {
+      if (err.message?.includes('Unauthorized') || err.message?.includes('rights')) {
+        return c.json(
+          {
+            success: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: err.message,
+            },
+          },
+          403,
+        );
+      }
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: err.message || 'Failed to update topology',
+          },
         },
-      },
-      500,
-    );
-  }
-});
+        500,
+      );
+    }
+  },
+);
 
 // 5. Delete topology
 // Requires authentication and minimum MEMBER privileges in the topology's organization
-topologyRouter.delete('/:id', requireAuth, async (c) => {
-  const id = c.req.param('id');
-  const user = c.get('user')!;
+topologyRouter.delete(
+  '/:id',
+  requireAuth,
+  zValidator(
+    'param',
+    z.object({
+      id: z.string().uuid(),
+    }),
+  ),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const user = c.get('user')!;
 
-  try {
-    await topologyRepository.deleteTopology(id, user.id);
-    return c.json({
-      success: true,
-      message: 'Topology deleted successfully',
-    });
-  } catch (err: any) {
-    if (err.message?.includes('Unauthorized') || err.message?.includes('rights')) {
+    try {
+      await topologyRepository.deleteTopology(id, user.id);
+      return c.json({
+        success: true,
+        message: 'Topology deleted successfully',
+      });
+    } catch (err: any) {
+      if (err.message?.includes('Unauthorized') || err.message?.includes('rights')) {
+        return c.json(
+          {
+            success: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: err.message,
+            },
+          },
+          403,
+        );
+      }
       return c.json(
         {
           success: false,
           error: {
-            code: 'FORBIDDEN',
-            message: err.message,
+            code: 'INTERNAL_ERROR',
+            message: err.message || 'Failed to delete topology',
           },
         },
-        403,
+        500,
       );
     }
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: err.message || 'Failed to delete topology',
-        },
-      },
-      500,
-    );
-  }
-});
+  },
+);
 
 export { topologyRouter };

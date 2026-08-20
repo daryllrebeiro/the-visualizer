@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
 
 import { config } from './config.js';
 import { authenticate } from './middleware/auth.middleware.js';
+import { rateLimiter } from './middleware/rate-limiter.js';
 import { authRouter } from './routes/auth.routes.js';
 import { orgRouter } from './routes/org.routes.js';
 import { topologyRouter } from './routes/topology.routes.js';
@@ -11,6 +13,8 @@ import { topologyRouter } from './routes/topology.routes.js';
 const app = new Hono();
 
 // 1. Global Middlewares
+app.use('*', secureHeaders());
+app.use('*', rateLimiter({ limit: 60, refillRate: 1 }));
 app.use('*', honoLogger());
 app.use(
   '*',

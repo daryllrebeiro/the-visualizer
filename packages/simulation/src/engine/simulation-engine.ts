@@ -212,6 +212,10 @@ export class SimulationEngine {
     console.warn(`[SimulationEngine] Halted: ${reason}`);
   }
 
+  public clearHistory(): void {
+    this.snapshotManager.clear();
+  }
+
   /**
    * Returns a diagnostic state of the simulation for debugging/logging.
    */

@@ -8,7 +8,13 @@ import { simulationRunner } from './gateway/runner.js';
 import { createWebSocketServer } from './gateway/ws-server.js';
 
 const server = http.createServer((_req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.writeHead(200, {
+    'Content-Type': 'text/plain',
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+  });
   res.end('WebSocket Gateway Health OK\n');
 });
 
