@@ -290,16 +290,16 @@ export default function Page(): React.JSX.Element {
               onClick={() => {
                 void handleSandboxLogin();
               }}
-              className="btn-base btn-secondary !w-28"
+              className="btn-base btn-secondary px-4"
             >
               Auth Dev
             </button>
             {status === 'CONNECTED' ? (
-              <button onClick={handleDisconnect} className="btn-base btn-rose !w-32">
+              <button onClick={handleDisconnect} className="btn-base btn-rose px-4">
                 Disconnect
               </button>
             ) : (
-              <button onClick={handleConnect} className="btn-base btn-emerald !w-32">
+              <button onClick={handleConnect} className="btn-base btn-emerald px-4">
                 Connect Room
               </button>
             )}
@@ -310,27 +310,27 @@ export default function Page(): React.JSX.Element {
       {/* 2. Main Workspace Layout */}
       <div className="flex flex-1 overflow-hidden p-5 gap-5 bg-[#f1f5f9]">
         {/* Left Sidebar */}
-        <aside className="w-80 flex flex-col gap-4 overflow-y-auto shrink-0 pr-1">
+        <aside className="w-96 flex flex-col gap-4 overflow-y-auto shrink-0 pr-1">
           
           {/* Pastel Yellow Card: System Overview */}
-          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#fef9c3]">
+          <div className="card-panel p-5 flex flex-col items-center justify-center gap-4 bg-[#fef9c3]">
             <h2 className="text-xs font-bold text-[#854d0e] uppercase tracking-wider text-center">
               System Overview
             </h2>
-            <div className="grid grid-cols-2 gap-2.5 w-full text-xs font-mono">
-              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+            <div className="grid grid-cols-2 gap-3 w-full text-xs font-mono">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-1 shadow-sm text-center">
                 <span className="text-[10px] text-[#854d0e] font-semibold text-center">Live Tick</span>
                 <span className="text-base font-bold text-[#713f12] text-center">
                   {String(liveState?.tick ?? 0)}
                 </span>
               </div>
-              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-1 shadow-sm text-center">
                 <span className="text-[10px] text-[#854d0e] font-semibold text-center">Active Controller</span>
                 <span className="text-base font-bold text-[#b45309] text-center">
                   {liveState?.kraft.activeControllerId ?? 'NONE'}
                 </span>
               </div>
-              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-1 shadow-sm text-center">
                 <span className="text-[10px] text-[#854d0e] font-semibold text-center">Alive Brokers</span>
                 <span className="text-base font-bold text-[#047857] text-center">
                   {String(
@@ -338,7 +338,7 @@ export default function Page(): React.JSX.Element {
                   )}
                 </span>
               </div>
-              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-1 shadow-sm text-center">
                 <span className="text-[10px] text-[#854d0e] font-semibold text-center">Crashed Nodes</span>
                 <span className="text-base font-bold text-[#be123c] text-center">
                   {String(
@@ -350,54 +350,54 @@ export default function Page(): React.JSX.Element {
           </div>
 
           {/* Pastel Blue Card: Simulation Control */}
-          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#dbeafe]">
+          <div className="card-panel p-5 flex flex-col items-center justify-center gap-4 bg-[#dbeafe]">
             <h2 className="text-xs font-bold text-[#1e40af] uppercase tracking-wider text-center">
               Simulation Control
             </h2>
-            <div className="flex flex-col items-center justify-center gap-3 w-full">
+            {/* All Buttons in Single Horizontal Row with Spacing */}
+            <div className="flex items-center justify-center gap-3 w-full px-2 py-1">
               <button
                 onClick={handleProduceIntent}
                 disabled={status !== 'CONNECTED' || isHalted}
-                className="btn-base btn-primary !w-full"
+                className="btn-base btn-primary flex-1"
               >
                 Produce Message
               </button>
-              <div className="flex items-center justify-center gap-2.5 w-full">
-                <button
-                  onClick={handleConsumerJoin}
-                  disabled={status !== 'CONNECTED' || isHalted}
-                  className="btn-base btn-indigo !w-32"
-                >
-                  Join Consumer
-                </button>
-                <button
-                  onClick={handleConsumerLeave}
-                  disabled={status !== 'CONNECTED' || isHalted}
-                  className="btn-base btn-secondary !w-32"
-                >
-                  Leave Consumer
-                </button>
-              </div>
+              <button
+                onClick={handleConsumerJoin}
+                disabled={status !== 'CONNECTED' || isHalted}
+                className="btn-base btn-indigo flex-1"
+              >
+                Join Consumer
+              </button>
+              <button
+                onClick={handleConsumerLeave}
+                disabled={status !== 'CONNECTED' || isHalted}
+                className="btn-base btn-secondary flex-1"
+              >
+                Leave Consumer
+              </button>
             </div>
           </div>
 
           {/* Pastel Pink Card: Chaos Laboratory */}
-          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#ffe4e6]">
+          <div className="card-panel p-5 flex flex-col items-center justify-center gap-4 bg-[#ffe4e6]">
             <h2 className="text-xs font-bold text-[#9f1239] uppercase tracking-wider text-center">
               Chaos Laboratory
             </h2>
-            <div className="flex items-center justify-center gap-2.5 w-full">
+            {/* All Buttons in Single Horizontal Row with Spacing */}
+            <div className="flex items-center justify-center gap-3 w-full px-2 py-1">
               <button
                 onClick={handleKillBroker}
                 disabled={status !== 'CONNECTED' || isHalted}
-                className="btn-base btn-rose !w-32"
+                className="btn-base btn-rose flex-1"
               >
                 Crash Broker
               </button>
               <button
                 onClick={handleRecoverBroker}
                 disabled={status !== 'CONNECTED' || isHalted}
-                className="btn-base btn-emerald !w-32"
+                className="btn-base btn-emerald flex-1"
               >
                 Recover Broker
               </button>
@@ -405,18 +405,20 @@ export default function Page(): React.JSX.Element {
           </div>
 
           {/* Pastel Light Green Card: Playback Scrubber */}
-          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#dcfce7] mt-auto">
+          <div className="card-panel p-5 flex flex-col items-center justify-center gap-4 bg-[#dcfce7] mt-auto">
             <h2 className="text-xs font-bold text-[#166534] uppercase tracking-wider text-center">
               Playback Scrubber
             </h2>
-            <button
-              onClick={() => setIsPaused(!isPaused)}
-              className={`btn-base !w-full ${isPaused ? 'btn-emerald' : 'btn-secondary'}`}
-            >
-              {isPaused ? '▶ Resume Stream' : '❚❚ Pause Stream'}
-            </button>
+            <div className="w-full px-2 py-1 flex justify-center">
+              <button
+                onClick={() => setIsPaused(!isPaused)}
+                className={`btn-base w-full ${isPaused ? 'btn-emerald' : 'btn-secondary'}`}
+              >
+                {isPaused ? '▶ Resume Stream' : '❚❚ Pause Stream'}
+              </button>
+            </div>
             {isPaused && stateHistory.length > 1 && (
-              <div className="flex flex-col items-center justify-center gap-2 pt-2 border-t border-emerald-300 w-full">
+              <div className="flex flex-col items-center justify-center gap-2 pt-3 border-t border-emerald-300 w-full px-2">
                 <div className="flex justify-between w-full text-xs font-mono text-[#166534] font-semibold text-center">
                   <span>Timeline</span>
                   <span>Tick {String(playbackTick)}</span>
@@ -458,7 +460,7 @@ export default function Page(): React.JSX.Element {
         </main>
 
         {/* Right Sidebar - Pastel Purple Event Log Stream */}
-        <aside className="w-80 card-panel p-4 flex flex-col items-center gap-3 shrink-0 overflow-hidden bg-[#f3e8ff]">
+        <aside className="w-80 card-panel p-5 flex flex-col items-center gap-4 shrink-0 overflow-hidden bg-[#f3e8ff]">
           <h2 className="text-xs font-bold text-[#6b21a8] uppercase tracking-wider text-center">
             Event Log Stream
           </h2>

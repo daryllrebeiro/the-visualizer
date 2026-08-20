@@ -51,7 +51,7 @@ body {
   background: #94a3b8;
 }
 
-/* Base Card Container */
+/* Base Card Container with Padding & Shadows */
 .card-panel {
   border: 1px solid var(--border-slate);
   border-radius: 16px;
@@ -77,14 +77,14 @@ body {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
-/* Button System with Fixed Equal Sizing & Centered Flex Alignment */
+/* Button System with Flex Fit & Centered Alignment */
 .btn-base {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 14px;
-  font-size: 12px;
+  padding: 8px 12px;
+  font-size: 11px;
   font-weight: 600;
   border-radius: 8px;
   cursor: pointer;
@@ -92,8 +92,8 @@ body {
   font-family: 'Inter', sans-serif;
   user-select: none;
   text-align: center;
-  width: 140px; /* Equal fixed width for buttons */
-  height: 36px; /* Equal height */
+  height: 36px;
+  white-space: nowrap;
 }
 .btn-base:disabled {
   opacity: 0.45;
