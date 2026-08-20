@@ -95,7 +95,7 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
                 y: producerPosition.current.y,
                 progress: 0,
                 speed: 0.02 + Math.random() * 0.015,
-                color: '#38bdf8', // Subtle Sky Blue
+                color: '#2563eb', // Blue particle
                 size: 3 + Math.random() * 2,
               });
             }
@@ -148,7 +148,7 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
                   y: partPos.y,
                   progress: 0,
                   speed: 0.025 + Math.random() * 0.01,
-                  color: '#818cf8', // Subtle Indigo
+                  color: '#4f46e5', // Indigo particle
                   size: 3 + Math.random() * 2,
                 });
               }
@@ -187,12 +187,12 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
   };
 
   const render = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    // Canvas background
-    ctx.fillStyle = '#0f172a';
+    // Light Canvas Background
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Subtle Grid
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+    // Subtle Light Grid Lines
+    ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 1;
     const gridSize = 36;
     for (let x = 0; x < width; x += gridSize) {
@@ -277,8 +277,8 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
       });
     }
 
-    // Links & Rings
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    // Outer Ring
+    ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
@@ -300,7 +300,7 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
             const partKey = `${ap.topic}-${String(ap.partition)}`;
             const partPos = partitionPositions.current.get(partKey);
             if (partPos) {
-              ctx.strokeStyle = 'rgba(129, 140, 248, 0.15)';
+              ctx.strokeStyle = '#c7d2fe';
               ctx.beginPath();
               ctx.moveTo(memberPos.x, memberPos.y);
               ctx.lineTo(partPos.x, partPos.y);
@@ -314,15 +314,15 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
     // Producer Node
     const prodX = producerPosition.current.x;
     const prodY = producerPosition.current.y;
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.08)';
-    ctx.strokeStyle = '#38bdf8';
+    ctx.fillStyle = '#eff6ff';
+    ctx.strokeStyle = '#2563eb';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(prodX, prodY, 34, 0, 2 * Math.PI);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#38bdf8';
+    ctx.fillStyle = '#1d4ed8';
     ctx.font = '600 10px "Inter", sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('PRODUCER', prodX, prodY + 3);
@@ -331,15 +331,15 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
     allGroupMembers.forEach((member) => {
       const pos = consumerPositions.current.get(member.memberId);
       if (pos) {
-        ctx.fillStyle = 'rgba(129, 140, 248, 0.08)';
-        ctx.strokeStyle = '#818cf8';
+        ctx.fillStyle = '#eef2ff';
+        ctx.strokeStyle = '#4f46e5';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, 30, 0, 2 * Math.PI);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#818cf8';
+        ctx.fillStyle = '#4338ca';
         ctx.font = '600 10px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('CONSUMER', pos.x, pos.y + 2);
@@ -360,20 +360,20 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
       const isController = state.kraft.activeControllerId === broker.id;
 
       if (isController && !isCrashed) {
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
-        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, 48, 0, 2 * Math.PI);
         ctx.stroke();
       }
 
       ctx.fillStyle = isCrashed
-        ? 'rgba(248, 113, 113, 0.12)'
+        ? '#fef2f2' // Light Pastel Red
         : isRecovering
-          ? 'rgba(251, 191, 36, 0.12)'
-          : 'rgba(52, 211, 153, 0.12)';
+          ? '#fffbeb' // Light Pastel Yellow
+          : '#ecfdf5'; // Light Pastel Emerald Green
 
-      ctx.strokeStyle = isCrashed ? '#f87171' : isRecovering ? '#fbbf24' : '#34d399';
+      ctx.strokeStyle = isCrashed ? '#ef4444' : isRecovering ? '#f59e0b' : '#10b981';
 
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -381,32 +381,32 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = isCrashed ? '#f87171' : '#f8fafc';
+      ctx.fillStyle = isCrashed ? '#dc2626' : '#0f172a';
       ctx.font = '600 11px "Inter", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(`Broker ${broker.id}`, pos.x, pos.y - 4);
 
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = '#64748b';
       ctx.font = '9px monospace';
       ctx.fillText(broker.status, pos.x, pos.y + 8);
 
       if (isController && !isCrashed) {
-        ctx.fillStyle = '#fbbf24';
+        ctx.fillStyle = '#d97706';
         ctx.font = '600 8px "Inter", sans-serif';
         ctx.fillText('CONTROLLER', pos.x, pos.y + 20);
       }
 
       if (!isCrashed) {
         const diskPct = broker.diskUsageBytes / broker.maxDiskSizeBytes;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillStyle = '#e2e8f0';
         ctx.fillRect(pos.x - 22, pos.y - 25, 44, 3);
 
-        ctx.fillStyle = diskPct > 0.85 ? '#f87171' : '#34d399';
+        ctx.fillStyle = diskPct > 0.85 ? '#ef4444' : '#10b981';
         ctx.fillRect(pos.x - 22, pos.y - 25, 44 * Math.min(diskPct, 1), 3);
       }
     });
 
-    // Topic Partitions
+    // Topic Partitions (Draw.io style rounded rectangular cards)
     for (const topicName in state.topics) {
       const partitions = state.topics[topicName] || [];
       partitions.forEach((part) => {
@@ -414,17 +414,17 @@ export function Visualizer({ state, onHoverDetails }: VisualizerProps): React.JS
         const pos = partitionPositions.current.get(partKey);
         if (!pos) return;
 
-        ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#cbd5e1';
         ctx.lineWidth = 1.5;
         drawRoundRect(ctx, pos.x - 32, pos.y - 18, 64, 36, 6);
 
-        ctx.fillStyle = '#f8fafc';
+        ctx.fillStyle = '#0f172a';
         ctx.font = '600 9px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(`${topicName}-${String(part.partition)}`, pos.x, pos.y - 4);
 
-        ctx.fillStyle = '#38bdf8';
+        ctx.fillStyle = '#2563eb';
         ctx.font = '8px monospace';
         ctx.fillText(
           `HW:${String(part.highWatermark)} LEO:${String(part.highWatermark + 1)}`,
@@ -515,7 +515,7 @@ Unclean Leader Election: ${String(part.uncleanLeaderElectionEnabled)}`,
     <canvas
       ref={canvasRef}
       onMouseMove={handleMouseMove}
-      className="w-full h-full block rounded-xl cursor-crosshair"
+      className="w-full h-full block rounded-xl cursor-crosshair bg-white"
     />
   );
 }

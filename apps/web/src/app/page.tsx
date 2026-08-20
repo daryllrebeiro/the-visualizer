@@ -21,7 +21,7 @@ export default function Page(): React.JSX.Element {
   const [eventLogs, setEventLogs] = useState<EventLogItem[]>([]);
   const [hoverDetails, setHoverDetails] = useState<string | null>(null);
 
-  // Playback controls (Client-side scrubbing)
+  // Playback controls
   const [isPaused, setIsPaused] = useState(false);
   const [playbackTick, setPlaybackTick] = useState(0);
   const [stateHistory, setStateHistory] = useState<KafkaClusterState[]>([]);
@@ -222,63 +222,63 @@ export default function Page(): React.JSX.Element {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0f172a] text-[#f8fafc]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f8fafc] text-[#0f172a]">
       {/* 1. Header Navigation Bar */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-white/10 bg-[#1e293b]/80 backdrop-blur-md z-20 shrink-0">
+      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white z-20 shrink-0 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="flex h-3 w-3 relative items-center justify-center">
             <span
               className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                 status === 'CONNECTED'
-                  ? 'bg-[#34d399]'
+                  ? 'bg-[#10b981]'
                   : status === 'CONNECTING'
-                    ? 'bg-[#fbbf24]'
-                    : 'bg-[#f87171]'
+                    ? 'bg-[#f59e0b]'
+                    : 'bg-[#ef4444]'
               }`}
             />
             <span
               className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
                 status === 'CONNECTED'
-                  ? 'bg-[#34d399]'
+                  ? 'bg-[#10b981]'
                   : status === 'CONNECTING'
-                    ? 'bg-[#fbbf24]'
-                    : 'bg-[#f87171]'
+                    ? 'bg-[#f59e0b]'
+                    : 'bg-[#ef4444]'
               }`}
             />
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-white">TheVisualizer</h1>
+          <h1 className="text-lg font-bold tracking-tight text-[#0f172a]">TheVisualizer</h1>
         </div>
 
         {/* Endpoint Inputs and Controls */}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 bg-[#0f172a]/60 border border-white/10 px-3 py-1.5 rounded-lg">
+          <div className="flex items-center gap-3 bg-[#f1f5f9] border border-slate-200 px-3 py-1.5 rounded-lg">
             <div className="flex flex-col">
-              <span className="text-[9px] text-[#94a3b8] font-mono uppercase tracking-wider">REST Gateway</span>
+              <span className="text-[9px] text-[#64748b] font-mono uppercase tracking-wider">REST Gateway</span>
               <input
                 type="text"
                 value={restUrl}
                 onChange={(e) => setRestUrl(e.target.value)}
-                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-40"
+                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-40 text-[#0f172a]"
               />
             </div>
-            <div className="h-6 w-px bg-white/10" />
+            <div className="h-6 w-px bg-slate-300" />
             <div className="flex flex-col">
-              <span className="text-[9px] text-[#94a3b8] font-mono uppercase tracking-wider">WS Tunnel</span>
+              <span className="text-[9px] text-[#64748b] font-mono uppercase tracking-wider">WS Tunnel</span>
               <input
                 type="text"
                 value={wsUrl}
                 onChange={(e) => setWsUrl(e.target.value)}
-                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-40"
+                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-40 text-[#0f172a]"
               />
             </div>
-            <div className="h-6 w-px bg-white/10" />
+            <div className="h-6 w-px bg-slate-300" />
             <div className="flex flex-col">
-              <span className="text-[9px] text-[#94a3b8] font-mono uppercase tracking-wider">Session Room</span>
+              <span className="text-[9px] text-[#64748b] font-mono uppercase tracking-wider">Session Room</span>
               <input
                 type="text"
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
-                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-16"
+                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-16 text-[#0f172a]"
               />
             </div>
           </div>
@@ -306,39 +306,39 @@ export default function Page(): React.JSX.Element {
       </header>
 
       {/* 2. Main Workspace Layout */}
-      <div className="flex flex-1 overflow-hidden p-4 gap-4">
-        {/* Left Sidebar - Full Vertical Spacing */}
+      <div className="flex flex-1 overflow-hidden p-4 gap-4 bg-[#f1f5f9]">
+        {/* Left Sidebar */}
         <aside className="w-96 flex flex-col gap-4 overflow-y-auto shrink-0">
           
           {/* Cluster Summary Metrics Card */}
           <div className="card-panel p-4 flex flex-col gap-3">
-            <h2 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider">
+            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
               System Overview
             </h2>
             <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-              <div className="bg-[#0f172a]/50 p-2.5 rounded-lg border border-white/5 flex flex-col gap-1">
-                <span className="text-[10px] text-[#94a3b8]">Live Tick</span>
-                <span className="text-base font-bold text-white">
+              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
+                <span className="text-[10px] text-[#64748b]">Live Tick</span>
+                <span className="text-base font-bold text-[#0f172a]">
                   {String(liveState?.tick ?? 0)}
                 </span>
               </div>
-              <div className="bg-[#0f172a]/50 p-2.5 rounded-lg border border-white/5 flex flex-col gap-1">
-                <span className="text-[10px] text-[#94a3b8]">Active Controller</span>
-                <span className="text-base font-bold text-[#fbbf24]">
+              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
+                <span className="text-[10px] text-[#64748b]">Active Controller</span>
+                <span className="text-base font-bold text-[#d97706]">
                   {liveState?.kraft.activeControllerId ?? 'NONE'}
                 </span>
               </div>
-              <div className="bg-[#0f172a]/50 p-2.5 rounded-lg border border-white/5 flex flex-col gap-1">
-                <span className="text-[10px] text-[#94a3b8]">Alive Brokers</span>
-                <span className="text-base font-bold text-[#34d399]">
+              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
+                <span className="text-[10px] text-[#64748b]">Alive Brokers</span>
+                <span className="text-base font-bold text-[#059669]">
                   {String(
                     Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'ALIVE').length,
                   )}
                 </span>
               </div>
-              <div className="bg-[#0f172a]/50 p-2.5 rounded-lg border border-white/5 flex flex-col gap-1">
-                <span className="text-[10px] text-[#94a3b8]">Crashed Nodes</span>
-                <span className="text-base font-bold text-[#f87171]">
+              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
+                <span className="text-[10px] text-[#64748b]">Crashed Nodes</span>
+                <span className="text-base font-bold text-[#dc2626]">
                   {String(
                     Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'CRASHED').length,
                   )}
@@ -349,7 +349,7 @@ export default function Page(): React.JSX.Element {
 
           {/* Simulation Commands Panel */}
           <div className="card-panel p-4 flex flex-col gap-3">
-            <h2 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider">
+            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
               Simulation Control
             </h2>
             <div className="flex flex-col gap-2">
@@ -381,7 +381,7 @@ export default function Page(): React.JSX.Element {
 
           {/* Chaos Testing Panel */}
           <div className="card-panel p-4 flex flex-col gap-3">
-            <h2 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider">
+            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
               Chaos Laboratory
             </h2>
             <div className="grid grid-cols-2 gap-2">
@@ -404,7 +404,7 @@ export default function Page(): React.JSX.Element {
 
           {/* Playback Scrubbing Deck */}
           <div className="card-panel p-4 flex flex-col gap-3 mt-auto">
-            <h2 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider">
+            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
               Playback Scrubber
             </h2>
             <button
@@ -414,10 +414,10 @@ export default function Page(): React.JSX.Element {
               {isPaused ? '▶ Resume Live Stream' : '❚❚ Pause Stream'}
             </button>
             {isPaused && stateHistory.length > 1 && (
-              <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
-                <div className="flex justify-between text-xs font-mono text-[#94a3b8]">
+              <div className="flex flex-col gap-2 pt-2 border-t border-slate-200">
+                <div className="flex justify-between text-xs font-mono text-[#64748b]">
                   <span>Timeline</span>
-                  <span className="text-[#38bdf8]">Tick {String(playbackTick)}</span>
+                  <span className="text-[#2563eb]">Tick {String(playbackTick)}</span>
                 </div>
                 <input
                   type="range"
@@ -425,7 +425,7 @@ export default function Page(): React.JSX.Element {
                   max={stateHistory[stateHistory.length - 1]?.tick ?? 0}
                   value={playbackTick}
                   onChange={handleScrubChange}
-                  className="w-full cursor-pointer accent-[#38bdf8]"
+                  className="w-full cursor-pointer accent-[#2563eb]"
                 />
                 <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
                   <span>Tick {String(stateHistory[0]?.tick ?? 0)}</span>
@@ -436,28 +436,28 @@ export default function Page(): React.JSX.Element {
           </div>
         </aside>
 
-        {/* Center Main Canvas - Fills Viewport Completely */}
-        <main className="flex-1 relative card-panel p-2 overflow-hidden flex flex-col justify-center items-center">
+        {/* Center Main Canvas */}
+        <main className="flex-1 relative card-panel p-2 overflow-hidden flex flex-col justify-center items-center bg-white">
           <Visualizer state={renderedState} onHoverDetails={setHoverDetails} />
 
           {/* Inspect Hover Card */}
           {hoverDetails && (
-            <div className="absolute top-4 left-4 card-panel p-4 z-30 w-80 text-xs code-font whitespace-pre-wrap pointer-events-none border-l-4 border-l-[#38bdf8] leading-relaxed shadow-xl">
+            <div className="absolute top-4 left-4 card-panel p-4 z-30 w-80 text-xs code-font whitespace-pre-wrap pointer-events-none border-l-4 border-l-[#2563eb] leading-relaxed shadow-lg bg-white/95">
               {hoverDetails}
             </div>
           )}
 
           {/* Scrubbing Banner */}
           {isPaused && (
-            <div className="absolute top-4 right-4 bg-[#1e293b]/90 border border-[#fbbf24]/40 text-[#fbbf24] px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider font-mono backdrop-blur-md shadow-lg">
+            <div className="absolute top-4 right-4 bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider font-mono shadow-md">
               ❚❚ PAUSED (Scrubbing Tick {String(playbackTick)})
             </div>
           )}
         </main>
 
         {/* Right Sidebar - Event Stream */}
-        <aside className="w-80 card-panel p-4 flex flex-col gap-3 shrink-0 overflow-hidden">
-          <h2 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider">
+        <aside className="w-80 card-panel p-4 flex flex-col gap-3 shrink-0 overflow-hidden bg-white">
+          <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
             Event Log Stream
           </h2>
           <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 code-font text-[11px] select-text">
@@ -465,23 +465,23 @@ export default function Page(): React.JSX.Element {
               <div className="text-center text-[#64748b] mt-10">No events captured</div>
             ) : (
               eventLogs.map((log) => {
-                let badgeColor = 'text-[#94a3b8] bg-white/5';
-                let logBorder = 'border-white/5';
+                let badgeColor = 'text-[#64748b] bg-slate-100';
+                let logBorder = 'border-slate-200';
                 if (log.type === 'SUCCESS') {
-                  badgeColor = 'text-[#34d399] bg-[#34d399]/10';
-                  logBorder = 'border-[#34d399]/20';
+                  badgeColor = 'text-[#047857] bg-[#ecfdf5]';
+                  logBorder = 'border-[#a7f3d0]';
                 }
                 if (log.type === 'WARN') {
-                  badgeColor = 'text-[#fbbf24] bg-[#fbbf24]/10';
-                  logBorder = 'border-[#fbbf24]/20';
+                  badgeColor = 'text-[#b45309] bg-[#fffbeb]';
+                  logBorder = 'border-[#fde68a]';
                 }
                 if (log.type === 'ERROR') {
-                  badgeColor = 'text-[#f87171] bg-[#f87171]/10';
-                  logBorder = 'border-[#f87171]/20';
+                  badgeColor = 'text-[#be123c] bg-[#fff1f2]';
+                  logBorder = 'border-[#fecdd3]';
                 }
 
                 return (
-                  <div key={log.id} className={`border bg-[#0f172a]/40 rounded-lg p-2.5 flex flex-col gap-1.5 ${logBorder}`}>
+                  <div key={log.id} className={`border bg-[#f8fafc] rounded-lg p-2.5 flex flex-col gap-1.5 ${logBorder}`}>
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-[#64748b]">
                         {new Date(log.timestamp).toLocaleTimeString()}
@@ -490,7 +490,7 @@ export default function Page(): React.JSX.Element {
                         {log.type}
                       </span>
                     </div>
-                    <div className="text-[#f8fafc] leading-relaxed break-words">
+                    <div className="text-[#0f172a] leading-relaxed break-words">
                       {log.message}
                     </div>
                   </div>
@@ -503,7 +503,7 @@ export default function Page(): React.JSX.Element {
 
       {/* Safety Violation Alert Overlay */}
       {isHalted && (
-        <div className="bg-[#f87171] text-slate-900 px-6 py-3.5 flex items-center justify-between font-mono font-bold text-xs tracking-wide shadow-2xl relative z-50">
+        <div className="bg-[#ef4444] text-white px-6 py-3.5 flex items-center justify-between font-mono font-bold text-xs tracking-wide shadow-2xl relative z-50">
           <div className="flex items-center gap-3">
             <span className="text-base">⚠️</span>
             <span>
@@ -516,7 +516,7 @@ export default function Page(): React.JSX.Element {
               setHaltError(null);
               handleConnect();
             }}
-            className="px-3.5 py-1.5 bg-slate-900 text-white rounded border border-white/20 text-xs font-semibold uppercase tracking-wider transition-all"
+            className="px-3.5 py-1.5 bg-white text-slate-900 rounded border border-white/20 text-xs font-semibold uppercase tracking-wider transition-all"
           >
             Reset Session
           </button>

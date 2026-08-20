@@ -1,30 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-slate: #0f172a;
-  --bg-slate-card: #1e293b;
-  --bg-slate-card-subtle: rgba(30, 41, 59, 0.7);
+  /* Light, subtle pastel theme (Draw.io inspired light ice blue & warm slate) */
+  --bg-main: #f8fafc; /* Very light slate ice blue */
+  --panel-bg: #ffffff; /* Clean white card panels */
+  --panel-subtle: #f1f5f9; /* Subtle grey-blue container backgrounds */
   
-  --accent-blue: #38bdf8;
-  --accent-blue-subtle: rgba(56, 189, 248, 0.12);
+  --accent-blue: #2563eb;
+  --accent-blue-subtle: rgba(37, 99, 235, 0.08);
   
-  --accent-indigo: #818cf8;
-  --accent-indigo-subtle: rgba(129, 140, 248, 0.12);
+  --accent-indigo: #4f46e5;
+  --accent-indigo-subtle: rgba(79, 70, 229, 0.08);
   
-  --accent-emerald: #34d399;
-  --accent-emerald-subtle: rgba(52, 211, 153, 0.12);
+  --accent-emerald: #059669;
+  --accent-emerald-subtle: rgba(5, 150, 105, 0.08);
   
-  --accent-amber: #fbbf24;
-  --accent-amber-subtle: rgba(251, 191, 36, 0.12);
+  --accent-amber: #d97706;
+  --accent-amber-subtle: rgba(217, 119, 6, 0.08);
   
-  --accent-rose: #f87171;
-  --accent-rose-subtle: rgba(248, 113, 113, 0.12);
+  --accent-rose: #dc2626;
+  --accent-rose-subtle: rgba(220, 38, 38, 0.08);
   
-  --text-main: #f8fafc;
-  --text-sub: #94a3b8;
+  --text-main: #0f172a;
+  --text-sub: #475569;
   --text-muted: #64748b;
-  --border-slate: rgba(255, 255, 255, 0.08);
-  --border-slate-strong: rgba(255, 255, 255, 0.15);
+  --border-slate: rgba(148, 163, 184, 0.25);
+  --border-slate-strong: rgba(148, 163, 184, 0.4);
 }
 
 * {
@@ -35,7 +36,7 @@ html,
 body {
   padding: 0;
   margin: 0;
-  background-color: var(--bg-slate);
+  background-color: var(--bg-main);
   color: var(--text-main);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow: hidden;
@@ -52,25 +53,24 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(148, 163, 184, 0.4);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(148, 163, 184, 0.6);
 }
 
 /* Card Container */
 .card-panel {
-  background: var(--bg-slate-card-subtle);
-  backdrop-filter: blur(16px);
+  background: var(--panel-bg);
   border: 1px solid var(--border-slate);
   border-radius: 12px;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
 }
 
 /* Form Inputs */
 .modern-input {
-  background: rgba(15, 23, 42, 0.6);
+  background: #f8fafc;
   border: 1px solid var(--border-slate);
   border-radius: 8px;
   padding: 6px 12px;
@@ -83,7 +83,7 @@ body {
   outline: none;
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 2px var(--accent-blue-subtle);
-  background: rgba(15, 23, 42, 0.9);
+  background: #ffffff;
 }
 
 /* Buttons System */
@@ -111,56 +111,56 @@ body {
 
 /* Blue primary button */
 .btn-primary {
-  background: var(--accent-blue-subtle);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  color: var(--accent-blue);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
 }
 .btn-primary:hover:not(:disabled) {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: var(--accent-blue);
+  background: #dbeafe;
+  border-color: #93c5fd;
 }
 
 /* Indigo consumer button */
 .btn-indigo {
-  background: var(--accent-indigo-subtle);
-  border: 1px solid rgba(129, 140, 248, 0.4);
-  color: var(--accent-indigo);
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #4338ca;
 }
 .btn-indigo:hover:not(:disabled) {
-  background: rgba(129, 140, 248, 0.2);
-  border-color: var(--accent-indigo);
+  background: #e0e7ff;
+  border-color: #a5b4fc;
 }
 
 /* Emerald success button */
 .btn-emerald {
-  background: var(--accent-emerald-subtle);
-  border: 1px solid rgba(52, 211, 153, 0.4);
-  color: var(--accent-emerald);
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
 }
 .btn-emerald:hover:not(:disabled) {
-  background: rgba(52, 211, 153, 0.2);
-  border-color: var(--accent-emerald);
+  background: #d1fae5;
+  border-color: #6ee7b7;
 }
 
 /* Rose danger button */
 .btn-rose {
-  background: var(--accent-rose-subtle);
-  border: 1px solid rgba(248, 113, 113, 0.4);
-  color: var(--accent-rose);
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
 }
 .btn-rose:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.2);
-  border-color: var(--accent-rose);
+  background: #ffe4e6;
+  border-color: #fda4af;
 }
 
 /* Secondary outline button */
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.04);
+  background: #f8fafc;
   border: 1px solid var(--border-slate);
   color: var(--text-sub);
 }
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+  background: #f1f5f9;
   color: var(--text-main);
   border-color: var(--text-sub);
 }
