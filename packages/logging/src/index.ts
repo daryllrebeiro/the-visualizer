@@ -64,3 +64,7 @@ export function withTraceContext(logger: Logger, span?: Span): Logger {
 
 // Default application logger
 export const logger = createLogger('the-visualizer');
+
+export * from './otel.js';
+export * from './metrics.js';
+

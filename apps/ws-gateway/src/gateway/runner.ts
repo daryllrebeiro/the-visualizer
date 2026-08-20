@@ -2,7 +2,15 @@ import { compare } from 'fast-json-patch';
 import { Redis } from 'ioredis';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
-import { logger } from '@the-visualizer/logging';
+import {
+  logger,
+  simActiveSessions,
+  simInvariantViolationsTotal,
+  simQueueSize,
+  simResourceLimitsExceededTotal,
+  simTickDurationSeconds,
+  simTicksProcessedTotal,
+} from '@the-visualizer/logging';
 import { SimulationEngine } from '@the-visualizer/simulation';
 
 import { config } from '../config.js';
@@ -58,9 +66,11 @@ export class SimulationRunner {
           typeof violation === 'object' && violation !== null && 'message' in violation
             ? String(violation.message)
             : 'Invariant safety policy violated';
+        simInvariantViolationsTotal.inc({ invariant: message });
         void this.haltSession(roomId, message);
       },
       onResourceLimitExceeded: (reason: string) => {
+        simResourceLimitsExceededTotal.inc({ reason });
         void this.haltSession(roomId, reason);
       },
     };
@@ -78,6 +88,7 @@ export class SimulationRunner {
     };
 
     this.activeSessions.set(roomId, session);
+    simActiveSessions.set(this.activeSessions.size);
 
     // Run tick loop at 100ms interval (10 Hz)
     session.timer = setInterval(() => {
@@ -91,6 +102,7 @@ export class SimulationRunner {
   private async executeTick(session: RoomSession): Promise<void> {
     if (session.isHalted || session.isPaused) return;
 
+    const startTime = performance.now();
     try {
       const { roomId, engine } = session;
 
@@ -101,6 +113,10 @@ export class SimulationRunner {
       if (intentsRaw.length > 0) {
         await this.redis.ltrim(intentsKey, intentsRaw.length, -1);
       }
+
+      // Record queue size metric
+      const queueLen = await this.redis.llen(intentsKey);
+      simQueueSize.set({ roomId }, queueLen);
 
       // 2. Queue intents on simulation engine
       for (const raw of intentsRaw) {
@@ -186,6 +202,7 @@ export class SimulationRunner {
 
       // Guard: Halt session if tick count exceeds hard ceiling (100,000 ticks)
       if (session.tickCount >= 100_000) {
+        simResourceLimitsExceededTotal.inc({ reason: 'max_ticks' });
         await this.haltSession(
           roomId,
           'Maximum simulation tick bounds exceeded (100,000 ticks ceiling).',
@@ -203,6 +220,7 @@ export class SimulationRunner {
         engine.clearHistory();
 
         if (heapUsedMb > 256) {
+          simResourceLimitsExceededTotal.inc({ reason: 'max_memory' });
           await this.haltSession(
             roomId,
             `Worker memory usage critical (${heapUsedMb.toFixed(1)}MB). Halted to prevent crash.`,
@@ -238,8 +256,14 @@ export class SimulationRunner {
         };
         await this.redis.lpush(`simulation:${roomId}:replays`, JSON.stringify(replayFrame));
       }
-    } catch {
+
+      // Record tick execution metrics
+      const durationSec = (performance.now() - startTime) / 1000;
+      simTickDurationSeconds.observe(durationSec);
+      simTicksProcessedTotal.inc();
+    } catch (err: any) {
       // Catch exceptions in tick loop execution
+      logger.error({ err, roomId: session.roomId }, 'Error executing simulation tick');
     }
   }
 
@@ -276,6 +300,7 @@ export class SimulationRunner {
       clearInterval(session.timer);
     }
     this.activeSessions.delete(roomId);
+    simActiveSessions.set(this.activeSessions.size);
   }
 
   public getSession(roomId: string): RoomSession | undefined {
@@ -287,6 +312,7 @@ export class SimulationRunner {
       if (session.timer) clearInterval(session.timer);
     }
     this.activeSessions.clear();
+    simActiveSessions.set(0);
     await this.redis.quit();
   }
 }

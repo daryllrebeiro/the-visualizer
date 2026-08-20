@@ -5,6 +5,12 @@ import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 
 import { ClientIntentSchema, type KafkaClusterState } from '@the-visualizer/contracts';
+import {
+  wsConnectionDropsTotal,
+  wsMessagesReceivedTotal,
+  wsMessagesSentTotal,
+  wsRateLimitedMessagesTotal,
+} from '@the-visualizer/logging';
 
 import { authenticateConnection } from './auth.js';
 import { roomManager } from './room-manager.js';
@@ -145,6 +151,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
   // 2. Handle connections
   wss.on('connection', (ws: ExtendedWebSocket) => {
     ws.isAlive = true;
+    roomManager.addUnassigned(ws);
 
     ws.on('pong', () => {
       ws.isAlive = true;
@@ -155,6 +162,8 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
         // Apply WebSocket message ingress rate-limiting
         const { allowed, terminate } = checkConnectionRateLimit(ws);
         if (terminate) {
+          wsRateLimitedMessagesTotal.inc({ userId: ws.userId || 'anonymous', tier: 'system' });
+          wsConnectionDropsTotal.inc({ reason: 'rate_limit_hard' });
           ws.send(
             pack({
               type: 'SESSION_ERROR',
@@ -165,11 +174,13 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
               },
             }),
           );
+          wsMessagesSentTotal.inc({ type: 'SESSION_ERROR' });
           ws.terminate();
           return;
         }
 
         if (!allowed) {
+          wsRateLimitedMessagesTotal.inc({ userId: ws.userId || 'anonymous', tier: 'free' });
           ws.send(
             pack({
               type: 'SESSION_ERROR',
@@ -180,6 +191,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
               },
             }),
           );
+          wsMessagesSentTotal.inc({ type: 'SESSION_ERROR' });
           return;
         }
 
@@ -192,6 +204,8 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
           if (typeof message.type !== 'string') {
             return;
           }
+
+          wsMessagesReceivedTotal.inc({ type: message.type });
 
           const roomId = roomManager.getRoomIdForSocket(ws);
           const type = message.type;
@@ -228,6 +242,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                   payload: { roomId: targetRoomId },
                 }),
               );
+              wsMessagesSentTotal.inc({ type: 'ROOM_JOINED' });
 
               // Send full initial state snapshot
               ws.send(
@@ -239,6 +254,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                   },
                 }),
               );
+              wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT' });
             }
             return;
           }
@@ -255,6 +271,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                 // Send back buffered updates sequentially
                 for (const recoveredPayload of recoveredPayloads) {
                   ws.send(pack(recoveredPayload));
+                  wsMessagesSentTotal.inc({ type: recoveredPayload.type });
                 }
               } else {
                 // Missing messages evicted -> notify client a full snapshot refresh is required
@@ -264,6 +281,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                     payload: { roomId },
                   }),
                 );
+                wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT_REQUIRED' });
               }
             }
             return;
@@ -294,6 +312,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                 },
               }),
             );
+            wsMessagesSentTotal.inc({ type: 'MSG_INTENT_ACK' });
             return;
           }
 
@@ -310,8 +329,9 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
       })();
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code) => {
       void roomManager.leaveRoom(ws);
+      wsConnectionDropsTotal.inc({ reason: `client_close_code_${code}` });
     });
   });
 
@@ -321,6 +341,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
       const extWs = ws as ExtendedWebSocket;
       if (!extWs.isAlive) {
         extWs.terminate();
+        wsConnectionDropsTotal.inc({ reason: 'heartbeat_timeout' });
         return;
       }
       extWs.isAlive = false;

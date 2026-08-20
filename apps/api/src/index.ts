@@ -1,10 +1,13 @@
+import './otel-init.js';
+
+import { register } from '@the-visualizer/logging';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
 import { config } from './config.js';
 import { authenticate } from './middleware/auth.middleware.js';
+import { requestLogger } from './middleware/logging.middleware.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
 import { authRouter } from './routes/auth.routes.js';
 import { orgRouter } from './routes/org.routes.js';
@@ -15,7 +18,8 @@ const app = new Hono();
 // 1. Global Middlewares
 app.use('*', secureHeaders());
 app.use('*', rateLimiter({ limit: 60, refillRate: 1 }));
-app.use('*', honoLogger());
+app.use('*', requestLogger());
+
 app.use(
   '*',
   cors({
@@ -43,6 +47,11 @@ app.get('/health', (c) => {
     service: 'api',
     timestamp: new Date().toISOString(),
   });
+});
+
+app.get('/metrics', async (c) => {
+  c.header('Content-Type', register.contentType);
+  return c.text(await register.metrics());
 });
 
 app.route('/auth', authRouter);

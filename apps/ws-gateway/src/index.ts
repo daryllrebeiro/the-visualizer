@@ -1,13 +1,35 @@
+import './otel-init.js';
+
 import * as http from 'http';
 
-import { logger } from '@the-visualizer/logging';
+import { logger, register } from '@the-visualizer/logging';
 
 import { config } from './config.js';
 import { roomManager } from './gateway/room-manager.js';
 import { simulationRunner } from './gateway/runner.js';
 import { createWebSocketServer } from './gateway/ws-server.js';
 
-const server = http.createServer((_req, res) => {
+const server = http.createServer((req, res) => {
+  if (req.url === '/metrics') {
+    res.writeHead(200, {
+      'Content-Type': register.contentType,
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+    });
+    register
+      .metrics()
+      .then((metricsText) => {
+        res.end(metricsText);
+      })
+      .catch((err: unknown) => {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end(String(err));
+      });
+    return;
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/plain',
     'X-Frame-Options': 'DENY',
@@ -17,6 +39,7 @@ const server = http.createServer((_req, res) => {
   });
   res.end('WebSocket Gateway Health OK\n');
 });
+
 
 // Bind ws.Server upgrade handlers to HTTP server
 const wss = createWebSocketServer(server);

@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.54.0",
+    "@opentelemetry/sdk-node": "^0.57.2",
     "@the-visualizer/config": "workspace:*",
     "@the-visualizer/contracts": "workspace:*",
     "@the-visualizer/logging": "workspace:*",

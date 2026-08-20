@@ -2,6 +2,8 @@ import { Redis } from 'ioredis';
 import { pack } from 'msgpackr';
 import type { WebSocket } from 'ws';
 
+import { wsActiveConnections, wsMessagesSentTotal } from '@the-visualizer/logging';
+
 import { config } from '../config.js';
 import { sequenceReconciler } from './sequence-reconciler.js';
 
@@ -18,6 +20,14 @@ export class RoomManager {
   private rooms = new Map<string, Set<RoomClient>>();
   // Reverse lookup: socket -> roomId
   private clientRooms = new Map<WebSocket, string>();
+  // Sockets that are connected but haven't joined a room
+  private unassignedSockets = new Set<WebSocket>();
+
+  public addUnassigned(socket: WebSocket): void {
+    this.unassignedSockets.add(socket);
+    wsActiveConnections.inc({ room: 'unassigned' });
+  }
+
 
   constructor() {
     this.pub = new Redis(config.REDIS_URL, {
@@ -68,13 +78,21 @@ export class RoomManager {
     const client: RoomClient = { userId, socket };
     clients.add(client);
     this.clientRooms.set(socket, roomId);
+    wsActiveConnections.inc({ room: roomId });
   }
 
   public async leaveRoom(socket: WebSocket): Promise<void> {
     const roomId = this.clientRooms.get(socket);
-    if (!roomId) return;
+    if (!roomId) {
+      if (this.unassignedSockets.has(socket)) {
+        this.unassignedSockets.delete(socket);
+        wsActiveConnections.dec({ room: 'unassigned' });
+      }
+      return;
+    }
 
     this.clientRooms.delete(socket);
+    wsActiveConnections.dec({ room: roomId });
 
     const clients = this.rooms.get(roomId);
     if (clients) {
@@ -155,6 +173,7 @@ export class RoomManager {
       if (client.socket.readyState === 1) {
         // WebSocket.OPEN
         client.socket.send(binaryBuffer);
+        wsMessagesSentTotal.inc({ type: payload.type });
       }
     }
   }
