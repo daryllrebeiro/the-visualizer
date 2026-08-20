@@ -12,7 +12,7 @@ const env = parseEnv(ApiEnvSchema) as ApiEnv;
 // Set statement timeout default at pg pool driver level
 defaults.statement_timeout = env.DATABASE_STATEMENT_TIMEOUT_MS;
 
-const pool = new Pool({
+export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   min: env.DATABASE_POOL_MIN,
   max: env.DATABASE_POOL_MAX,

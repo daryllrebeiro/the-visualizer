@@ -283,3 +283,14 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+      - name: Build WS-Gateway Docker image
+        run: docker build -f infrastructure/docker/ws-gateway.Dockerfile -t the-visualizer-ws-gateway:ci .
+      - name: Run Trivy vulnerability scanner (WS-Gateway)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'the-visualizer-ws-gateway:ci'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
