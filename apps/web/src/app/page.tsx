@@ -260,9 +260,6 @@ export default function Page(): React.JSX.Element {
           </div>
           <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
             TheVisualizer
-            <span className="text-[10px] bg-[#161e2e] border border-white/5 px-2 py-0.5 rounded text-[#94a3b8] font-mono font-normal">
-              v0.2.0 (Stable)
-            </span>
           </h1>
         </div>
 
