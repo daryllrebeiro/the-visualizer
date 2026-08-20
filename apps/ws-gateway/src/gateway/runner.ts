@@ -1,4 +1,6 @@
-import { compare } from 'fast-json-patch';
+import jsonpatch from 'fast-json-patch';
+
+const compare = (jsonpatch.compare || (jsonpatch as any).default?.compare) as typeof jsonpatch.compare;
 import { Redis } from 'ioredis';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';

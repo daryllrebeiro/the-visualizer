@@ -8,7 +8,7 @@ const WsGatewayEnvSchema = BaseEnvSchema.merge(RedisEnvSchema).merge(
     SESSION_SECRET: z.string().min(32),
     JWT_SECRET: z.string().min(32).optional(),
   }),
-);
+).passthrough();
 
 export type WsGatewayEnv = z.infer<typeof WsGatewayEnvSchema>;
 

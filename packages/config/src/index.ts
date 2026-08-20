@@ -82,7 +82,8 @@ const AuthEnvSchema = z.object({
 
 const ApiEnvSchema = BaseEnvSchema.merge(DatabaseEnvSchema)
   .merge(RedisEnvSchema)
-  .merge(AuthEnvSchema);
+  .merge(AuthEnvSchema)
+  .passthrough();
 
 /**
  * Parse and validate environment variables.
@@ -90,7 +91,17 @@ const ApiEnvSchema = BaseEnvSchema.merge(DatabaseEnvSchema)
  * This prevents silent misconfiguration from causing runtime failures.
  */
 export function parseEnv(schema: z.ZodType, env: NodeJS.ProcessEnv = process.env): unknown {
-  const result = schema.safeParse(env);
+  const shape = (schema as any).shape;
+  let filteredEnv = env;
+  if (shape) {
+    filteredEnv = {} as any;
+    for (const key of Object.keys(shape)) {
+      if (env[key] !== undefined) {
+        filteredEnv[key] = env[key];
+      }
+    }
+  }
+  const result = schema.safeParse(filteredEnv);
   if (!result.success) {
     const errors = result.error.flatten().fieldErrors;
     throw new Error(`❌ Invalid environment configuration:\n${JSON.stringify(errors, null, 2)}`);
