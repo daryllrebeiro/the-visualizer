@@ -1,6 +1,7 @@
 import type * as http from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
-import { unpack, pack } from 'msgpackr';
+import { pack, unpack } from 'msgpackr';
+import { WebSocket, WebSocketServer } from 'ws';
+
 import { authenticateConnection } from './auth.js';
 import { roomManager } from './room-manager.js';
 import { sequenceReconciler } from './sequence-reconciler.js';

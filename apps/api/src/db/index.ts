@@ -1,7 +1,9 @@
-import { Pool, defaults } from 'pg';
-import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import { parseEnv, ApiEnvSchema, type ApiEnv } from '@the-visualizer/config';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool, defaults } from 'pg';
+
+import { type ApiEnv, ApiEnvSchema, parseEnv } from '@the-visualizer/config';
+
 import * as schema from './schema.js';
 
 // Parse and validate environment configurations

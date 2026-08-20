@@ -1,8 +1,8 @@
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 import {
-  makeClusterState,
   makeBroker,
+  makeClusterState,
   makePartition,
   resetFactoryCounters,
 } from '../factories/kafka.js';

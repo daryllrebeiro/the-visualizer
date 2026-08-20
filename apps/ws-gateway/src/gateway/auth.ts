@@ -1,4 +1,5 @@
 import { verify } from 'hono/jwt';
+
 import { JWT_SECRET } from '../config.js';
 
 export interface AuthenticatedUser {

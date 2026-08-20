@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
+
 import { db } from '../db/index.js';
-import { users, memberships, organizations } from '../db/schema.js';
+import { memberships, organizations, users } from '../db/schema.js';
 
 export interface UserOrgMembership {
   orgId: string;

@@ -1,6 +1,5 @@
 import { performance } from 'perf_hooks';
-
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 // Define SimEvent schema for benchmarking

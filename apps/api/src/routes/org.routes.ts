@@ -1,9 +1,10 @@
+import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+
+import { db } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { orgRepository } from '../repositories/org.repository.js';
-import { db } from '../db/index.js';
 
 const orgRouter = new Hono();
 

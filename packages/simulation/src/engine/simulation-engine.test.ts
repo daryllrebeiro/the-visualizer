@@ -1,12 +1,13 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import {
   makeBroker,
-  makePartition,
   makeClusterState,
+  makePartition,
   resetFactoryCounters,
 } from '@the-visualizer/test-utils';
-import { describe, it, expect, beforeEach } from 'vitest';
 
-import { SimulationEngine, type SimulationConfig } from './simulation-engine.js';
+import { type SimulationConfig, SimulationEngine } from './simulation-engine.js';
 import type { KafkaClusterState, SimEvent } from './types.js';
 
 describe('SimulationEngine state transitions & snapshots', () => {

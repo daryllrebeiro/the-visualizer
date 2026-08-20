@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
-import app from '../index.js';
-import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
 import type { KafkaClusterState } from '@the-visualizer/contracts';
+
+import { db } from '../db/index.js';
+import app from '../index.js';
 
 describe('Hono REST API Routing & Auth Integration Tests', () => {
   let mockKafkaState: KafkaClusterState;

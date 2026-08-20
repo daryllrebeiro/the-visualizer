@@ -1,12 +1,11 @@
-import { writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { mkdirSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import {
-  KafkaClusterStateSchema,
   ClientIntentSchema,
+  KafkaClusterStateSchema,
   ServerMessageSchema,
   TopologySchema,
 } from '../index.js';

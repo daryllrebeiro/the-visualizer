@@ -1,5 +1,4 @@
 import type { DeterministicRNG } from '../prng/deterministic-rng.js';
-
 import type { KafkaClusterState, SimEvent } from './types.js';
 
 export interface TransitionResult {

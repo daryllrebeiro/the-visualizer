@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { sql } from 'drizzle-orm';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import type { KafkaClusterState } from '@the-visualizer/contracts';
+
 import { db } from '../db/index.js';
 import { orgRepository } from './org.repository.js';
 import { topologyRepository } from './topology.repository.js';
-import { sql } from 'drizzle-orm';
-import type { KafkaClusterState } from '@the-visualizer/contracts';
 import { userRepository } from './user.repository.js';
 
 describe('TopologyRepository Multi-Tenant Integration Tests', () => {

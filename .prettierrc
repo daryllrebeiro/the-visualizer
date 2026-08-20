@@ -11,5 +11,6 @@
   "endOfLine": "lf",
   "importOrder": ["^@the-visualizer/(.*)$", "^[./]"],
   "importOrderSeparation": true,
-  "importOrderSortSpecifiers": true
+  "importOrderSortSpecifiers": true,
+  "plugins": ["@trivago/prettier-plugin-sort-imports"]
 }

@@ -1,13 +1,13 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import {
   makeBroker,
-  makePartition,
   makeClusterState,
+  makePartition,
   resetFactoryCounters,
 } from '@the-visualizer/test-utils';
-import { describe, it, expect, beforeEach } from 'vitest';
 
 import type { KafkaClusterState } from '../engine/types.js';
-
 import { InvariantChecker } from './invariant-checker.js';
 
 describe('InvariantChecker safety policies', () => {

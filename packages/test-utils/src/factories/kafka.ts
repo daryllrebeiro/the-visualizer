@@ -1,4 +1,4 @@
-import type { KafkaClusterState, BrokerNode, TopicPartition } from '@the-visualizer/contracts';
+import type { BrokerNode, KafkaClusterState, TopicPartition } from '@the-visualizer/contracts';
 
 /**
  * Factory functions for building valid Kafka domain objects in tests.

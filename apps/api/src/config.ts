@@ -1,4 +1,4 @@
-import { parseEnv, ApiEnvSchema } from '@the-visualizer/config';
+import { ApiEnvSchema, parseEnv } from '@the-visualizer/config';
 import type { ApiEnv } from '@the-visualizer/config';
 
 export const config = parseEnv(ApiEnvSchema) as ApiEnv;

@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { WebSocket } from 'ws';
 import { sign } from 'hono/jwt';
 import { pack, unpack } from 'msgpackr';
-import { server } from '../index.js';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { WebSocket } from 'ws';
+
 import { JWT_SECRET } from '../config.js';
+import { server } from '../index.js';
 import { roomManager } from './room-manager.js';
 
 describe('WebSocket Gateway Integration Tests', () => {

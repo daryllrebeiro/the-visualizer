@@ -1,4 +1,4 @@
-import { compare, applyPatch, type Operation } from 'fast-json-patch';
+import { type Operation, applyPatch, compare } from 'fast-json-patch';
 
 import type { KafkaClusterState } from '../engine/types.js';
 

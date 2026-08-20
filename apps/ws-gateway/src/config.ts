@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { parseEnv, BaseEnvSchema, RedisEnvSchema } from '@the-visualizer/config';
+
+import { BaseEnvSchema, RedisEnvSchema, parseEnv } from '@the-visualizer/config';
 
 const WsGatewayEnvSchema = BaseEnvSchema.merge(RedisEnvSchema).merge(
   z.object({

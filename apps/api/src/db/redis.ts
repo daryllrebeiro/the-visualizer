@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
-import { parseEnv, ApiEnvSchema, type ApiEnv } from '@the-visualizer/config';
+
+import { type ApiEnv, ApiEnvSchema, parseEnv } from '@the-visualizer/config';
 import { logger } from '@the-visualizer/logging';
 
 const env = parseEnv(ApiEnvSchema) as ApiEnv;

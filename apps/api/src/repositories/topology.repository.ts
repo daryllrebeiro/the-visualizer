@@ -1,8 +1,10 @@
-import { eq, and } from 'drizzle-orm';
-import { db } from '../db/index.js';
-import { topologies, memberships } from '../db/schema.js';
+import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+
 import type { KafkaClusterState } from '@the-visualizer/contracts';
+
+import { db } from '../db/index.js';
+import { memberships, topologies } from '../db/schema.js';
 
 export class TopologyRepository {
   /**

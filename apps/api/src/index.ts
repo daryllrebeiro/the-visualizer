@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
+
+import { config } from './config.js';
 import { authenticate } from './middleware/auth.middleware.js';
 import { authRouter } from './routes/auth.routes.js';
 import { orgRouter } from './routes/org.routes.js';
 import { topologyRouter } from './routes/topology.routes.js';
-import { config } from './config.js';
 
 const app = new Hono();
 

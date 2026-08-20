@@ -1,6 +1,7 @@
 import { Redis } from 'ioredis';
 import { pack } from 'msgpackr';
 import type { WebSocket } from 'ws';
+
 import { config } from '../config.js';
 import { sequenceReconciler } from './sequence-reconciler.js';
 
@@ -22,8 +23,15 @@ export class RoomManager {
     this.pub = new Redis(config.REDIS_URL, {
       password: config.REDIS_PASSWORD,
     });
+    this.pub.on('error', () => {
+      // Suppress unhandled connection-closed errors during socket teardowns
+    });
+
     this.sub = new Redis(config.REDIS_URL, {
       password: config.REDIS_PASSWORD,
+    });
+    this.sub.on('error', () => {
+      // Suppress unhandled connection-closed errors during socket teardowns
     });
 
     this.setupRedisSubscription();
@@ -81,7 +89,11 @@ export class RoomManager {
       // If room is empty locally, unsubscribe and cleanup sequence buffers
       if (clients.size === 0) {
         this.rooms.delete(roomId);
-        await this.sub.unsubscribe(`room:${roomId}`);
+        if (this.sub.status === 'ready') {
+          try {
+            await this.sub.unsubscribe(`room:${roomId}`);
+          } catch (_) {}
+        }
         sequenceReconciler.clearRoom(roomId);
       }
     }
@@ -134,8 +146,16 @@ export class RoomManager {
   }
 
   public async close(): Promise<void> {
-    await this.pub.quit();
-    await this.sub.quit();
+    try {
+      if (this.pub.status === 'ready') {
+        await this.pub.quit();
+      }
+    } catch (_) {}
+    try {
+      if (this.sub.status === 'ready') {
+        await this.sub.quit();
+      }
+    } catch (_) {}
   }
 }
 

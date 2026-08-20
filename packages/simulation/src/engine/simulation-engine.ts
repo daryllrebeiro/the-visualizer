@@ -1,8 +1,7 @@
 import { InvariantChecker, type InvariantViolation } from '../invariants/invariant-checker.js';
 import { DeterministicRNG } from '../prng/deterministic-rng.js';
-import { VirtualTimeline, type ScheduledEvent } from '../scheduler/virtual-timeline.js';
+import { type ScheduledEvent, VirtualTimeline } from '../scheduler/virtual-timeline.js';
 import { SnapshotManager } from '../snapshot/snapshot-manager.js';
-
 import { pureStateTransition } from './state-transitions.js';
 import type { KafkaClusterState, SimEvent } from './types.js';
 

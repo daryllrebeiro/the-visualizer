@@ -1,4 +1,4 @@
-import { trace, type Span } from '@opentelemetry/api';
+import { type Span, trace } from '@opentelemetry/api';
 import pino from 'pino';
 
 /**

@@ -1,8 +1,10 @@
 import * as http from 'http';
+
 import { logger } from '@the-visualizer/logging';
+
 import { config } from './config.js';
-import { createWebSocketServer } from './gateway/ws-server.js';
 import { roomManager } from './gateway/room-manager.js';
+import { createWebSocketServer } from './gateway/ws-server.js';
 
 const server = http.createServer((_req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });

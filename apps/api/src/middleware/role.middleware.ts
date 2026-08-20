@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+
 import { orgRepository } from '../repositories/org.repository.js';
 import type { UserContextPayload } from './auth.middleware.js';
 

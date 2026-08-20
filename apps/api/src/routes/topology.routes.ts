@@ -1,10 +1,12 @@
+import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+
+import type { KafkaClusterState } from '@the-visualizer/contracts';
+
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireOrgRole } from '../middleware/role.middleware.js';
 import { topologyRepository } from '../repositories/topology.repository.js';
-import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 const topologyRouter = new Hono();
 

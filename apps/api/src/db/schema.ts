@@ -1,13 +1,14 @@
 import {
-  pgTable,
-  uuid,
-  varchar,
-  text,
-  timestamp,
   integer,
   jsonb,
+  pgTable,
   primaryKey,
+  text,
+  timestamp,
+  uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
+
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 export const organizations = pgTable('organizations', {
