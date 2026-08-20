@@ -1,0 +1,209 @@
+import { compare } from 'fast-json-patch';
+import { Redis } from 'ioredis';
+
+import type { KafkaClusterState } from '@the-visualizer/contracts';
+import { logger } from '@the-visualizer/logging';
+import { SimulationEngine } from '@the-visualizer/simulation';
+
+import { config } from '../config.js';
+import { roomManager } from './room-manager.js';
+
+export interface RoomSession {
+  roomId: string;
+  engine: SimulationEngine;
+  tickCount: number;
+  timer: NodeJS.Timeout | null;
+  isHalted: boolean;
+}
+
+export class SimulationRunner {
+  private activeSessions = new Map<string, RoomSession>();
+  private redis: Redis;
+
+  constructor() {
+    this.redis = new Redis(config.REDIS_URL, {
+      password: config.REDIS_PASSWORD,
+    });
+    this.redis.on('error', (err) => {
+      logger.error({ err }, 'SimulationRunner Redis connection error');
+    });
+  }
+
+  /**
+   * Starts a simulation session for a room if not already running.
+   */
+  public startSession(roomId: string, initialTopology: KafkaClusterState): void {
+    if (this.activeSessions.has(roomId)) {
+      return;
+    }
+
+    const engineConfig = {
+      seed: 12345,
+      maxTicks: 1_000_000,
+      maxEvents: 5_000_000,
+      maxMemoryMb: 128,
+      speedMultiplier: 1.0,
+    };
+
+    const engine = new SimulationEngine(engineConfig);
+
+    // Create callback targets
+    const callbacks = {
+      onEventBatch: () => {
+        // No-op - event batches are not broadcasted individually to save bandwidth
+      },
+      onInvariantViolation: (violation: any) => {
+        const message =
+          typeof violation === 'object' && violation !== null && 'message' in violation
+            ? String(violation.message)
+            : 'Invariant safety policy violated';
+        void this.haltSession(roomId, message);
+      },
+      onResourceLimitExceeded: (reason: string) => {
+        void this.haltSession(roomId, reason);
+      },
+    };
+
+    engine.registerCallbacks(callbacks);
+    engine.initialize(initialTopology);
+
+    const session: RoomSession = {
+      roomId,
+      engine,
+      tickCount: 0,
+      timer: null,
+      isHalted: false,
+    };
+
+    this.activeSessions.set(roomId, session);
+
+    // Run tick loop at 100ms interval (10 Hz)
+    session.timer = setInterval(() => {
+      void this.executeTick(session);
+    }, 100);
+  }
+
+  /**
+   * Drains client intents from Redis queue, steps simulation timeline, and broadcasts diffs.
+   */
+  private async executeTick(session: RoomSession): Promise<void> {
+    if (session.isHalted) return;
+
+    try {
+      const { roomId, engine } = session;
+
+      // 1. Drain pending intents from Redis List room:<roomId>:intents
+      const intentsKey = `room:${roomId}:intents`;
+      // Fetch up to 50 intents atomically
+      const intentsRaw = await this.redis.lrange(intentsKey, 0, 49);
+      if (intentsRaw.length > 0) {
+        await this.redis.ltrim(intentsKey, intentsRaw.length, -1);
+      }
+
+      // 2. Queue intents on simulation engine
+      for (const raw of intentsRaw) {
+        try {
+          const intent = JSON.parse(raw) as Record<string, any>;
+          if (typeof intent.type === 'string' && intent.payload) {
+            engine.scheduleEvent(
+              engine.currentTick,
+              Math.random().toString(36).substring(7),
+              intent.type as any,
+              intent.payload as Record<string, unknown>,
+            );
+          }
+        } catch {
+          // Ignore bad intent parsing
+        }
+      }
+
+      // Record current state before transition
+      const previousState = engine.state
+        ? (JSON.parse(JSON.stringify(engine.state)) as KafkaClusterState)
+        : null;
+
+      // 3. Step the engine forward by 1 tick
+      engine.step(1);
+      session.tickCount++;
+
+      // 4. Compute delta patch
+      const currentState = engine.state;
+      if (previousState && currentState) {
+        const patch = compare(previousState, currentState);
+
+        if (patch.length > 0) {
+          // Broadcast updates to Redis room channel
+          await roomManager.publishRoomUpdate(roomId, {
+            type: 'EVENT_BATCH',
+            payload: {
+              tick: session.tickCount,
+              patch,
+            },
+          });
+        }
+      }
+
+      // 5. Periodically push replay keyframe to Redis queue for asynchronous DB flushes
+      if (session.tickCount % 50 === 0 && currentState) {
+        const replayFrame = {
+          roomId,
+          tick: session.tickCount,
+          state: currentState,
+          timestamp: Date.now(),
+        };
+        await this.redis.lpush(`simulation:${roomId}:replays`, JSON.stringify(replayFrame));
+      }
+    } catch {
+      // Catch exceptions in tick loop execution
+    }
+  }
+
+  /**
+   * Halts session on invariant safety violations.
+   */
+  private async haltSession(roomId: string, errorMessage: string): Promise<void> {
+    const session = this.activeSessions.get(roomId);
+    if (!session || session.isHalted) return;
+
+    session.isHalted = true;
+    if (session.timer) {
+      clearInterval(session.timer);
+    }
+
+    // Broadcast safety violation halt frame to room nodes
+    await roomManager.publishRoomUpdate(roomId, {
+      type: 'INVARIANT_VIOLATION',
+      payload: {
+        error: errorMessage,
+        tick: session.tickCount,
+      },
+    });
+  }
+
+  /**
+   * Terminates active session.
+   */
+  public stopSession(roomId: string): void {
+    const session = this.activeSessions.get(roomId);
+    if (!session) return;
+
+    if (session.timer) {
+      clearInterval(session.timer);
+    }
+    this.activeSessions.delete(roomId);
+  }
+
+  public getSession(roomId: string): RoomSession | undefined {
+    return this.activeSessions.get(roomId);
+  }
+
+  public async close(): Promise<void> {
+    for (const session of this.activeSessions.values()) {
+      if (session.timer) clearInterval(session.timer);
+    }
+    this.activeSessions.clear();
+    await this.redis.quit();
+  }
+}
+
+export const simulationRunner = new SimulationRunner();

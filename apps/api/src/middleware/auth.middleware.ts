@@ -38,9 +38,9 @@ export const authenticate: MiddlewareHandler = async (c, next) => {
   if (token) {
     try {
       const payload = await verify(token, JWT_SECRET, 'HS256');
-      if (payload && typeof payload['id'] === 'string') {
+      if (payload && typeof payload.id === 'string') {
         // Fetch or verify user exists in DB
-        const user = await userRepository.getUserById(payload['id']);
+        const user = await userRepository.getUserById(payload.id);
         if (user) {
           c.set('user', {
             id: user.id,
@@ -49,12 +49,12 @@ export const authenticate: MiddlewareHandler = async (c, next) => {
           });
         }
       }
-    } catch (err) {
+    } catch {
       // Invalid/Expired token - intentionally ignore so that requireAuth can handle rejection
     }
   }
 
-  return await next();
+  await next();
 };
 
 /**
@@ -75,5 +75,5 @@ export const requireAuth: MiddlewareHandler = async (c, next) => {
       401,
     );
   }
-  return await next();
+  return next();
 };

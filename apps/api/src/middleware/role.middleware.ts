@@ -1,14 +1,13 @@
 import type { MiddlewareHandler } from 'hono';
 
 import { orgRepository } from '../repositories/org.repository.js';
-import type { UserContextPayload } from './auth.middleware.js';
 
 export function requireOrgRole(
   minRole: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER',
   getOrgId: (c: any) => string | undefined = (c) =>
     c.req.param('orgId') ||
     c.req.query('orgId') ||
-    (c.req.valid ? (c.req.valid('json') as any)?.orgId : undefined),
+    (c.req.valid ? c.req.valid('json')?.orgId : undefined),
 ): MiddlewareHandler {
   const roleHierarchy = {
     OWNER: 4,
@@ -18,7 +17,7 @@ export function requireOrgRole(
   };
 
   return async (c, next) => {
-    const user = c.get('user') as UserContextPayload | undefined;
+    const user = c.get('user');
     if (!user) {
       return c.json(
         {
@@ -61,7 +60,7 @@ export function requireOrgRole(
       );
     }
 
-    const userRoleValue = roleHierarchy[membership.role as keyof typeof roleHierarchy];
+    const userRoleValue = roleHierarchy[membership.role];
     const minRoleValue = roleHierarchy[minRole];
 
     if (userRoleValue < minRoleValue) {
@@ -77,6 +76,6 @@ export function requireOrgRole(
       );
     }
 
-    return await next();
+    return next();
   };
 }

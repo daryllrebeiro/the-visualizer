@@ -18,7 +18,7 @@ describe('TopologyRepository Multi-Tenant Integration Tests', () => {
   beforeAll(async () => {
     // Basic mock Kafka Cluster State
     mockKafkaState = {
-      clusterId: 'kafka-cluster-id' as never,
+      clusterId: 'kafka-cluster-id',
       rngState: 12345,
       brokers: {},
       topics: {},

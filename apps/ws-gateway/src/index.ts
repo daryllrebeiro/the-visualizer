@@ -4,6 +4,7 @@ import { logger } from '@the-visualizer/logging';
 
 import { config } from './config.js';
 import { roomManager } from './gateway/room-manager.js';
+import { simulationRunner } from './gateway/runner.js';
 import { createWebSocketServer } from './gateway/ws-server.js';
 
 const server = http.createServer((_req, res) => {
@@ -16,12 +17,12 @@ const wss = createWebSocketServer(server);
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(config.PORT, () => {
-    logger.info(`🚀 WebSocket Realtime Gateway listening on port ${config.PORT}`);
+    logger.info(`🚀 WebSocket Realtime Gateway listening on port ${String(config.PORT)}`);
   });
 }
 
 // Graceful Shutdown
-async function handleShutdown(signal: string) {
+async function handleShutdown(signal: string): Promise<void> {
   logger.info(`Received ${signal}. Shutting down WebSocket gateway gracefully...`);
 
   // Close HTTP Server (drains upgrades)
@@ -37,6 +38,8 @@ async function handleShutdown(signal: string) {
     logger.info('WebSocket Server closed.');
   });
 
+  // Close simulation runner tick loops and Redis connection
+  await simulationRunner.close();
   // Quit Redis client pools
   await roomManager.close();
   logger.info('Redis connections closed.');
@@ -45,10 +48,10 @@ async function handleShutdown(signal: string) {
 }
 
 process.on('SIGINT', () => {
-  handleShutdown('SIGINT');
+  void handleShutdown('SIGINT');
 });
 process.on('SIGTERM', () => {
-  handleShutdown('SIGTERM');
+  void handleShutdown('SIGTERM');
 });
 
 export { wss, server };

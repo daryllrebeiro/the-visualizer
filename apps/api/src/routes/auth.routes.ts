@@ -37,7 +37,7 @@ authRouter.post('/dev-login', zValidator('json', devLoginSchema), async (c) => {
   // Set Secure HttpOnly cookie
   setCookie(c, 'session_token', token, {
     httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production',
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'Lax',
     path: '/',
     maxAge: 86400, // 24 hours in seconds

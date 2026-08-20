@@ -27,24 +27,25 @@ export async function authenticateConnection(
 
     // 2. Try Cookie Header
     if (!token && cookieHeader) {
-      const match = cookieHeader.match(/session_token=([^;]+)/);
-      if (match && match[1]) {
-        token = match[1];
+      const match = /session_token=([^;]+)/.exec(cookieHeader);
+      const matchedToken = match?.[1];
+      if (matchedToken) {
+        token = matchedToken;
       }
     }
 
     if (!token) return null;
 
     // Verify JWT payload
-    const payload = await verify(token, JWT_SECRET, 'HS256');
-    if (payload && typeof payload['id'] === 'string' && typeof payload['email'] === 'string') {
+    const payload = (await verify(token, JWT_SECRET, 'HS256')) as Record<string, unknown>;
+    if (typeof payload.id === 'string' && typeof payload.email === 'string') {
       return {
-        id: payload['id'],
-        email: payload['email'],
-        name: String(payload['name'] || ''),
+        id: payload.id,
+        email: payload.email,
+        name: typeof payload.name === 'string' ? payload.name : '',
       };
     }
-  } catch (err) {
+  } catch {
     // JWT verification failed
   }
 

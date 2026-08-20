@@ -11,7 +11,7 @@ describe('Hono REST API Routing & Auth Integration Tests', () => {
 
   beforeAll(async () => {
     mockKafkaState = {
-      clusterId: 'kafka-cluster-id' as never,
+      clusterId: 'kafka-cluster-id',
       rngState: 54321,
       brokers: {},
       topics: {},

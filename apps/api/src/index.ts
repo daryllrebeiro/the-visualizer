@@ -46,7 +46,7 @@ app.route('/orgs', orgRouter);
 app.route('/topologies', topologyRouter);
 
 // 3. Port startup bindings when executed directly
-if (process.env['NODE_ENV'] !== 'test') {
+if (process.env.NODE_ENV !== 'test') {
   console.log(`🚀 Stateless REST API listening on port ${config.PORT}`);
 }
 

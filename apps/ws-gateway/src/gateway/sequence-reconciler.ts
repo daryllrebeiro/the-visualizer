@@ -16,7 +16,7 @@ export class SequenceReconciler {
    * Assigns a sequence number to a room message, buffers it, and returns the sequence.
    */
   public bufferMessage(roomId: string, payload: any): number {
-    const nextSeq = this.roomSequences.get(roomId) || 1;
+    const nextSeq = this.roomSequences.get(roomId) ?? 1;
     this.roomSequences.set(roomId, nextSeq + 1);
 
     const message: SequenceMessage = {
@@ -47,7 +47,7 @@ export class SequenceReconciler {
    * otherwise returns null (indicating a full snapshot sync is required).
    */
   public recoverGap(roomId: string, fromSequence: number): any[] | null {
-    const buffer = this.roomBuffers.get(roomId) || [];
+    const buffer = this.roomBuffers.get(roomId) ?? [];
     if (buffer.length === 0) return null;
 
     const firstSeq = buffer[0]?.sequence;

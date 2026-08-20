@@ -23,6 +23,7 @@
     "@the-visualizer/contracts": "workspace:*",
     "@the-visualizer/logging": "workspace:*",
     "@the-visualizer/simulation": "workspace:*",
+    "fast-json-patch": "^3.1.1",
     "hono": "^4.13.3",
     "ioredis": "^5.4.1",
     "msgpackr": "^1.11.2",

@@ -45,7 +45,7 @@ export class RoomManager {
         try {
           const payload = JSON.parse(message);
           this.broadcastToLocalRoom(roomId, payload);
-        } catch (err) {
+        } catch {
           // Failed to parse pub/sub message
         }
       }
@@ -92,7 +92,9 @@ export class RoomManager {
         if (this.sub.status === 'ready') {
           try {
             await this.sub.unsubscribe(`room:${roomId}`);
-          } catch (_) {}
+          } catch {
+            // Ignore errors
+          }
         }
         sequenceReconciler.clearRoom(roomId);
       }
@@ -100,10 +102,26 @@ export class RoomManager {
   }
 
   /**
-   * Publishes client intents to Redis so they are routed to the session worker.
+   * Pushes client intents to a Redis List queue so they are consumed by the simulation worker.
    */
   public async publishIntent(roomId: string, intent: any): Promise<void> {
-    await this.pub.publish(`room:${roomId}:intents`, JSON.stringify(intent));
+    if (this.pub.status === 'ready') {
+      await this.pub.lpush(`room:${roomId}:intents`, JSON.stringify(intent));
+    }
+  }
+
+  /**
+   * Retrieves cached topology string from Redis.
+   */
+  public async getCachedTopology(roomId: string): Promise<string | null> {
+    try {
+      if (this.pub.status === 'ready') {
+        return await this.pub.get(`topology:${roomId}`);
+      }
+    } catch {
+      // Ignore error
+    }
+    return null;
   }
 
   /**
@@ -150,12 +168,16 @@ export class RoomManager {
       if (this.pub.status === 'ready') {
         await this.pub.quit();
       }
-    } catch (_) {}
+    } catch {
+      // Ignore error
+    }
     try {
       if (this.sub.status === 'ready') {
         await this.sub.quit();
       }
-    } catch (_) {}
+    } catch {
+      // Ignore error
+    }
   }
 }
 

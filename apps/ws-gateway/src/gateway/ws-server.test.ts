@@ -45,7 +45,7 @@ describe('WebSocket Gateway Integration Tests', () => {
 
   it('should reject connection upgrade with 401 if token is invalid or missing', () => {
     return new Promise<void>((resolve) => {
-      const client = new WebSocket(`ws://localhost:${port}`);
+      const client = new WebSocket(`ws://localhost:${String(port)}`);
       client.on('error', (err: any) => {
         // Upgrade failed (e.g. returned 401)
         expect(err.message).toContain('Unexpected server response: 401');
@@ -56,7 +56,7 @@ describe('WebSocket Gateway Integration Tests', () => {
 
   it('should accept connection upgrade with valid token query parameter', () => {
     return new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://localhost:${port}?token=${testUserToken}`);
+      const client = new WebSocket(`ws://localhost:${String(port)}?token=${testUserToken}`);
 
       client.on('open', () => {
         expect(client.readyState).toBe(WebSocket.OPEN);
@@ -72,7 +72,7 @@ describe('WebSocket Gateway Integration Tests', () => {
 
   it('should support joining rooms and dispatching ClientIntents', () => {
     return new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://localhost:${port}?token=${testUserToken}`);
+      const client = new WebSocket(`ws://localhost:${String(port)}?token=${testUserToken}`);
 
       client.on('open', () => {
         // Send JOIN_ROOM MessagePack request
@@ -84,7 +84,7 @@ describe('WebSocket Gateway Integration Tests', () => {
       });
 
       client.on('message', (data: Buffer) => {
-        const message = unpack(data) as any;
+        const message = unpack(data) as Record<string, any>;
         if (message.type === 'ROOM_JOINED') {
           expect(message.payload.roomId).toBe('test-room-1');
           client.close();
@@ -100,7 +100,7 @@ describe('WebSocket Gateway Integration Tests', () => {
 
   it('should handle GAP_RECOVERY request and trigger full snapshot sync if sequence is missing', () => {
     return new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://localhost:${port}?token=${testUserToken}`);
+      const client = new WebSocket(`ws://localhost:${String(port)}?token=${testUserToken}`);
 
       client.on('open', () => {
         // Join room first
@@ -113,7 +113,7 @@ describe('WebSocket Gateway Integration Tests', () => {
 
       let joined = false;
       client.on('message', (data: Buffer) => {
-        const message = unpack(data) as any;
+        const message = unpack(data) as Record<string, any>;
 
         if (message.type === 'ROOM_JOINED') {
           joined = true;
