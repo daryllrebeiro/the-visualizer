@@ -18,11 +18,12 @@
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "@the-visualizer/config": "workspace:*",
     "@the-visualizer/contracts": "workspace:*",
     "@the-visualizer/logging": "workspace:*",
     "@the-visualizer/simulation": "workspace:*",
-    "@opentelemetry/api": "^1.9.0",
+    "hono": "^4.13.3",
     "ioredis": "^5.4.1",
     "msgpackr": "^1.11.2",
     "ws": "^8.18.0",
