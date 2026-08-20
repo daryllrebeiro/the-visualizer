@@ -1,0 +1,371 @@
+{
+  "$ref": "#/definitions/cluster-state",
+  "definitions": {
+    "cluster-state": {
+      "type": "object",
+      "properties": {
+        "clusterId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "tick": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rngState": {
+          "type": "integer"
+        },
+        "brokers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "host": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "rack": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "status": {
+                "type": "string",
+                "enum": ["ALIVE", "DEGRADED", "CRASHED", "RECOVERING"]
+              },
+              "diskUsageBytes": {
+                "type": "number",
+                "minimum": 0
+              },
+              "maxDiskSizeBytes": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "lastHeartbeatTick": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "host",
+              "port",
+              "status",
+              "diskUsageBytes",
+              "maxDiskSizeBytes",
+              "lastHeartbeatTick"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "topics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "topic": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 249,
+                  "pattern": "^[a-zA-Z0-9._-]+$"
+                },
+                "partition": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "leaderBrokerId": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/definitions/cluster-state/properties/brokers/additionalProperties/properties/id"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "leaderEpoch": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "replicas": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "brokerId": {
+                        "$ref": "#/definitions/cluster-state/properties/brokers/additionalProperties/properties/id"
+                      },
+                      "logEndOffset": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "lastCaughtUpTick": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "isInSync": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": ["brokerId", "logEndOffset", "lastCaughtUpTick", "isInSync"],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1,
+                  "maxItems": 10
+                },
+                "isr": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/cluster-state/properties/brokers/additionalProperties/properties/id"
+                  }
+                },
+                "highWatermark": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "minInsyncReplicas": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "uncleanLeaderElectionEnabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "topic",
+                "partition",
+                "leaderBrokerId",
+                "leaderEpoch",
+                "replicas",
+                "isr",
+                "highWatermark",
+                "minInsyncReplicas",
+                "uncleanLeaderElectionEnabled"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "consumerGroups": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "state": {
+                "type": "string",
+                "enum": ["Empty", "PreparingRebalance", "CompletingRebalance", "Stable", "Dead"]
+              },
+              "protocol": {
+                "type": "string",
+                "enum": ["range", "roundrobin", "cooperative-sticky"]
+              },
+              "generationId": {
+                "type": "number",
+                "minimum": 0
+              },
+              "leaderMemberId": {
+                "type": ["string", "null"]
+              },
+              "members": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "memberId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "clientId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "clientHost": {
+                      "type": "string",
+                      "maxLength": 255
+                    },
+                    "assignedPartitions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "topic": {
+                            "$ref": "#/definitions/cluster-state/properties/topics/additionalProperties/items/properties/topic"
+                          },
+                          "partition": {
+                            "$ref": "#/definitions/cluster-state/properties/topics/additionalProperties/items/properties/partition"
+                          }
+                        },
+                        "required": ["topic", "partition"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "lastHeartbeatTick": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "memberId",
+                    "clientId",
+                    "clientHost",
+                    "assignedPartitions",
+                    "lastHeartbeatTick"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "committedOffsets": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "required": [
+              "id",
+              "state",
+              "protocol",
+              "generationId",
+              "leaderMemberId",
+              "members",
+              "committedOffsets"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "transactions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "transactionalId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "producerId": {
+                "type": "number",
+                "minimum": 0
+              },
+              "producerEpoch": {
+                "type": "number",
+                "minimum": 0
+              },
+              "txnTimeoutTicks": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "Empty",
+                  "Ongoing",
+                  "PrepareCommit",
+                  "PrepareAbort",
+                  "CompleteCommit",
+                  "CompleteAbort"
+                ]
+              },
+              "partitionsInTxn": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "topic": {
+                      "$ref": "#/definitions/cluster-state/properties/topics/additionalProperties/items/properties/topic"
+                    },
+                    "partition": {
+                      "$ref": "#/definitions/cluster-state/properties/topics/additionalProperties/items/properties/partition"
+                    }
+                  },
+                  "required": ["topic", "partition"],
+                  "additionalProperties": false
+                }
+              },
+              "startTick": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "transactionalId",
+              "producerId",
+              "producerEpoch",
+              "txnTimeoutTicks",
+              "state",
+              "partitionsInTxn",
+              "startTick"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "kraft": {
+          "type": "object",
+          "properties": {
+            "activeControllerId": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/cluster-state/properties/brokers/additionalProperties/properties/id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "controllerEpoch": {
+              "type": "number",
+              "minimum": 0
+            },
+            "voters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/cluster-state/properties/brokers/additionalProperties/properties/id"
+              }
+            },
+            "metadataOffset": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": ["activeControllerId", "controllerEpoch", "voters", "metadataOffset"],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "clusterId",
+        "tick",
+        "rngState",
+        "brokers",
+        "topics",
+        "consumerGroups",
+        "transactions",
+        "kraft"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

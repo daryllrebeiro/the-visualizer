@@ -1,0 +1,269 @@
+{
+  "$ref": "#/definitions/client-intent",
+  "definitions": {
+    "client-intent": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_PRODUCE"
+            },
+            "topic": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 249
+            },
+            "partition": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 1048576
+            },
+            "acks": {
+              "type": "number",
+              "enum": [0, 1, -1]
+            }
+          },
+          "required": ["id", "type", "topic", "key", "value", "acks"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_CONSUMER_JOIN"
+            },
+            "groupId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "clientId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "topics": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 249
+              },
+              "minItems": 1,
+              "maxItems": 50
+            }
+          },
+          "required": ["id", "type", "groupId", "clientId", "topics"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_CONSUMER_LEAVE"
+            },
+            "groupId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "memberId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          "required": ["id", "type", "groupId", "memberId"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_CONSUMER_POLL"
+            },
+            "groupId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "memberId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          "required": ["id", "type", "groupId", "memberId"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_COMMIT_OFFSET"
+            },
+            "groupId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "memberId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "topic": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 249
+            },
+            "partition": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "offset": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": ["id", "type", "groupId", "memberId", "topic", "partition", "offset"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_CHAOS_KILL_BROKER"
+            },
+            "brokerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "required": ["id", "type", "brokerId"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_CHAOS_RECOVER_BROKER"
+            },
+            "brokerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "required": ["id", "type", "brokerId"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_CHAOS_NETWORK_PARTITION"
+            },
+            "isolatedBrokerIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "minItems": 1,
+              "maxItems": 100
+            },
+            "durationTicks": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 50000
+            }
+          },
+          "required": ["id", "type", "isolatedBrokerIds", "durationTicks"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_SIM_CONTROL"
+            },
+            "action": {
+              "type": "string",
+              "enum": ["PLAY", "PAUSE", "STEP_FORWARD", "STEP_BACK", "SET_SPEED"]
+            },
+            "speedMultiplier": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": ["id", "type", "action"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/client-intent/anyOf/0/properties/id"
+            },
+            "type": {
+              "type": "string",
+              "const": "INTENT_REQUEST_SNAPSHOT"
+            }
+          },
+          "required": ["id", "type"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

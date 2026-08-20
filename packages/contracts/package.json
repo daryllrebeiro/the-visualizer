@@ -1,0 +1,50 @@
+{
+  "name": "@the-visualizer/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Authoritative domain model, Zod schemas, and wire protocol contracts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./domain": {
+      "import": "./dist/domain/index.js",
+      "types": "./dist/domain/index.d.ts"
+    },
+    "./websocket": {
+      "import": "./dist/websocket/index.js",
+      "types": "./dist/websocket/index.d.ts"
+    },
+    "./api": {
+      "import": "./dist/api/index.js",
+      "types": "./dist/api/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run",
+    "test:unit": "vitest run --reporter=verbose",
+    "test:coverage": "vitest run --coverage",
+    "export:schemas": "pnpm build && node dist/bin/export-schemas.js",
+    "clean": "rimraf dist json-schemas *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "^3.24.1",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@vitest/coverage-v8": "^2.1.8",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,112 @@
+services:
+  # ───────────────────────────────────────
+  # PostgreSQL 16 — Primary persistence
+  # ───────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: visualizer
+      POSTGRES_PASSWORD: visualizer_local
+      POSTGRES_DB: visualizer_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U visualizer -d visualizer_dev']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ───────────────────────────────────────
+  # Redis 7 — Cache, pub/sub, rate limiting
+  # ───────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass redis_local_secret
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'redis_local_secret', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ───────────────────────────────────────
+  # Redis Insight — GUI for local dev
+  # ───────────────────────────────────────
+  redis-insight:
+    image: redis/redisinsight:latest
+    restart: unless-stopped
+    ports:
+      - '5540:5540'
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - tools
+
+  # ───────────────────────────────────────
+  # pgAdmin — DB GUI for local dev
+  # ───────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: dev@local.dev
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_local
+    ports:
+      - '5050:80'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
+
+  # ───────────────────────────────────────
+  # Prometheus — Metrics collection
+  # ───────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - '9090:9090'
+    profiles:
+      - observability
+
+  # ───────────────────────────────────────
+  # Grafana — Metrics dashboards
+  # ───────────────────────────────────────
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: grafana_local
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - '3001:3000'
+    depends_on:
+      - prometheus
+    profiles:
+      - observability
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:
+
+networks:
+  default:
+    name: visualizer_local

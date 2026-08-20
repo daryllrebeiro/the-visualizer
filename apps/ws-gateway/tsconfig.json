@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    "lib": ["ES2022"]
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/config" },
+    { "path": "../../packages/logging" },
+    { "path": "../../packages/simulation" }
+  ]
+}

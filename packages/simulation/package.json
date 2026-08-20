@@ -1,0 +1,37 @@
+{
+  "name": "@the-visualizer/simulation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic discrete-event simulation engine — zero I/O dependencies",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run",
+    "test:unit": "vitest run --reporter=verbose",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@the-visualizer/test-utils": "workspace:*",
+    "@vitest/coverage-v8": "^2.1.8",
+    "fast-check": "^3.22.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "fast-json-patch": "^3.1.1"
+  }
+}
