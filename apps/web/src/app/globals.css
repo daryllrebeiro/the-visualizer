@@ -1,31 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Light, subtle pastel theme (Draw.io inspired light ice blue & warm slate) */
-  --bg-main: #f8fafc; /* Very light slate ice blue */
-  --panel-bg: #ffffff; /* Clean white card panels */
-  --panel-subtle: #f1f5f9; /* Subtle grey-blue container backgrounds */
+  /* Main Background - Subtle Pastel Grey/Blue */
+  --bg-main: #f1f5f9;
   
-  --accent-blue: #2563eb;
-  --accent-blue-subtle: rgba(37, 99, 235, 0.08);
-  
-  --accent-indigo: #4f46e5;
-  --accent-indigo-subtle: rgba(79, 70, 229, 0.08);
-  
-  --accent-emerald: #059669;
-  --accent-emerald-subtle: rgba(5, 150, 105, 0.08);
-  
-  --accent-amber: #d97706;
-  --accent-amber-subtle: rgba(217, 119, 6, 0.08);
-  
-  --accent-rose: #dc2626;
-  --accent-rose-subtle: rgba(220, 38, 38, 0.08);
-  
-  --text-main: #0f172a;
+  /* Distinct Pastel Card Backgrounds with Good Contrast */
+  --card-overview: #fef9c3; /* Pastel Soft Yellow */
+  --card-simulation: #dbeafe; /* Pastel Soft Blue */
+  --card-[#0f172a]chaos: #ffe4e6; /* Pastel Soft Pink */
+  --card-scrubber: #dcfce7; /* Pastel Soft Light Green */
+  --card-stream: #f3e8ff; /* Pastel Soft Purple */
+  --card-canvas: #ffffff; /* Clean White */
+
+  --text-main: #1e293b;
   --text-sub: #475569;
   --text-muted: #64748b;
-  --border-slate: rgba(148, 163, 184, 0.25);
-  --border-slate-strong: rgba(148, 163, 184, 0.4);
+  
+  --border-slate: #cbd5e1;
+  --border-slate-strong: #94a3b8;
 }
 
 * {
@@ -53,56 +45,58 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.4);
+  background: #cbd5e1;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.6);
+  background: #94a3b8;
 }
 
-/* Card Container */
+/* Base Card Container with Padding & Shadows */
 .card-panel {
-  background: var(--panel-bg);
   border: 1px solid var(--border-slate);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
 }
 
 /* Form Inputs */
 .modern-input {
-  background: #f8fafc;
+  background: #ffffff;
   border: 1px solid var(--border-slate);
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   color: var(--text-main);
   font-family: 'Fira Code', monospace;
   font-size: 11px;
+  text-align: center;
   transition: all 0.15s ease-in-out;
 }
 .modern-input:focus {
   outline: none;
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 2px var(--accent-blue-subtle);
-  background: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
-/* Buttons System */
+/* Button System with Centered Text */
 .btn-base {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.15s ease-in-out;
   font-family: 'Inter', sans-serif;
   user-select: none;
+  text-align: center;
+  width: 100%;
 }
 .btn-base:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 .btn-base:active:not(:disabled) {
@@ -111,58 +105,57 @@ body {
 
 /* Blue primary button */
 .btn-primary {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+  color: #ffffff;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #dbeafe;
-  border-color: #93c5fd;
+  background: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
 
 /* Indigo consumer button */
 .btn-indigo {
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
-  color: #4338ca;
+  background: #4f46e5;
+  border: 1px solid #4338ca;
+  color: #ffffff;
 }
 .btn-indigo:hover:not(:disabled) {
-  background: #e0e7ff;
-  border-color: #a5b4fc;
+  background: #4338ca;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
 }
 
 /* Emerald success button */
 .btn-emerald {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #047857;
+  background: #059669;
+  border: 1px solid #047857;
+  color: #ffffff;
 }
 .btn-emerald:hover:not(:disabled) {
-  background: #d1fae5;
-  border-color: #6ee7b7;
+  background: #047857;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
 }
 
 /* Rose danger button */
 .btn-rose {
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
-  color: #be123c;
+  background: #e11d48;
+  border: 1px solid #be123c;
+  color: #ffffff;
 }
 .btn-rose:hover:not(:disabled) {
-  background: #ffe4e6;
-  border-color: #fda4af;
+  background: #be123c;
+  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.25);
 }
 
 /* Secondary outline button */
 .btn-secondary {
-  background: #f8fafc;
+  background: #ffffff;
   border: 1px solid var(--border-slate);
-  color: var(--text-sub);
+  color: var(--text-main);
 }
 .btn-secondary:hover:not(:disabled) {
-  background: #f1f5f9;
-  color: var(--text-main);
-  border-color: var(--text-sub);
+  background: #f8fafc;
+  border-color: var(--border-slate-strong);
 }
 
 .code-font {

@@ -32,12 +32,10 @@ export default function Page(): React.JSX.Element {
 
   const clientRef = useRef<WebSocketClient | null>(null);
 
-  // Auto-authenticate on mount
   useEffect(() => {
     void handleSandboxLogin();
   }, []);
 
-  // Update playback slider bounds when state changes
   useEffect(() => {
     if (!liveState) return;
 
@@ -55,7 +53,6 @@ export default function Page(): React.JSX.Element {
     }
   }, [liveState, isPaused]);
 
-  // Handle connection
   const handleConnect = () => {
     if (clientRef.current) {
       clientRef.current.disconnect();
@@ -63,7 +60,7 @@ export default function Page(): React.JSX.Element {
 
     if (!token) {
       addLocalLog(
-        'Cannot connect: auth token is missing. Please click Auth Dev first.',
+        'Cannot connect: auth token missing. Click Auth Dev.',
         'ERROR',
       );
       return;
@@ -105,7 +102,6 @@ export default function Page(): React.JSX.Element {
     setRenderedState(null);
   };
 
-  // Sandbox login credentials fetch
   const handleSandboxLogin = async () => {
     try {
       addLocalLog('Requesting developer credentials...', 'INFO');
@@ -149,7 +145,6 @@ export default function Page(): React.JSX.Element {
     setEventLogs((prev) => [log, ...prev].slice(0, 100));
   };
 
-  // Dispatch client intents
   const handleProduceIntent = () => {
     if (clientRef.current) {
       clientRef.current.sendIntent('PRODUCE', {
@@ -210,7 +205,6 @@ export default function Page(): React.JSX.Element {
     }
   };
 
-  // Scrubbing handler
   const handleScrubChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const tickVal = parseInt(e.target.value, 10);
     setPlaybackTick(tickVal);
@@ -222,11 +216,11 @@ export default function Page(): React.JSX.Element {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f8fafc] text-[#0f172a]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f1f5f9] text-[#1e293b]">
       {/* 1. Header Navigation Bar */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white z-20 shrink-0 shadow-sm">
+      <header className="flex items-center justify-between px-8 py-4 border-b border-slate-300 bg-white shadow-sm z-20 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex h-3 w-3 relative items-center justify-center">
+          <div className="flex h-3.5 w-3.5 relative items-center justify-center">
             <span
               className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                 status === 'CONNECTED'
@@ -237,7 +231,7 @@ export default function Page(): React.JSX.Element {
               }`}
             />
             <span
-              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+              className={`relative inline-flex rounded-full h-3 w-3 ${
                 status === 'CONNECTED'
                   ? 'bg-[#10b981]'
                   : status === 'CONNECTING'
@@ -246,58 +240,66 @@ export default function Page(): React.JSX.Element {
               }`}
             />
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-[#0f172a]">TheVisualizer</h1>
+          <h1 className="text-xl font-bold tracking-tight text-[#0f172a] text-center">
+            TheVisualizer
+          </h1>
         </div>
 
-        {/* Endpoint Inputs and Controls */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 bg-[#f1f5f9] border border-slate-200 px-3 py-1.5 rounded-lg">
-            <div className="flex flex-col">
-              <span className="text-[9px] text-[#64748b] font-mono uppercase tracking-wider">REST Gateway</span>
+        {/* Center-Aligned Endpoint Configs */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 bg-[#f8fafc] border border-slate-300 px-4 py-2 rounded-xl shadow-inner">
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold">
+                REST Gateway
+              </span>
               <input
                 type="text"
                 value={restUrl}
                 onChange={(e) => setRestUrl(e.target.value)}
-                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-40 text-[#0f172a]"
+                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-44 font-semibold text-center"
               />
             </div>
-            <div className="h-6 w-px bg-slate-300" />
-            <div className="flex flex-col">
-              <span className="text-[9px] text-[#64748b] font-mono uppercase tracking-wider">WS Tunnel</span>
+            <div className="h-7 w-px bg-slate-300" />
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold">
+                WS Tunnel
+              </span>
               <input
                 type="text"
                 value={wsUrl}
                 onChange={(e) => setWsUrl(e.target.value)}
-                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-40 text-[#0f172a]"
+                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-44 font-semibold text-center"
               />
             </div>
-            <div className="h-6 w-px bg-slate-300" />
-            <div className="flex flex-col">
-              <span className="text-[9px] text-[#64748b] font-mono uppercase tracking-wider">Session Room</span>
+            <div className="h-7 w-px bg-slate-300" />
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold">
+                Session Room
+              </span>
               <input
                 type="text"
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
-                className="modern-input border-none bg-transparent px-0 py-0 text-xs w-16 text-[#0f172a]"
+                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-20 font-semibold text-center"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => {
                 void handleSandboxLogin();
               }}
-              className="btn-base btn-secondary"
+              className="btn-base btn-secondary w-28"
             >
               Auth Dev
             </button>
             {status === 'CONNECTED' ? (
-              <button onClick={handleDisconnect} className="btn-base btn-rose">
+              <button onClick={handleDisconnect} className="btn-base btn-rose w-32">
                 Disconnect
               </button>
             ) : (
-              <button onClick={handleConnect} className="btn-base btn-emerald">
+              <button onClick={handleConnect} className="btn-base btn-emerald w-32">
                 Connect Room
               </button>
             )}
@@ -306,39 +308,39 @@ export default function Page(): React.JSX.Element {
       </header>
 
       {/* 2. Main Workspace Layout */}
-      <div className="flex flex-1 overflow-hidden p-4 gap-4 bg-[#f1f5f9]">
+      <div className="flex flex-1 overflow-hidden p-6 gap-6 bg-[#f1f5f9]">
         {/* Left Sidebar */}
-        <aside className="w-96 flex flex-col gap-4 overflow-y-auto shrink-0">
+        <aside className="w-96 flex flex-col gap-6 overflow-y-auto shrink-0 pr-1">
           
-          {/* Cluster Summary Metrics Card */}
-          <div className="card-panel p-4 flex flex-col gap-3">
-            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
+          {/* Pastel Yellow Card: System Overview */}
+          <div className="card-panel p-5 flex flex-col gap-4 bg-[#fef9c3]">
+            <h2 className="text-sm font-bold text-[#854d0e] uppercase tracking-wider text-center">
               System Overview
             </h2>
             <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
-                <span className="text-[10px] text-[#64748b]">Live Tick</span>
-                <span className="text-base font-bold text-[#0f172a]">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
+                <span className="text-[10px] text-[#854d0e] font-semibold">Live Tick</span>
+                <span className="text-lg font-bold text-[#713f12]">
                   {String(liveState?.tick ?? 0)}
                 </span>
               </div>
-              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
-                <span className="text-[10px] text-[#64748b]">Active Controller</span>
-                <span className="text-base font-bold text-[#d97706]">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
+                <span className="text-[10px] text-[#854d0e] font-semibold">Active Controller</span>
+                <span className="text-lg font-bold text-[#b45309]">
                   {liveState?.kraft.activeControllerId ?? 'NONE'}
                 </span>
               </div>
-              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
-                <span className="text-[10px] text-[#64748b]">Alive Brokers</span>
-                <span className="text-base font-bold text-[#059669]">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
+                <span className="text-[10px] text-[#854d0e] font-semibold">Alive Brokers</span>
+                <span className="text-lg font-bold text-[#047857]">
                   {String(
                     Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'ALIVE').length,
                   )}
                 </span>
               </div>
-              <div className="bg-[#f8fafc] p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
-                <span className="text-[10px] text-[#64748b]">Crashed Nodes</span>
-                <span className="text-base font-bold text-[#dc2626]">
+              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
+                <span className="text-[10px] text-[#854d0e] font-semibold">Crashed Nodes</span>
+                <span className="text-lg font-bold text-[#be123c]">
                   {String(
                     Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'CRASHED').length,
                   )}
@@ -347,20 +349,20 @@ export default function Page(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Simulation Commands Panel */}
-          <div className="card-panel p-4 flex flex-col gap-3">
-            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
+          {/* Pastel Blue Card: Simulation Control */}
+          <div className="card-panel p-5 flex flex-col gap-4 bg-[#dbeafe]">
+            <h2 className="text-sm font-bold text-[#1e40af] uppercase tracking-wider text-center">
               Simulation Control
             </h2>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               <button
                 onClick={handleProduceIntent}
                 disabled={status !== 'CONNECTED' || isHalted}
-                className="btn-base btn-primary w-full"
+                className="btn-base btn-primary"
               >
                 Produce Message (orders)
               </button>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleConsumerJoin}
                   disabled={status !== 'CONNECTED' || isHalted}
@@ -379,12 +381,12 @@ export default function Page(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Chaos Testing Panel */}
-          <div className="card-panel p-4 flex flex-col gap-3">
-            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
+          {/* Pastel Pink Card: Chaos Laboratory */}
+          <div className="card-panel p-5 flex flex-col gap-4 bg-[#ffe4e6]">
+            <h2 className="text-sm font-bold text-[#9f1239] uppercase tracking-wider text-center">
               Chaos Laboratory
             </h2>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={handleKillBroker}
                 disabled={status !== 'CONNECTED' || isHalted}
@@ -402,22 +404,22 @@ export default function Page(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Playback Scrubbing Deck */}
-          <div className="card-panel p-4 flex flex-col gap-3 mt-auto">
-            <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
+          {/* Pastel Light Green Card: Playback Scrubber */}
+          <div className="card-panel p-5 flex flex-col gap-4 bg-[#dcfce7] mt-auto">
+            <h2 className="text-sm font-bold text-[#166534] uppercase tracking-wider text-center">
               Playback Scrubber
             </h2>
             <button
               onClick={() => setIsPaused(!isPaused)}
-              className={`btn-base w-full ${isPaused ? 'btn-emerald' : 'btn-secondary'}`}
+              className={`btn-base ${isPaused ? 'btn-emerald' : 'btn-secondary'}`}
             >
               {isPaused ? '▶ Resume Live Stream' : '❚❚ Pause Stream'}
             </button>
             {isPaused && stateHistory.length > 1 && (
-              <div className="flex flex-col gap-2 pt-2 border-t border-slate-200">
-                <div className="flex justify-between text-xs font-mono text-[#64748b]">
+              <div className="flex flex-col gap-3 pt-3 border-t border-emerald-300">
+                <div className="flex justify-between text-xs font-mono text-[#166534] font-semibold">
                   <span>Timeline</span>
-                  <span className="text-[#2563eb]">Tick {String(playbackTick)}</span>
+                  <span>Tick {String(playbackTick)}</span>
                 </div>
                 <input
                   type="range"
@@ -425,9 +427,9 @@ export default function Page(): React.JSX.Element {
                   max={stateHistory[stateHistory.length - 1]?.tick ?? 0}
                   value={playbackTick}
                   onChange={handleScrubChange}
-                  className="w-full cursor-pointer accent-[#2563eb]"
+                  className="w-full cursor-pointer accent-[#059669]"
                 />
-                <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
+                <div className="flex justify-between text-[10px] font-mono text-[#15803d]">
                   <span>Tick {String(stateHistory[0]?.tick ?? 0)}</span>
                   <span>Tick {String(stateHistory[stateHistory.length - 1]?.tick ?? 0)}</span>
                 </div>
@@ -436,61 +438,68 @@ export default function Page(): React.JSX.Element {
           </div>
         </aside>
 
-        {/* Center Main Canvas */}
-        <main className="flex-1 relative card-panel p-2 overflow-hidden flex flex-col justify-center items-center bg-white">
+        {/* Center Main Canvas Panel */}
+        <main className="flex-1 relative card-panel p-4 overflow-hidden flex flex-col justify-center items-center bg-white shadow-md">
           <Visualizer state={renderedState} onHoverDetails={setHoverDetails} />
 
           {/* Inspect Hover Card */}
           {hoverDetails && (
-            <div className="absolute top-4 left-4 card-panel p-4 z-30 w-80 text-xs code-font whitespace-pre-wrap pointer-events-none border-l-4 border-l-[#2563eb] leading-relaxed shadow-lg bg-white/95">
+            <div className="absolute top-6 left-6 card-panel p-5 z-30 w-80 text-xs code-font whitespace-pre-wrap pointer-events-none border-l-4 border-l-[#2563eb] leading-relaxed shadow-xl bg-white/95 text-center">
               {hoverDetails}
             </div>
           )}
 
           {/* Scrubbing Banner */}
           {isPaused && (
-            <div className="absolute top-4 right-4 bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider font-mono shadow-md">
+            <div className="absolute top-6 right-6 bg-yellow-100 border border-yellow-400 text-yellow-900 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider font-mono shadow-md text-center">
               ❚❚ PAUSED (Scrubbing Tick {String(playbackTick)})
             </div>
           )}
         </main>
 
-        {/* Right Sidebar - Event Stream */}
-        <aside className="w-80 card-panel p-4 flex flex-col gap-3 shrink-0 overflow-hidden bg-white">
-          <h2 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider">
+        {/* Right Sidebar - Pastel Purple Event Log Stream */}
+        <aside className="w-80 card-panel p-5 flex flex-col gap-4 shrink-0 overflow-hidden bg-[#f3e8ff]">
+          <h2 className="text-sm font-bold text-[#6b21a8] uppercase tracking-wider text-center">
             Event Log Stream
           </h2>
-          <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 code-font text-[11px] select-text">
+          <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 code-font text-[11px] select-text">
             {eventLogs.length === 0 ? (
-              <div className="text-center text-[#64748b] mt-10">No events captured</div>
+              <div className="text-center text-[#7e22ce] mt-12 font-semibold">
+                No events captured
+              </div>
             ) : (
               eventLogs.map((log) => {
-                let badgeColor = 'text-[#64748b] bg-slate-100';
-                let logBorder = 'border-slate-200';
+                let badgeColor = 'text-[#475569] bg-slate-200';
+                let logBorder = 'border-purple-200';
                 if (log.type === 'SUCCESS') {
-                  badgeColor = 'text-[#047857] bg-[#ecfdf5]';
-                  logBorder = 'border-[#a7f3d0]';
+                  badgeColor = 'text-[#047857] bg-[#dcfce7]';
+                  logBorder = 'border-emerald-300';
                 }
                 if (log.type === 'WARN') {
-                  badgeColor = 'text-[#b45309] bg-[#fffbeb]';
-                  logBorder = 'border-[#fde68a]';
+                  badgeColor = 'text-[#b45309] bg-[#fef9c3]';
+                  logBorder = 'border-yellow-300';
                 }
                 if (log.type === 'ERROR') {
-                  badgeColor = 'text-[#be123c] bg-[#fff1f2]';
-                  logBorder = 'border-[#fecdd3]';
+                  badgeColor = 'text-[#be123c] bg-[#ffe4e6]';
+                  logBorder = 'border-rose-300';
                 }
 
                 return (
-                  <div key={log.id} className={`border bg-[#f8fafc] rounded-lg p-2.5 flex flex-col gap-1.5 ${logBorder}`}>
+                  <div
+                    key={log.id}
+                    className={`border bg-white rounded-xl p-3 flex flex-col gap-2 shadow-sm ${logBorder}`}
+                  >
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-[#64748b]">
                         {new Date(log.timestamp).toLocaleTimeString()}
                       </span>
-                      <span className={`px-1.5 py-0.5 rounded font-semibold text-[9px] ${badgeColor}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${badgeColor}`}
+                      >
                         {log.type}
                       </span>
                     </div>
-                    <div className="text-[#0f172a] leading-relaxed break-words">
+                    <div className="text-[#1e293b] leading-relaxed break-words text-center font-medium">
                       {log.message}
                     </div>
                   </div>
@@ -503,7 +512,7 @@ export default function Page(): React.JSX.Element {
 
       {/* Safety Violation Alert Overlay */}
       {isHalted && (
-        <div className="bg-[#ef4444] text-white px-6 py-3.5 flex items-center justify-between font-mono font-bold text-xs tracking-wide shadow-2xl relative z-50">
+        <div className="bg-[#be123c] text-white px-8 py-4 flex items-center justify-between font-mono font-bold text-xs tracking-wide shadow-2xl relative z-50">
           <div className="flex items-center gap-3">
             <span className="text-base">⚠️</span>
             <span>
@@ -516,7 +525,7 @@ export default function Page(): React.JSX.Element {
               setHaltError(null);
               handleConnect();
             }}
-            className="px-3.5 py-1.5 bg-white text-slate-900 rounded border border-white/20 text-xs font-semibold uppercase tracking-wider transition-all"
+            className="px-4 py-2 bg-white text-[#be123c] rounded-lg border border-white/20 text-xs font-bold uppercase tracking-wider transition-all"
           >
             Reset Session
           </button>
