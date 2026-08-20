@@ -1,39 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-dark: #090d16;
-  --panel-dark: #0f1422;
-  --panel-light: #161e2e;
+  --bg-slate: #0f172a;
+  --bg-slate-card: #1e293b;
+  --bg-slate-card-subtle: rgba(30, 41, 59, 0.7);
   
-  --accent-blue: #3b82f6;
-  --accent-blue-hover: #2563eb;
-  --accent-blue-pastel: #e0f2fe;
+  --accent-blue: #38bdf8;
+  --accent-blue-subtle: rgba(56, 189, 248, 0.12);
   
-  --accent-purple: #a855f7;
-  --accent-purple-hover: #9333ea;
-  --accent-purple-pastel: #f3e8ff;
+  --accent-indigo: #818cf8;
+  --accent-indigo-subtle: rgba(129, 140, 248, 0.12);
   
-  --accent-green: #10b981;
-  --accent-green-hover: #059669;
-  --accent-green-pastel: #d1fae5;
+  --accent-emerald: #34d399;
+  --accent-emerald-subtle: rgba(52, 211, 153, 0.12);
   
-  --accent-orange: #f97316;
-  --accent-orange-hover: #ea580c;
-  --accent-orange-pastel: #ffedd5;
+  --accent-amber: #fbbf24;
+  --accent-amber-subtle: rgba(251, 191, 36, 0.12);
   
-  --accent-red: #ef4444;
-  --accent-red-hover: #dc2626;
-  --accent-red-pastel: #fee2e2;
+  --accent-rose: #f87171;
+  --accent-rose-subtle: rgba(248, 113, 113, 0.12);
   
-  --accent-yellow: #eab308;
-  --accent-yellow-hover: #ca8a04;
-  --accent-yellow-pastel: #fef3c7;
-  
-  --text-main: #f1f5f9;
+  --text-main: #f8fafc;
   --text-sub: #94a3b8;
   --text-muted: #64748b;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-color-focus: rgba(59, 130, 246, 0.4);
+  --border-slate: rgba(255, 255, 255, 0.08);
+  --border-slate-strong: rgba(255, 255, 255, 0.15);
 }
 
 * {
@@ -44,71 +35,55 @@ html,
 body {
   padding: 0;
   margin: 0;
-  background-color: var(--bg-dark);
+  background-color: var(--bg-slate);
   color: var(--text-main);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow: hidden;
   height: 100vh;
   width: 100vw;
 }
 
-/* Custom scrollbars for a clean look */
+/* Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-blue);
+  background: rgba(255, 255, 255, 0.25);
 }
 
-/* Pulsing highlight for KRaft controller active nodes */
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.2);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(234, 179, 8, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
-  }
-}
-
-.pulsing-border {
-  animation: pulse 2.5s infinite ease-in-out;
-}
-
-/* Glassmorphism Panel style */
-.glass-panel {
-  background: rgba(15, 20, 34, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
+/* Card Container */
+.card-panel {
+  background: var(--bg-slate-card-subtle);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-slate);
   border-radius: 12px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
 }
 
 /* Form Inputs */
 .modern-input {
-  background: rgba(22, 30, 46, 0.6);
-  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-slate);
   border-radius: 8px;
   padding: 6px 12px;
   color: var(--text-main);
   font-family: 'Fira Code', monospace;
   font-size: 11px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s ease-in-out;
 }
 .modern-input:focus {
   outline: none;
   border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-  background: rgba(22, 30, 46, 0.9);
+  box-shadow: 0 0 0 2px var(--accent-blue-subtle);
+  background: rgba(15, 23, 42, 0.9);
 }
 
 /* Buttons System */
@@ -117,89 +92,71 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 8px 14px;
   font-size: 12px;
   font-weight: 500;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-family: 'Outfit', sans-serif;
+  transition: all 0.15s ease-in-out;
+  font-family: 'Inter', sans-serif;
   user-select: none;
 }
 .btn-base:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  transform: none !important;
-  box-shadow: none !important;
 }
 .btn-base:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 /* Blue primary button */
 .btn-primary {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid var(--accent-blue);
+  background: var(--accent-blue-subtle);
+  border: 1px solid rgba(56, 189, 248, 0.4);
   color: var(--accent-blue);
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-blue);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-blue);
 }
 
-/* Purple consumer button */
-.btn-purple {
-  background: rgba(168, 85, 247, 0.1);
-  border: 1px solid var(--accent-purple);
-  color: var(--accent-purple);
+/* Indigo consumer button */
+.btn-indigo {
+  background: var(--accent-indigo-subtle);
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  color: var(--accent-indigo);
 }
-.btn-purple:hover:not(:disabled) {
-  background: var(--accent-purple);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.2);
-}
-
-/* Green success/recover button */
-.btn-success {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid var(--accent-green);
-  color: var(--accent-green);
-}
-.btn-success:hover:not(:disabled) {
-  background: var(--accent-green);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+.btn-indigo:hover:not(:disabled) {
+  background: rgba(129, 140, 248, 0.2);
+  border-color: var(--accent-indigo);
 }
 
-/* Orange/Yellow warnings */
-.btn-warning {
-  background: rgba(249, 115, 22, 0.1);
-  border: 1px solid var(--accent-orange);
-  color: var(--accent-orange);
+/* Emerald success button */
+.btn-emerald {
+  background: var(--accent-emerald-subtle);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: var(--accent-emerald);
 }
-.btn-warning:hover:not(:disabled) {
-  background: var(--accent-orange);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
+.btn-emerald:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.2);
+  border-color: var(--accent-emerald);
 }
 
-/* Red danger/crash button */
-.btn-danger {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid var(--accent-red);
-  color: var(--accent-red);
+/* Rose danger button */
+.btn-rose {
+  background: var(--accent-rose-subtle);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: var(--accent-rose);
 }
-.btn-danger:hover:not(:disabled) {
-  background: var(--accent-red);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+.btn-rose:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: var(--accent-rose);
 }
 
 /* Secondary outline button */
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-slate);
   color: var(--text-sub);
 }
 .btn-secondary:hover:not(:disabled) {
