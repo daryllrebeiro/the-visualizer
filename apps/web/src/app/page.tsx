@@ -216,10 +216,10 @@ export default function Page(): React.JSX.Element {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f1f5f9] text-[#1e293b]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f1f5f9] text-[#1e293b] text-center">
       {/* 1. Header Navigation Bar */}
-      <header className="flex items-center justify-between px-8 py-4 border-b border-slate-300 bg-white shadow-sm z-20 shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="flex items-center justify-between px-8 py-3.5 border-b border-slate-300 bg-white shadow-sm z-20 shrink-0">
+        <div className="flex items-center justify-center gap-3">
           <div className="flex h-3.5 w-3.5 relative items-center justify-center">
             <span
               className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
@@ -246,60 +246,60 @@ export default function Page(): React.JSX.Element {
         </div>
 
         {/* Center-Aligned Endpoint Configs */}
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-4 bg-[#f8fafc] border border-slate-300 px-4 py-2 rounded-xl shadow-inner">
-            <div className="flex flex-col items-center">
-              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold">
+        <div className="flex items-center justify-center gap-5">
+          <div className="flex items-center justify-center gap-4 bg-[#f8fafc] border border-slate-300 px-4 py-1.5 rounded-xl shadow-inner">
+            <div className="flex flex-col items-center justify-center">
+              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold text-center">
                 REST Gateway
               </span>
               <input
                 type="text"
                 value={restUrl}
                 onChange={(e) => setRestUrl(e.target.value)}
-                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-44 font-semibold text-center"
+                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-36 font-semibold text-center"
               />
             </div>
-            <div className="h-7 w-px bg-slate-300" />
-            <div className="flex flex-col items-center">
-              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold">
+            <div className="h-6 w-px bg-slate-300" />
+            <div className="flex flex-col items-center justify-center">
+              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold text-center">
                 WS Tunnel
               </span>
               <input
                 type="text"
                 value={wsUrl}
                 onChange={(e) => setWsUrl(e.target.value)}
-                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-44 font-semibold text-center"
+                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-36 font-semibold text-center"
               />
             </div>
-            <div className="h-7 w-px bg-slate-300" />
-            <div className="flex flex-col items-center">
-              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold">
+            <div className="h-6 w-px bg-slate-300" />
+            <div className="flex flex-col items-center justify-center">
+              <span className="text-[10px] text-[#64748b] font-mono uppercase tracking-wider font-semibold text-center">
                 Session Room
               </span>
               <input
                 type="text"
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
-                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-20 font-semibold text-center"
+                className="modern-input border-none bg-transparent px-1 py-0.5 text-xs w-16 font-semibold text-center"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center gap-3">
             <button
               onClick={() => {
                 void handleSandboxLogin();
               }}
-              className="btn-base btn-secondary w-28"
+              className="btn-base btn-secondary !w-28"
             >
               Auth Dev
             </button>
             {status === 'CONNECTED' ? (
-              <button onClick={handleDisconnect} className="btn-base btn-rose w-32">
+              <button onClick={handleDisconnect} className="btn-base btn-rose !w-32">
                 Disconnect
               </button>
             ) : (
-              <button onClick={handleConnect} className="btn-base btn-emerald w-32">
+              <button onClick={handleConnect} className="btn-base btn-emerald !w-32">
                 Connect Room
               </button>
             )}
@@ -308,39 +308,39 @@ export default function Page(): React.JSX.Element {
       </header>
 
       {/* 2. Main Workspace Layout */}
-      <div className="flex flex-1 overflow-hidden p-6 gap-6 bg-[#f1f5f9]">
+      <div className="flex flex-1 overflow-hidden p-5 gap-5 bg-[#f1f5f9]">
         {/* Left Sidebar */}
-        <aside className="w-96 flex flex-col gap-6 overflow-y-auto shrink-0 pr-1">
+        <aside className="w-80 flex flex-col gap-4 overflow-y-auto shrink-0 pr-1">
           
           {/* Pastel Yellow Card: System Overview */}
-          <div className="card-panel p-5 flex flex-col gap-4 bg-[#fef9c3]">
-            <h2 className="text-sm font-bold text-[#854d0e] uppercase tracking-wider text-center">
+          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#fef9c3]">
+            <h2 className="text-xs font-bold text-[#854d0e] uppercase tracking-wider text-center">
               System Overview
             </h2>
-            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
-                <span className="text-[10px] text-[#854d0e] font-semibold">Live Tick</span>
-                <span className="text-lg font-bold text-[#713f12]">
+            <div className="grid grid-cols-2 gap-2.5 w-full text-xs font-mono">
+              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+                <span className="text-[10px] text-[#854d0e] font-semibold text-center">Live Tick</span>
+                <span className="text-base font-bold text-[#713f12] text-center">
                   {String(liveState?.tick ?? 0)}
                 </span>
               </div>
-              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
-                <span className="text-[10px] text-[#854d0e] font-semibold">Active Controller</span>
-                <span className="text-lg font-bold text-[#b45309]">
+              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+                <span className="text-[10px] text-[#854d0e] font-semibold text-center">Active Controller</span>
+                <span className="text-base font-bold text-[#b45309] text-center">
                   {liveState?.kraft.activeControllerId ?? 'NONE'}
                 </span>
               </div>
-              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
-                <span className="text-[10px] text-[#854d0e] font-semibold">Alive Brokers</span>
-                <span className="text-lg font-bold text-[#047857]">
+              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+                <span className="text-[10px] text-[#854d0e] font-semibold text-center">Alive Brokers</span>
+                <span className="text-base font-bold text-[#047857] text-center">
                   {String(
                     Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'ALIVE').length,
                   )}
                 </span>
               </div>
-              <div className="bg-white/90 p-3 rounded-xl border border-yellow-200 flex flex-col items-center gap-1 shadow-sm">
-                <span className="text-[10px] text-[#854d0e] font-semibold">Crashed Nodes</span>
-                <span className="text-lg font-bold text-[#be123c]">
+              <div className="bg-white/90 p-2.5 rounded-xl border border-yellow-200 flex flex-col items-center justify-center gap-0.5 shadow-sm text-center">
+                <span className="text-[10px] text-[#854d0e] font-semibold text-center">Crashed Nodes</span>
+                <span className="text-base font-bold text-[#be123c] text-center">
                   {String(
                     Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'CRASHED').length,
                   )}
@@ -350,30 +350,30 @@ export default function Page(): React.JSX.Element {
           </div>
 
           {/* Pastel Blue Card: Simulation Control */}
-          <div className="card-panel p-5 flex flex-col gap-4 bg-[#dbeafe]">
-            <h2 className="text-sm font-bold text-[#1e40af] uppercase tracking-wider text-center">
+          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#dbeafe]">
+            <h2 className="text-xs font-bold text-[#1e40af] uppercase tracking-wider text-center">
               Simulation Control
             </h2>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col items-center justify-center gap-3 w-full">
               <button
                 onClick={handleProduceIntent}
                 disabled={status !== 'CONNECTED' || isHalted}
-                className="btn-base btn-primary"
+                className="btn-base btn-primary !w-full"
               >
-                Produce Message (orders)
+                Produce Message
               </button>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center justify-center gap-2.5 w-full">
                 <button
                   onClick={handleConsumerJoin}
                   disabled={status !== 'CONNECTED' || isHalted}
-                  className="btn-base btn-indigo"
+                  className="btn-base btn-indigo !w-32"
                 >
                   Join Consumer
                 </button>
                 <button
                   onClick={handleConsumerLeave}
                   disabled={status !== 'CONNECTED' || isHalted}
-                  className="btn-base btn-secondary"
+                  className="btn-base btn-secondary !w-32"
                 >
                   Leave Consumer
                 </button>
@@ -382,22 +382,22 @@ export default function Page(): React.JSX.Element {
           </div>
 
           {/* Pastel Pink Card: Chaos Laboratory */}
-          <div className="card-panel p-5 flex flex-col gap-4 bg-[#ffe4e6]">
-            <h2 className="text-sm font-bold text-[#9f1239] uppercase tracking-wider text-center">
+          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#ffe4e6]">
+            <h2 className="text-xs font-bold text-[#9f1239] uppercase tracking-wider text-center">
               Chaos Laboratory
             </h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-center gap-2.5 w-full">
               <button
                 onClick={handleKillBroker}
                 disabled={status !== 'CONNECTED' || isHalted}
-                className="btn-base btn-rose"
+                className="btn-base btn-rose !w-32"
               >
                 Crash Broker
               </button>
               <button
                 onClick={handleRecoverBroker}
                 disabled={status !== 'CONNECTED' || isHalted}
-                className="btn-base btn-emerald"
+                className="btn-base btn-emerald !w-32"
               >
                 Recover Broker
               </button>
@@ -405,19 +405,19 @@ export default function Page(): React.JSX.Element {
           </div>
 
           {/* Pastel Light Green Card: Playback Scrubber */}
-          <div className="card-panel p-5 flex flex-col gap-4 bg-[#dcfce7] mt-auto">
-            <h2 className="text-sm font-bold text-[#166534] uppercase tracking-wider text-center">
+          <div className="card-panel p-4 flex flex-col items-center justify-center gap-3 bg-[#dcfce7] mt-auto">
+            <h2 className="text-xs font-bold text-[#166534] uppercase tracking-wider text-center">
               Playback Scrubber
             </h2>
             <button
               onClick={() => setIsPaused(!isPaused)}
-              className={`btn-base ${isPaused ? 'btn-emerald' : 'btn-secondary'}`}
+              className={`btn-base !w-full ${isPaused ? 'btn-emerald' : 'btn-secondary'}`}
             >
-              {isPaused ? '▶ Resume Live Stream' : '❚❚ Pause Stream'}
+              {isPaused ? '▶ Resume Stream' : '❚❚ Pause Stream'}
             </button>
             {isPaused && stateHistory.length > 1 && (
-              <div className="flex flex-col gap-3 pt-3 border-t border-emerald-300">
-                <div className="flex justify-between text-xs font-mono text-[#166534] font-semibold">
+              <div className="flex flex-col items-center justify-center gap-2 pt-2 border-t border-emerald-300 w-full">
+                <div className="flex justify-between w-full text-xs font-mono text-[#166534] font-semibold text-center">
                   <span>Timeline</span>
                   <span>Tick {String(playbackTick)}</span>
                 </div>
@@ -429,7 +429,7 @@ export default function Page(): React.JSX.Element {
                   onChange={handleScrubChange}
                   className="w-full cursor-pointer accent-[#059669]"
                 />
-                <div className="flex justify-between text-[10px] font-mono text-[#15803d]">
+                <div className="flex justify-between w-full text-[10px] font-mono text-[#15803d]">
                   <span>Tick {String(stateHistory[0]?.tick ?? 0)}</span>
                   <span>Tick {String(stateHistory[stateHistory.length - 1]?.tick ?? 0)}</span>
                 </div>
@@ -458,11 +458,11 @@ export default function Page(): React.JSX.Element {
         </main>
 
         {/* Right Sidebar - Pastel Purple Event Log Stream */}
-        <aside className="w-80 card-panel p-5 flex flex-col gap-4 shrink-0 overflow-hidden bg-[#f3e8ff]">
-          <h2 className="text-sm font-bold text-[#6b21a8] uppercase tracking-wider text-center">
+        <aside className="w-80 card-panel p-4 flex flex-col items-center gap-3 shrink-0 overflow-hidden bg-[#f3e8ff]">
+          <h2 className="text-xs font-bold text-[#6b21a8] uppercase tracking-wider text-center">
             Event Log Stream
           </h2>
-          <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 code-font text-[11px] select-text">
+          <div className="flex-1 w-full overflow-y-auto flex flex-col items-center gap-2.5 pr-1 code-font text-[11px] select-text">
             {eventLogs.length === 0 ? (
               <div className="text-center text-[#7e22ce] mt-12 font-semibold">
                 No events captured
@@ -487,9 +487,9 @@ export default function Page(): React.JSX.Element {
                 return (
                   <div
                     key={log.id}
-                    className={`border bg-white rounded-xl p-3 flex flex-col gap-2 shadow-sm ${logBorder}`}
+                    className={`border bg-white rounded-xl p-2.5 w-full flex flex-col items-center gap-1.5 shadow-sm text-center ${logBorder}`}
                   >
-                    <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex justify-between items-center w-full text-[10px]">
                       <span className="text-[#64748b]">
                         {new Date(log.timestamp).toLocaleTimeString()}
                       </span>
@@ -512,8 +512,8 @@ export default function Page(): React.JSX.Element {
 
       {/* Safety Violation Alert Overlay */}
       {isHalted && (
-        <div className="bg-[#be123c] text-white px-8 py-4 flex items-center justify-between font-mono font-bold text-xs tracking-wide shadow-2xl relative z-50">
-          <div className="flex items-center gap-3">
+        <div className="bg-[#be123c] text-white px-8 py-3.5 flex items-center justify-between font-mono font-bold text-xs tracking-wide shadow-2xl relative z-50">
+          <div className="flex items-center justify-center gap-3">
             <span className="text-base">⚠️</span>
             <span>
               CRITICAL INVARIANT VIOLATION: {haltError ?? 'Protocol Exception'}
