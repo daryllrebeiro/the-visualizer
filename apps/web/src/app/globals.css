@@ -582,6 +582,10 @@ p, h1, h2, h3, h4 { margin: 0; }
   position: absolute;
   top: 14px;
   left: 14px;
+  bottom: auto;
+  height: auto;
+  width: max-content;
+  max-width: 220px;
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(10px);
   border: 1px solid #bfdbfe;
@@ -589,7 +593,6 @@ p, h1, h2, h3, h4 { margin: 0; }
   border-radius: var(--r-sm);
   padding: 8px 12px;
   z-index: 30;
-  max-width: 220px;
   font-size: 10px;
   font-family: var(--font-sans);
   pointer-events: none;
@@ -932,72 +935,5 @@ p, h1, h2, h3, h4 { margin: 0; }
 
 .producer-row-btn:active {
   transform: scale(0.95);
-}
-
-/* Styled Hover Tooltip card */
-.hover-tooltip {
-  position: absolute;
-  bottom: 24px;
-  left: 24px;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 14px 18px;
-  color: #ffffff;
-  border-radius: var(--r-md);
-  font-family: var(--font-sans);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-  backdrop-filter: blur(10px);
-  width: 250px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  z-index: 1000;
-  transition: opacity var(--dur) var(--ease);
-}
-
-.hover-tooltip__title {
-  font-weight: 700;
-  font-size: 12.5px;
-  margin: 0;
-  color: #f8fafc;
-  letter-spacing: -0.01em;
-}
-
-.hover-tooltip__subtitle {
-  font-size: 9px;
-  color: #94a3b8;
-  margin: 0 0 6px 0;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
-}
-
-.hover-tooltip__stats {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 6px;
-  margin-top: 2px;
-}
-
-.hover-tooltip__stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  font-size: 11px;
-}
-
-.hover-tooltip__stat-label {
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.hover-tooltip__stat-value {
-  font-family: var(--font-mono);
-  font-weight: 600;
-  color: #f1f5f9;
 }
 
