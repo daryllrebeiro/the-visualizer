@@ -12,6 +12,8 @@ import {
   type ProduceTrigger,
 } from './visualizer';
 import { type ConnectionStatus, type EventLogItem, WebSocketClient } from './ws-client';
+import { EntityInspector, type InspectableEntity } from '../components/inspector/EntityInspector';
+import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
 
 /* ─── helpers ─── */
 function statusDotClass(s: ConnectionStatus): string {
@@ -85,6 +87,9 @@ export default function Page(): React.JSX.Element {
   const [consumers, setConsumers] = useState<ConsumerConfig[]>([
     { id: 'consumer-1', topic: 'orders', groupId: 'order-processors', joined: false, memberId: null },
   ]);
+
+  const [inspectEntity, setInspectEntity] = useState<InspectableEntity | null>(null);
+  const [showScenariosModal, setShowScenariosModal] = useState(false);
 
   const clientRef = useRef<WebSocketClient | null>(null);
 
@@ -423,6 +428,72 @@ export default function Page(): React.JSX.Element {
     addLog(`[${id}] Dispatched: CONSUMER_LEAVE (group "${cConfig.groupId}")`, 'INFO');
   };
 
+  const handleCrashSpecificBroker = (brokerId: string): void => {
+    if (!liveState || !clientRef.current) return;
+    clientRef.current.sendIntent('CHAOS_KILL_BROKER', { brokerId });
+    addLog(`💥 Chaos triggered: Crashed Broker Node #${brokerId}`, 'WARN');
+  };
+
+  const handleRecoverSpecificBroker = (brokerId: string): void => {
+    if (!liveState || !clientRef.current) return;
+    clientRef.current.sendIntent('CHAOS_RECOVER_BROKER', { brokerId });
+    addLog(`🔄 Chaos recovery: Restored Broker Node #${brokerId} to ALIVE`, 'INFO');
+  };
+
+  const handleProduceKey = (topic: string, key: string, value: string): void => {
+    if (!liveState || !clientRef.current) return;
+    const partitions = liveState.topics[topic] || [];
+    if (partitions.length === 0) return;
+
+    // Use Murmur2 Key Partitioner
+    const targetPart = Math.abs(key.split('').reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)) % partitions.length;
+
+    setProduceTrigger({
+      id: Math.random().toString(36).substring(7),
+      producerId: 'producer-1',
+      topic,
+      partition: targetPart,
+      timestamp: Date.now(),
+    });
+
+    clientRef.current.sendIntent('PRODUCE', {
+      topic,
+      partition: targetPart,
+      key,
+      value,
+      acks: 1,
+    });
+    addLog(`[Keyed Produce] key="${key}" → Murmur2 routed to ${topic}/p-${String(targetPart)}`, 'INFO');
+  };
+
+  const handleRunScenario = (scenarioId: string): void => {
+    if (!liveState || !connected) {
+      addLog('Cannot run scenario: Connect to cluster simulation first.', 'WARN');
+      return;
+    }
+
+    if (scenarioId === 'leader-failover') {
+      const ordersP0 = liveState.topics['orders']?.[0];
+      const leaderId = ordersP0?.leaderBrokerId || '1';
+      addLog(`[Scenario: Failover] Step 1: Crashing leader Broker #${leaderId}...`, 'WARN');
+      handleCrashSpecificBroker(leaderId);
+    } else if (scenarioId === 'cooperative-rebalance') {
+      addLog('[Scenario: Rebalance] Step 1: Joining Consumer-2 to group "order-processors"...', 'INFO');
+      const newId = `consumer-${String(consumers.length + 1)}`;
+      clientRef.current?.sendIntent('CONSUMER_JOIN', {
+        groupId: 'order-processors',
+        clientId: newId,
+        memberId: newId,
+        topics: ['orders'],
+      });
+      setConsumers((c) => [...c, { id: newId, topic: 'orders', groupId: 'order-processors', joined: true, memberId: newId }]);
+    } else if (scenarioId === 'kraft-controller-failover') {
+      const ctrlId = liveState.kraft.activeControllerId || '1';
+      addLog(`[Scenario: KRaft Quorum] Step 1: Crashing active KRaft controller Broker #${ctrlId}...`, 'WARN');
+      handleCrashSpecificBroker(ctrlId);
+    }
+  };
+
   const handleKillBroker = (): void => {
     if (!liveState) return;
     const alive = Object.keys(liveState.brokers).filter((id) => liveState.brokers[id]?.status === 'ALIVE');
@@ -443,6 +514,57 @@ export default function Page(): React.JSX.Element {
       clientRef.current.sendIntent('CHAOS_RECOVER_BROKER', { brokerId: id });
       addLog(`Dispatched: RECOVER broker ${id}`, 'INFO');
     }
+  };
+
+  const handleExportTrace = (): void => {
+    if (stateHistory.length === 0) {
+      addLog('No state history captured yet to export.', 'WARN');
+      return;
+    }
+    const traceBundle = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      clusterId: liveState?.clusterId ?? 'cluster-1',
+      stateHistory,
+      eventLogs,
+      producers,
+      consumers,
+    };
+    const blob = new Blob([JSON.stringify(traceBundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kafka-visualizer-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addLog(`Exported deterministic cluster timeline trace (${String(stateHistory.length)} snapshots)`, 'INFO');
+  };
+
+  const handleImportTrace = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const trace = JSON.parse(event.target?.result as string);
+        if (Array.isArray(trace.stateHistory) && trace.stateHistory.length > 0) {
+          setStateHistory(trace.stateHistory);
+          setEventLogs(trace.eventLogs ?? []);
+          if (trace.producers) setProducers(trace.producers);
+          if (trace.consumers) setConsumers(trace.consumers);
+          setIsPaused(true);
+          setPlaybackTick(trace.stateHistory[0].tick);
+          setRenderedState(trace.stateHistory[0]);
+          addLog(`Imported offline trace: ${file.name} (${String(trace.stateHistory.length)} snapshots)`, 'INFO');
+        } else {
+          addLog('Trace format invalid: missing stateHistory array.', 'ERROR');
+        }
+      } catch {
+        addLog('Failed to parse trace: Invalid JSON.', 'ERROR');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleAddBroker = (): void => {
@@ -536,6 +658,10 @@ export default function Page(): React.JSX.Element {
           </div>
 
           <div className="header-actions">
+            <button onClick={() => setShowScenariosModal(true)} className="btn btn--indigo">
+              🎓 Scenarios
+            </button>
+
             <button onClick={() => { void handleSandboxLogin(); }} className="btn btn--ghost">
               Auth Dev
             </button>
@@ -909,7 +1035,7 @@ export default function Page(): React.JSX.Element {
 
           {/* Playback Scrubber */}
           <div className="card card--green card--scrubber-push">
-            <p className="card-title card-title--green">Playback Scrubber</p>
+            <p className="card-title card-title--green">Playback Scrubber & Trace</p>
             <div className="btn-row--single">
               <button
                 onClick={() => setIsPaused(!isPaused)}
@@ -918,6 +1044,32 @@ export default function Page(): React.JSX.Element {
                 {isPaused ? '▶ Resume Stream' : '❚❚ Pause Stream'}
               </button>
             </div>
+
+            <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+              <button
+                onClick={handleExportTrace}
+                className="btn btn--ghost"
+                style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                title="Export current timeline as JSON trace file"
+              >
+                💾 Export Trace
+              </button>
+
+              <label
+                className="btn btn--ghost"
+                style={{ flex: 1, fontSize: '10px', padding: '4px', textAlign: 'center', cursor: 'pointer' }}
+                title="Import and replay offline JSON trace"
+              >
+                📂 Import
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportTrace}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+
             {isPaused && stateHistory.length > 1 && (
               <div className="scrubber-body">
                 <hr className="scrubber-divider" />
@@ -947,6 +1099,7 @@ export default function Page(): React.JSX.Element {
             consumers={consumers}
             produceTrigger={produceTrigger}
             onHoverDetails={setHoverDetails}
+            onSelectEntity={(entity) => setInspectEntity(entity)}
           />
           {hoverDetails && (
             <div className="hover-tooltip">
@@ -988,6 +1141,24 @@ export default function Page(): React.JSX.Element {
           </div>
         </aside>
       </div>
+
+      {/* ── Deep Inspection Drawer ── */}
+      <EntityInspector
+        entity={inspectEntity}
+        state={renderedState}
+        onClose={() => setInspectEntity(null)}
+        onCrashBroker={handleCrashSpecificBroker}
+        onRecoverBroker={handleRecoverSpecificBroker}
+        onProduceKey={handleProduceKey}
+      />
+
+      {/* ── Interactive Scenarios Playbook Modal ── */}
+      {showScenariosModal && (
+        <ScenarioRunner
+          onRunScenario={handleRunScenario}
+          onClose={() => setShowScenariosModal(false)}
+        />
+      )}
 
       {/* ── Halt Banner ── */}
       {isHalted && (

@@ -26,6 +26,8 @@ export interface HoverDetails {
   stats: { label: string; value: string; color?: string | undefined }[];
 }
 
+import type { InspectableEntity } from '../components/inspector/EntityInspector';
+
 export interface ProduceTrigger {
   id: string;
   producerId: string;
@@ -40,6 +42,7 @@ interface VisualizerProps {
   consumers?: ConsumerConfig[] | undefined;
   produceTrigger?: ProduceTrigger | null | undefined;
   onHoverDetails: (details: HoverDetails | null) => void;
+  onSelectEntity?: ((entity: InspectableEntity) => void) | undefined;
 }
 
 interface Particle {
@@ -74,6 +77,7 @@ export function Visualizer({
   consumers = [],
   produceTrigger,
   onHoverDetails,
+  onSelectEntity,
 }: VisualizerProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -90,6 +94,12 @@ export function Visualizer({
   const [isDraggingState, setIsDraggingState] = useState(false);
   const [hasCustomPositions, setHasCustomPositions] = useState(false);
 
+  // Infinite Canvas Camera & Zoom State
+  const cameraRef = useRef({ x: 0, y: 0, zoom: 1.0 });
+  const [zoomDisplay, setZoomDisplay] = useState(1.0);
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0, camX: 0, camY: 0 });
+
   const particles = useRef<Particle[]>([]);
   const stateRef = useRef<KafkaClusterState | null>(null);
   stateRef.current = state;
@@ -101,6 +111,44 @@ export function Visualizer({
 
   const consumersRef = useRef<ConsumerConfig[]>(consumers);
   consumersRef.current = consumers;
+
+  const getTransformedMousePos = (e: React.MouseEvent<HTMLCanvasElement>): { worldX: number; worldY: number; screenX: number; screenY: number } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { worldX: 0, worldY: 0, screenX: 0, screenY: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const cam = cameraRef.current;
+    const worldX = (screenX - cx - cam.x) / cam.zoom + cx;
+    const worldY = (screenY - cy - cam.y) / cam.zoom + cy;
+    return { worldX, worldY, screenX, screenY };
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>): void => {
+    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+    const newZoom = Math.max(0.3, Math.min(2.5, cameraRef.current.zoom * zoomFactor));
+    cameraRef.current.zoom = newZoom;
+    setZoomDisplay(newZoom);
+  };
+
+  const handleResetCamera = (): void => {
+    cameraRef.current = { x: 0, y: 0, zoom: 1.0 };
+    setZoomDisplay(1.0);
+  };
+
+  const handleZoomIn = (): void => {
+    const newZoom = Math.min(2.5, cameraRef.current.zoom * 1.15);
+    cameraRef.current.zoom = newZoom;
+    setZoomDisplay(newZoom);
+  };
+
+  const handleZoomOut = (): void => {
+    const newZoom = Math.max(0.3, cameraRef.current.zoom * 0.85);
+    cameraRef.current.zoom = newZoom;
+    setZoomDisplay(newZoom);
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -266,20 +314,27 @@ export function Visualizer({
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
+    ctx.save();
+    // ── Apply Camera Pan & Zoom Transform ──
+    const cam = cameraRef.current;
+    ctx.translate(width / 2 + cam.x, height / 2 + cam.y);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-width / 2, -height / 2);
+
     // 2. Grid Lines
     ctx.strokeStyle = '#f1f5f9';
     ctx.lineWidth = 1;
     const gridSize = 36;
-    for (let x = 0; x < width; x += gridSize) {
+    for (let x = -width; x < width * 2; x += gridSize) {
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
+      ctx.moveTo(x, -height);
+      ctx.lineTo(x, height * 2);
       ctx.stroke();
     }
-    for (let y = 0; y < height; y += gridSize) {
+    for (let y = -height; y < height * 2; y += gridSize) {
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
+      ctx.moveTo(-width, y);
+      ctx.lineTo(width * 2, y);
       ctx.stroke();
     }
 
@@ -290,6 +345,7 @@ export function Visualizer({
       ctx.font = '13px "Inter", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Waiting for Cluster Simulation Stream...', width / 2, height / 2);
+      ctx.restore();
       return;
     }
 
@@ -818,26 +874,87 @@ export function Visualizer({
       .filter((p) => p.progress < 1)
       .concat(newlyChained)
       .slice(-50);
+
+    ctx.restore();
+
+    // ── Draw Minimap in Screen Space ──
+    if (currentState) {
+      drawMinimap(ctx, width, height, currentState);
+    }
+  };
+
+  const drawMinimap = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    currentState: KafkaClusterState,
+  ): void => {
+    const mapW = 130;
+    const mapH = 80;
+    const mapX = width - mapW - 14;
+    const mapY = height - mapH - 14;
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    drawRoundRect(ctx, mapX, mapY, mapW, mapH, 6, true, true);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '700 7px "Inter", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('MINIMAP', mapX + 6, mapY + 10);
+
+    const scaleX = mapW / width;
+    const scaleY = mapH / height;
+
+    for (const [brokerId, pos] of brokerPositions.current.entries()) {
+      const isController = currentState.kraft.activeControllerId === brokerId;
+      ctx.fillStyle = isController ? '#f59e0b' : '#3b82f6';
+      ctx.beginPath();
+      ctx.arc(mapX + pos.x * scaleX, mapY + pos.y * scaleY, 2.5, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    for (const [, pos] of partitionPositions.current.entries()) {
+      ctx.fillStyle = '#6366f1';
+      ctx.beginPath();
+      ctx.arc(mapX + pos.x * scaleX, mapY + pos.y * scaleY, 2, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    for (const [, pos] of producerPositions.current.entries()) {
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(mapX + pos.x * scaleX, mapY + pos.y * scaleY, 2, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    for (const [, pos] of consumerPositions.current.entries()) {
+      ctx.fillStyle = '#a855f7';
+      ctx.beginPath();
+      ctx.arc(mapX + pos.x * scaleX, mapY + pos.y * scaleY, 2, 0, 2 * Math.PI);
+      ctx.fill();
+    }
   };
 
   // ── Hit Testing for Draggable Nodes (Priority 3) ──
   const findNodeAtPosition = (
-    mouseX: number,
-    mouseY: number,
+    worldX: number,
+    worldY: number,
   ): { key: string; x: number; y: number } | null => {
     const currentState = stateRef.current;
     if (!currentState) return null;
 
     // 1. Check Producers
     for (const [prodId, pos] of producerPositions.current.entries()) {
-      if (Math.hypot(mouseX - pos.x, mouseY - pos.y) <= 28) {
+      if (Math.hypot(worldX - pos.x, worldY - pos.y) <= 28) {
         return { key: `prod-${prodId}`, x: pos.x, y: pos.y };
       }
     }
 
     // 2. Check Consumers
     for (const [memberId, pos] of consumerPositions.current.entries()) {
-      if (Math.hypot(mouseX - pos.x, mouseY - pos.y) <= 28) {
+      if (Math.hypot(worldX - pos.x, worldY - pos.y) <= 28) {
         return { key: `consumer-${memberId}`, x: pos.x, y: pos.y };
       }
     }
@@ -845,10 +962,10 @@ export function Visualizer({
     // 3. Check Partitions
     for (const [partKey, pos] of partitionPositions.current.entries()) {
       if (
-        mouseX >= pos.x - 30 &&
-        mouseX <= pos.x + 30 &&
-        mouseY >= pos.y - 17 &&
-        mouseY <= pos.y + 17
+        worldX >= pos.x - 30 &&
+        worldX <= pos.x + 30 &&
+        worldY >= pos.y - 17 &&
+        worldY <= pos.y + 17
       ) {
         return { key: `part-${partKey}`, x: pos.x, y: pos.y };
       }
@@ -856,7 +973,7 @@ export function Visualizer({
 
     // 4. Check Brokers
     for (const [brokerId, pos] of brokerPositions.current.entries()) {
-      if (Math.hypot(mouseX - pos.x, mouseY - pos.y) <= 38) {
+      if (Math.hypot(worldX - pos.x, worldY - pos.y) <= 38) {
         return { key: `broker-${brokerId}`, x: pos.x, y: pos.y };
       }
     }
@@ -867,21 +984,29 @@ export function Visualizer({
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>): void => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const { worldX, worldY, screenX, screenY } = getTransformedMousePos(e);
 
-    const hit = findNodeAtPosition(mouseX, mouseY);
+    // If middle mouse or alt key or background click -> pan camera
+    if (e.button === 1 || e.altKey) {
+      isPanningRef.current = true;
+      panStartRef.current = { x: screenX, y: screenY, camX: cameraRef.current.x, camY: cameraRef.current.y };
+      return;
+    }
+
+    const hit = findNodeAtPosition(worldX, worldY);
     if (hit) {
       dragTargetRef.current = {
         key: hit.key,
-        startX: mouseX,
-        startY: mouseY,
+        startX: worldX,
+        startY: worldY,
         nodeStartX: hit.x,
         nodeStartY: hit.y,
       };
       setIsDraggingState(true);
       setHasCustomPositions(true);
+    } else {
+      isPanningRef.current = true;
+      panStartRef.current = { x: screenX, y: screenY, camX: cameraRef.current.x, camY: cameraRef.current.y };
     }
   };
 
@@ -889,16 +1014,22 @@ export function Visualizer({
     const canvas = canvasRef.current;
     const currentState = stateRef.current;
     if (!canvas || !currentState) return;
+    const { worldX, worldY, screenX, screenY } = getTransformedMousePos(e);
 
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    // Handle Camera Panning
+    if (isPanningRef.current) {
+      const dx = screenX - panStartRef.current.x;
+      const dy = screenY - panStartRef.current.y;
+      cameraRef.current.x = panStartRef.current.camX + dx;
+      cameraRef.current.y = panStartRef.current.camY + dy;
+      return;
+    }
 
-    // Handle Active Dragging
+    // Handle Active Node Dragging
     const drag = dragTargetRef.current;
     if (drag) {
-      const dx = mouseX - drag.startX;
-      const dy = mouseY - drag.startY;
+      const dx = worldX - drag.startX;
+      const dy = worldY - drag.startY;
       const newX = Math.max(30, Math.min(canvas.width - 30, drag.nodeStartX + dx));
       const newY = Math.max(30, Math.min(canvas.height - 30, drag.nodeStartY + dy));
       customNodePositions.current.set(drag.key, { x: newX, y: newY });
@@ -907,14 +1038,14 @@ export function Visualizer({
     }
 
     // Update cursor
-    const hit = findNodeAtPosition(mouseX, mouseY);
-    canvas.style.cursor = hit ? 'grab' : 'default';
+    const hit = findNodeAtPosition(worldX, worldY);
+    canvas.style.cursor = hit ? 'grab' : isPanningRef.current ? 'grabbing' : 'default';
 
     // Hover inspection
     // 1. Check Brokers
     for (const brokerId in currentState.brokers) {
       const pos = brokerPositions.current.get(brokerId);
-      if (pos && Math.hypot(mouseX - pos.x, mouseY - pos.y) <= 38) {
+      if (pos && Math.hypot(worldX - pos.x, worldY - pos.y) <= 38) {
         const broker = currentState.brokers[brokerId];
         if (broker) {
           onHoverDetails({
@@ -944,19 +1075,19 @@ export function Visualizer({
 
     // 2. Check Partitions
     for (const topicName in currentState.topics) {
-      const partitions = currentState.topics[topicName] || [];
+      const partitions = currentState.topics[topicName] ?? [];
       for (const part of partitions) {
         const partKey = `${topicName}-${String(part.partition)}`;
         const pos = partitionPositions.current.get(partKey);
         if (
           pos &&
-          mouseX >= pos.x - 30 &&
-          mouseX <= pos.x + 30 &&
-          mouseY >= pos.y - 17 &&
-          mouseY <= pos.y + 17
+          worldX >= pos.x - 30 &&
+          worldX <= pos.x + 30 &&
+          worldY >= pos.y - 17 &&
+          worldY <= pos.y + 17
         ) {
           onHoverDetails({
-            title: `Partition [${topicName}-${String(part.partition)}]`,
+            title: `${topicName} [Partition ${String(part.partition)}]`,
             subtitle: 'Topic Log Partition',
             stats: [
               {
@@ -976,10 +1107,10 @@ export function Visualizer({
 
     // 3. Check Producers
     for (const [prodId, pos] of producerPositions.current.entries()) {
-      if (Math.hypot(mouseX - pos.x, mouseY - pos.y) <= 28) {
+      if (Math.hypot(worldX - pos.x, worldY - pos.y) <= 28) {
         const prod = producersRef.current.find((p) => p.id === prodId);
         if (prod) {
-          const partitions = currentState.topics[prod.topic] || [];
+          const partitions = currentState.topics[prod.topic] ?? [];
           const leaderSet = new Set<string>();
           for (const p of partitions) {
             if (p.leaderBrokerId && currentState.brokers[p.leaderBrokerId]?.status === 'ALIVE') {
@@ -1017,7 +1148,7 @@ export function Visualizer({
 
     // 4. Check Consumers
     for (const [memberId, pos] of consumerPositions.current.entries()) {
-      if (Math.hypot(mouseX - pos.x, mouseY - pos.y) <= 28) {
+      if (Math.hypot(worldX - pos.x, worldY - pos.y) <= 28) {
         let matchedMember: any = null;
         let matchedGroupId = 'order-processors';
 
@@ -1059,44 +1190,107 @@ export function Visualizer({
     onHoverDetails(null);
   };
 
-  const handleMouseUp = (): void => {
+  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>): void => {
+    isPanningRef.current = false;
+    const drag = dragTargetRef.current;
+    if (drag) {
+      const { worldX, worldY } = getTransformedMousePos(e);
+      const dragDist = Math.hypot(worldX - drag.startX, worldY - drag.startY);
+
+      // Click detection (< 6px movement)
+      if (dragDist < 6 && onSelectEntity) {
+        if (drag.key.startsWith('broker-')) {
+          const brokerId = drag.key.substring(7);
+          onSelectEntity({ type: 'broker', brokerId });
+        } else if (drag.key.startsWith('partition-')) {
+          const parts = drag.key.substring(10).split('-');
+          const partNum = parseInt(parts.pop() ?? '0', 10);
+          const topic = parts.join('-');
+          onSelectEntity({ type: 'partition', topic, partition: partNum });
+        } else if (drag.key.startsWith('prod-')) {
+          const prodId = drag.key.substring(5);
+          const p = producersRef.current.find((item) => item.id === prodId);
+          onSelectEntity({ type: 'producer', producerId: prodId, topic: p?.topic ?? 'orders' });
+        } else if (drag.key.startsWith('consumer-')) {
+          const memberId = drag.key.substring(9);
+          const c = consumersRef.current.find((item) => item.id === memberId || item.memberId === memberId);
+          onSelectEntity({
+            type: 'consumer',
+            memberId,
+            groupId: c?.groupId ?? 'order-processors',
+          });
+        }
+      }
+    }
     dragTargetRef.current = null;
     setIsDraggingState(false);
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <canvas
         ref={canvasRef}
+        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         className="w-full h-full block rounded-xl bg-white"
-        style={{ cursor: isDraggingState ? 'grabbing' : 'default' }}
+        style={{ cursor: isDraggingState ? 'grabbing' : isPanningRef.current ? 'grabbing' : 'default' }}
       />
-      {hasCustomPositions && (
+
+      {/* ── Infinite Canvas Camera Controls HUD ── */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '14px',
+          left: '14px',
+          display: 'flex',
+          gap: '6px',
+          alignItems: 'center',
+          background: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(4px)',
+          padding: '4px 8px',
+          borderRadius: '8px',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          zIndex: 20,
+        }}
+      >
         <button
-          onClick={handleResetLayout}
+          onClick={handleZoomIn}
           className="btn btn--ghost"
-          style={{
-            position: 'absolute',
-            bottom: '14px',
-            right: '14px',
-            fontSize: '10px',
-            padding: '4px 10px',
-            background: 'rgba(255, 255, 255, 0.92)',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-            border: '1px solid #cbd5e1',
-            borderRadius: '6px',
-            zIndex: 20,
-            cursor: 'pointer',
-          }}
-          title="Reset all dragged node positions to default layout"
+          style={{ padding: '2px 8px', fontSize: '12px', color: '#f8fafc', height: '22px' }}
+          title="Zoom In"
         >
-          ↺ Reset Layout
+          ＋
         </button>
-      )}
+        <button
+          onClick={handleZoomOut}
+          className="btn btn--ghost"
+          style={{ padding: '2px 8px', fontSize: '12px', color: '#f8fafc', height: '22px' }}
+          title="Zoom Out"
+        >
+          －
+        </button>
+        <button
+          onClick={handleResetCamera}
+          className="btn btn--ghost"
+          style={{ padding: '2px 8px', fontSize: '10px', color: '#94a3b8', height: '22px', fontFamily: 'var(--font-mono)' }}
+          title="Reset Zoom & Pan"
+        >
+          {Math.round(zoomDisplay * 100)}%
+        </button>
+        {hasCustomPositions && (
+          <button
+            onClick={handleResetLayout}
+            className="btn btn--ghost"
+            style={{ padding: '2px 8px', fontSize: '10px', color: '#f59e0b', height: '22px' }}
+            title="Reset all dragged node positions to default layout"
+          >
+            ↺ Layout
+          </button>
+        )}
+      </div>
     </div>
   );
 }

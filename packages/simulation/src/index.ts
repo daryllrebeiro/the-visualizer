@@ -20,6 +20,9 @@ export { SnapshotManager } from './snapshot/snapshot-manager.js';
 export { PartitionLog } from './domain/partition-log.js';
 export { InMemoryStorageAdapter } from './domain/storage-adapter.js';
 export { KafkaOracleHarness, type OracleScenarioResult } from './oracle/oracle-harness.js';
+export { kafkaMurmur2, partitionForKey, toPositive } from './partitioners/murmur2.js';
+export { PartitionLogStorage, type PhysicalLogRecord, type LogSegmentSummary } from './storage/log-segment.js';
+export { TransactionCoordinatorManager, type ActiveTxnSession, type TransactionState } from './transactions/txn-coordinator.js';
 
 export type { SimulationConfig } from './engine/simulation-engine.js';
 export type { ScheduledEvent, VirtualTimestamp } from './scheduler/virtual-timeline.js';

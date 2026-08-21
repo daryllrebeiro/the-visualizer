@@ -1,0 +1,88 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: kafka-visualizer-redis
+    command: redis-server --requirepass redis_local_secret
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_local_secret", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: kafka-visualizer-postgres
+    environment:
+      POSTGRES_USER: visualizer_user
+      POSTGRES_PASSWORD: visualizer_password
+      POSTGRES_DB: visualizer_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visualizer_user -d visualizer_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: kafka-visualizer-api
+    environment:
+      PORT: "3000"
+      REDIS_URL: "redis://:redis_local_secret@redis:6379"
+      DATABASE_URL: "postgresql://visualizer_user:visualizer_password@postgres:5432/visualizer_db"
+      SESSION_SECRET: "super-secret-key-that-is-at-least-32-chars-long"
+      ALLOWED_ORIGINS: "http://localhost:3002,http://127.0.0.1:3002"
+    ports:
+      - "3000:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ws-gateway:
+    build:
+      context: .
+      dockerfile: apps/ws-gateway/Dockerfile
+    container_name: kafka-visualizer-ws-gateway
+    environment:
+      PORT: "3001"
+      REDIS_URL: "redis://:redis_local_secret@redis:6379"
+      SESSION_SECRET: "super-secret-key-that-is-at-least-32-chars-long"
+      ALLOWED_ORIGINS: "http://localhost:3002,http://127.0.0.1:3002"
+    ports:
+      - "3001:3001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: kafka-visualizer-web
+    environment:
+      NODE_ENV: production
+      PORT: "3002"
+      NEXT_PUBLIC_API_URL: "http://localhost:3000"
+      NEXT_PUBLIC_WS_URL: "ws://localhost:3001"
+    ports:
+      - "3002:3002"
+    depends_on:
+      - api
+      - ws-gateway
+    restart: unless-stopped
+
+volumes:
+  pgdata:
