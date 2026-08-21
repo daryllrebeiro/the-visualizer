@@ -4,7 +4,13 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
-import { Visualizer, type ProducerConfig, type ConsumerConfig, type HoverDetails } from './visualizer';
+import {
+  Visualizer,
+  type ProducerConfig,
+  type ConsumerConfig,
+  type HoverDetails,
+  type ProduceTrigger,
+} from './visualizer';
 import { type ConnectionStatus, type EventLogItem, WebSocketClient } from './ws-client';
 
 /* ─── helpers ─── */
@@ -60,21 +66,22 @@ export default function Page(): React.JSX.Element {
   const [newTopicName, setNewTopicName] = useState('payments');
   const [newPartitions, setNewPartitions] = useState(3);
 
-  // Producer Creation Modal / State (Priority 1.1 & 1.2)
+  // Producer state & trigger
   const [showAddProducerModal, setShowAddProducerModal] = useState(false);
   const [producerSelectedTopic, setProducerSelectedTopic] = useState('orders');
   const [customProducerTopic, setCustomProducerTopic] = useState('');
+  const [produceTrigger, setProduceTrigger] = useState<ProduceTrigger | null>(null);
 
   const [producers, setProducers] = useState<ProducerConfig[]>([
-    { id: 'producer-1', topic: 'orders' }
+    { id: 'producer-1', topic: 'orders' },
   ]);
 
-  // Consumer Creation Modal / State (Priority 3.1)
+  // Consumer state
   const [showAddConsumerModal, setShowAddConsumerModal] = useState(false);
   const [consumerSelectedTopic, setConsumerSelectedTopic] = useState('orders');
 
   const [consumers, setConsumers] = useState<ConsumerConfig[]>([
-    { id: 'consumer-1', topic: 'orders', joined: false, memberId: null }
+    { id: 'consumer-1', topic: 'orders', joined: false, memberId: null },
   ]);
 
   const clientRef = useRef<WebSocketClient | null>(null);
@@ -167,6 +174,15 @@ export default function Page(): React.JSX.Element {
     const activePartition = partitions.find((p) => p.partition === partition);
     const leaderId = activePartition?.leaderBrokerId ?? '1';
 
+    // Trigger visual packet animation immediately on click
+    setProduceTrigger({
+      id: Math.random().toString(36).substring(7),
+      producerId: targetProd.id,
+      topic: finalTopic,
+      partition,
+      timestamp: Date.now(),
+    });
+
     clientRef.current?.sendIntent('PRODUCE', {
       topic: finalTopic,
       partition,
@@ -182,11 +198,10 @@ export default function Page(): React.JSX.Element {
     e.preventDefault();
     let finalTopic = producerSelectedTopic;
 
-    if (producerSelectedTopic === '__NEW__') {
+    if (producerSelectedTopic === '__NEW__' || producerSelectedTopic === '') {
       if (!customProducerTopic.trim()) return;
       finalTopic = customProducerTopic.trim().toLowerCase();
 
-      // Register new topic on cluster if not existing (Priority 1.2)
       if (!liveState?.topics[finalTopic]) {
         clientRef.current?.sendIntent('CREATE_TOPIC', {
           topic: finalTopic,
@@ -438,7 +453,7 @@ export default function Page(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Producers card (Priority 1.1 & 1.3) */}
+          {/* Producers card */}
           <div className="card card--blue">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p className="card-title card-title--blue">Producers ({producers.length})</p>
@@ -461,7 +476,7 @@ export default function Page(): React.JSX.Element {
               </button>
             </div>
 
-            {/* Inline Add Producer Modal/Form */}
+            {/* Inline Add Producer Modal */}
             {showAddProducerModal && (
               <form onSubmit={handleConfirmAddProducer} className="form-body" style={{ background: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
                 <span className="form-label" style={{ fontWeight: 700, color: '#1e40af' }}>Bind Producer to Topic</span>
@@ -548,7 +563,7 @@ export default function Page(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Consumers card (Priority 3.1) */}
+          {/* Consumers card */}
           <div className="card card--purple">
             <p className="card-title card-title--purple">Consumers ({consumers.length})</p>
             <div className="btn-row">
@@ -715,12 +730,13 @@ export default function Page(): React.JSX.Element {
           </div>
         </aside>
 
-        {/* ── Center Canvas (Priority 2.1, 2.2, 4.1) ── */}
+        {/* ── Center Canvas ── */}
         <main className="canvas-panel">
           <Visualizer
             state={renderedState}
             producers={producers}
             consumers={consumers}
+            produceTrigger={produceTrigger}
             onHoverDetails={setHoverDetails}
           />
           {hoverDetails && (

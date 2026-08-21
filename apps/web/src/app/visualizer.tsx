@@ -23,10 +23,19 @@ export interface HoverDetails {
   stats: { label: string; value: string; color?: string | undefined }[];
 }
 
+export interface ProduceTrigger {
+  id: string;
+  producerId: string;
+  topic: string;
+  partition: number;
+  timestamp: number;
+}
+
 interface VisualizerProps {
   state: KafkaClusterState | null;
   producers: ProducerConfig[];
   consumers?: ConsumerConfig[] | undefined;
+  produceTrigger?: ProduceTrigger | null | undefined;
   onHoverDetails: (details: HoverDetails | null) => void;
 }
 
@@ -41,12 +50,19 @@ interface Particle {
   progress: number;
   speed: number;
   color: string;
-  size: number;
+  label?: string | undefined;
   leg: 1 | 2;
-  chainedTarget?: { x: number; y: number; color: string } | undefined;
+  trail: { x: number; y: number; alpha: number }[];
+  chainedTarget?: { x: number; y: number; color: string; label?: string | undefined } | undefined;
 }
 
-export function Visualizer({ state, producers, consumers = [], onHoverDetails }: VisualizerProps): React.JSX.Element {
+export function Visualizer({
+  state,
+  producers,
+  consumers = [],
+  produceTrigger,
+  onHoverDetails,
+}: VisualizerProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
@@ -95,7 +111,84 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
     };
   }, []);
 
-  // Particle Spawning on HW and Offset Advances
+  const spawnProduceFlow = (
+    producerId: string,
+    topicName: string,
+    partitionId: number,
+  ): void => {
+    const prodPos = producerPositions.current.get(producerId);
+    const partKey = `${topicName}-${String(partitionId)}`;
+    const partPos = partitionPositions.current.get(partKey);
+
+    const currentState = stateRef.current;
+    if (!prodPos) return;
+
+    // Find destination: either target partition or leader broker
+    let targetPos = partPos;
+    if (!targetPos && currentState) {
+      const partitions = currentState.topics[topicName] || [];
+      const part = partitions.find((p) => p.partition === partitionId) || partitions[0];
+      if (part?.leaderBrokerId) {
+        targetPos = brokerPositions.current.get(part.leaderBrokerId);
+      }
+    }
+
+    if (!targetPos) return;
+
+    // Find assigned consumers for second leg
+    let consumerPos: { x: number; y: number } | null = null;
+    if (currentState) {
+      for (const gId in currentState.consumerGroups) {
+        const group = currentState.consumerGroups[gId];
+        if (group) {
+          for (const mId in group.members) {
+            const member = group.members[mId];
+            if (
+              member?.assignedPartitions.some(
+                (ap) => ap.topic === topicName && ap.partition === partitionId,
+              )
+            ) {
+              const cPos = consumerPositions.current.get(mId);
+              if (cPos) consumerPos = cPos;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Spawn Leg 1
+    particles.current.push({
+      id: Math.random().toString(36).substring(7),
+      startX: prodPos.x,
+      startY: prodPos.y,
+      endX: targetPos.x,
+      endY: targetPos.y,
+      x: prodPos.x,
+      y: prodPos.y,
+      progress: 0,
+      speed: 0.025, // smooth speed (~40 frames = 650ms)
+      color: '#2563eb', // Vibrant Blue
+      label: `${topicName}:${String(partitionId)}`,
+      leg: 1,
+      trail: [],
+      chainedTarget: consumerPos
+        ? { x: consumerPos.x, y: consumerPos.y, color: '#6366f1', label: 'MSG' }
+        : undefined,
+    });
+  };
+
+  // Immediate Trigger on UI Produce Action
+  useEffect(() => {
+    if (!produceTrigger) return;
+    spawnProduceFlow(
+      produceTrigger.producerId,
+      produceTrigger.topic,
+      produceTrigger.partition,
+    );
+  }, [produceTrigger]);
+
+  // Particle Spawning on WebSocket HW and Offset Updates
   useEffect(() => {
     if (!state) return;
     const lastState = lastStateRef.current;
@@ -104,7 +197,7 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       return;
     }
 
-    // Two-leg Produce particles: Producer -> Broker Partition -> Consumers
+    // Detect Produce on HW advancement
     for (const topicName in state.topics) {
       const newPartitions = state.topics[topicName] || [];
       const oldPartitions = lastState.topics[topicName] || [];
@@ -112,61 +205,18 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       for (const newPart of newPartitions) {
         const oldPart = oldPartitions.find((p) => p.partition === newPart.partition);
         if (oldPart && newPart.highWatermark > oldPart.highWatermark) {
-          const partKey = `${topicName}-${String(newPart.partition)}`;
-          const partPos = partitionPositions.current.get(partKey);
-
-          // Find producer matching this topic
           const matchingProducers = producersRef.current.filter((p) => p.topic === topicName);
           const activeProds = matchingProducers.length > 0 ? matchingProducers : producersRef.current;
 
-          if (partPos && activeProds.length > 0) {
+          if (activeProds.length > 0) {
             const targetProd = activeProds[Math.floor(Math.random() * activeProds.length)]!;
-            const prodPos = producerPositions.current.get(targetProd.id);
-
-            if (prodPos) {
-              // Find assigned consumers for second leg
-              let consumerPos: { x: number; y: number } | null = null;
-              for (const gId in state.consumerGroups) {
-                const group = state.consumerGroups[gId];
-                if (group) {
-                  for (const mId in group.members) {
-                    const member = group.members[mId];
-                    if (
-                      member?.assignedPartitions.some(
-                        (ap) => ap.topic === topicName && ap.partition === newPart.partition,
-                      )
-                    ) {
-                      const cPos = consumerPositions.current.get(mId);
-                      if (cPos) consumerPos = cPos;
-                      break;
-                    }
-                  }
-                }
-              }
-
-              // Leg 1: Producer to Partition/Broker
-              particles.current.push({
-                id: Math.random().toString(36).substring(7),
-                startX: prodPos.x,
-                startY: prodPos.y,
-                endX: partPos.x,
-                endY: partPos.y,
-                x: prodPos.x,
-                y: prodPos.y,
-                progress: 0,
-                speed: 0.03 + Math.random() * 0.01,
-                color: '#2563eb', // Blue produce envelope
-                size: 4,
-                leg: 1,
-                chainedTarget: consumerPos ? { x: consumerPos.x, y: consumerPos.y, color: '#4f46e5' } : undefined,
-              });
-            }
+            spawnProduceFlow(targetProd.id, topicName, newPart.partition);
           }
         }
       }
     }
 
-    // Direct Consume particles on offset commits
+    // Detect Consume on Committed Offset changes
     for (const groupId in state.consumerGroups) {
       const group = state.consumerGroups[groupId];
       const oldGroup = lastState.consumerGroups[groupId];
@@ -208,10 +258,11 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
                 x: partPos.x,
                 y: partPos.y,
                 progress: 0,
-                speed: 0.035,
-                color: '#4f46e5', // Indigo consume envelope
-                size: 4,
+                speed: 0.03,
+                color: '#6366f1', // Indigo
+                label: `ACK #${partStr}`,
                 leg: 2,
+                trail: [],
               });
             }
           }
@@ -248,12 +299,14 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
   };
 
   const render = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
-    // Light Canvas Background
+    const timeNow = Date.now();
+
+    // 1. Light Canvas Background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Subtle Light Grid Lines
-    ctx.strokeStyle = '#e2e8f0';
+    // 2. Grid Lines
+    ctx.strokeStyle = '#f1f5f9';
     ctx.lineWidth = 1;
     const gridSize = 36;
     for (let x = 0; x < width; x += gridSize) {
@@ -285,7 +338,7 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
     const centerY = height / 2;
     const circleRadius = Math.min(width, height) * 0.28;
 
-    // 1. Calculate Broker positions
+    // Calculate Broker positions
     brokerPositions.current.clear();
     brokersArray.forEach((broker, index) => {
       const angle = (2 * Math.PI * index) / numBrokers - Math.PI / 2;
@@ -294,17 +347,17 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       brokerPositions.current.set(broker.id, { x, y });
     });
 
-    // 2. Calculate Producer positions
+    // Calculate Producer positions
     producerPositions.current.clear();
     const activeProducers = producersRef.current;
     const numProducers = activeProducers.length;
     activeProducers.forEach((prod, index) => {
-      const x = 90;
-      const y = numProducers > 1 ? 100 + (index * (height - 200)) / (numProducers - 1) : height / 2;
+      const x = 85;
+      const y = numProducers > 1 ? 90 + (index * (height - 180)) / (numProducers - 1) : height / 2;
       producerPositions.current.set(prod.id, { x, y });
     });
 
-    // 3. Calculate Consumer positions (Cluster Joined + Configured Local)
+    // Calculate Consumer positions
     consumerPositions.current.clear();
     const allGroupMembers: {
       memberId: string;
@@ -315,7 +368,6 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       subscribedTopics?: string[] | undefined;
     }[] = [];
 
-    // Joined members from cluster
     Object.keys(currentState.consumerGroups).forEach((groupId) => {
       const group = currentState.consumerGroups[groupId];
       if (group) {
@@ -333,7 +385,6 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       }
     });
 
-    // Add any configured consumers that haven't joined yet
     consumersRef.current.forEach((localC) => {
       if (!localC.joined || !localC.memberId) {
         allGroupMembers.push({
@@ -349,12 +400,12 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
 
     const numConsumers = allGroupMembers.length;
     allGroupMembers.forEach((member, index) => {
-      const x = width - 110;
-      const y = numConsumers > 1 ? 100 + (index * (height - 200)) / (numConsumers - 1) : height / 2;
+      const x = width - 85;
+      const y = numConsumers > 1 ? 90 + (index * (height - 180)) / (numConsumers - 1) : height / 2;
       consumerPositions.current.set(member.memberId, { x, y });
     });
 
-    // 4. Calculate Partition positions
+    // Calculate Partition positions
     partitionPositions.current.clear();
     const brokerPartitionCounts = new Map<string, number>();
 
@@ -378,13 +429,13 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       });
     }
 
-    // ── Persistent Producer → Broker Connection Lines (Priority 2.1) ──
+    // ── 3. Persistent Producer → Broker Connection Lines (With Animated Dash Flow) ──
+    const dashOffset = (timeNow / 40) % 12;
     activeProducers.forEach((prod) => {
       const prodPos = producerPositions.current.get(prod.id);
       if (!prodPos) return;
 
       const partitions = currentState.topics[prod.topic] || [];
-      // Resolve current leader broker for producer's topic
       const activePartition = partitions.find(
         (p) => p.leaderBrokerId && currentState.brokers[p.leaderBrokerId]?.status === 'ALIVE',
       ) || partitions[0];
@@ -395,29 +446,22 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       if (leaderBrokerId) {
         const brokerPos = brokerPositions.current.get(leaderBrokerId);
         if (brokerPos) {
-          // Draw subtle dashed connection edge
+          // Flowing connection line
           ctx.strokeStyle = '#93c5fd';
           ctx.lineWidth = 1.75;
-          ctx.setLineDash([6, 4]);
+          ctx.setLineDash([6, 6]);
+          ctx.lineDashOffset = -dashOffset;
           ctx.beginPath();
           ctx.moveTo(prodPos.x, prodPos.y);
           ctx.lineTo(brokerPos.x, brokerPos.y);
           ctx.stroke();
           ctx.setLineDash([]);
-
-          // Connection indicator dot on edge
-          const midX = (prodPos.x + brokerPos.x) / 2;
-          const midY = (prodPos.y + brokerPos.y) / 2;
-          ctx.fillStyle = '#3b82f6';
-          ctx.beginPath();
-          ctx.arc(midX, midY, 3, 0, 2 * Math.PI);
-          ctx.fill();
+          ctx.lineDashOffset = 0;
         }
       }
     });
 
-    // ── Consumer Assignment Lines ──
-    ctx.lineWidth = 1.5;
+    // ── 4. Consumer Assignment Lines ──
     Object.keys(currentState.consumerGroups).forEach((groupId) => {
       const group = currentState.consumerGroups[groupId];
       if (!group) return;
@@ -431,17 +475,22 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
             const partPos = partitionPositions.current.get(partKey);
             if (partPos) {
               ctx.strokeStyle = '#c7d2fe';
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([4, 4]);
+              ctx.lineDashOffset = dashOffset;
               ctx.beginPath();
               ctx.moveTo(memberPos.x, memberPos.y);
               ctx.lineTo(partPos.x, partPos.y);
               ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.lineDashOffset = 0;
             }
           });
         }
       });
     });
 
-    // ── Producer Nodes ──
+    // ── 5. Producer Nodes ──
     activeProducers.forEach((prod) => {
       const pos = producerPositions.current.get(prod.id);
       if (pos) {
@@ -449,23 +498,23 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
         ctx.strokeStyle = '#2563eb';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 30, 0, 2 * Math.PI);
+        ctx.arc(pos.x, pos.y, 28, 0, 2 * Math.PI);
         ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#1d4ed8';
-        ctx.font = '600 10px "Inter", sans-serif';
+        ctx.font = '700 9.5px "Inter", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('PRODUCER', pos.x, pos.y);
+        ctx.fillText('PRODUCER', pos.x, pos.y - 1);
 
         ctx.fillStyle = '#64748b';
         ctx.font = '8px monospace';
         const label = prod.id.startsWith('producer-') ? `P-${prod.id.substring(9)}` : prod.id;
-        ctx.fillText(`${label} → [${prod.topic}]`, pos.x, pos.y + 11);
+        ctx.fillText(`${label} → [${prod.topic}]`, pos.x, pos.y + 10);
       }
     });
 
-    // ── Consumer Nodes ──
+    // ── 6. Consumer Nodes ──
     allGroupMembers.forEach((member) => {
       const pos = consumerPositions.current.get(member.memberId);
       if (pos) {
@@ -475,13 +524,13 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
         if (!member.joined) ctx.setLineDash([4, 4]);
 
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 30, 0, 2 * Math.PI);
+        ctx.arc(pos.x, pos.y, 28, 0, 2 * Math.PI);
         ctx.fill();
         ctx.stroke();
         ctx.setLineDash([]);
 
         ctx.fillStyle = member.joined ? '#4338ca' : '#64748b';
-        ctx.font = '600 9px "Inter", sans-serif';
+        ctx.font = '700 9px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(member.joined ? 'CONSUMER' : 'IDLE', pos.x, pos.y - 1);
 
@@ -495,7 +544,7 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       }
     });
 
-    // ── Broker Nodes ──
+    // ── 7. Broker Nodes ──
     brokersArray.forEach((broker) => {
       const pos = brokerPositions.current.get(broker.id);
       if (!pos) return;
@@ -504,32 +553,30 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       const isRecovering = broker.status === 'RECOVERING';
       const isController = currentState.kraft.activeControllerId === broker.id;
 
-      // Heartbeat pulse ring for alive brokers
       if (!isCrashed) {
-        const pulseCycle = (Date.now() / 1500) % 1;
+        const pulseCycle = (timeNow / 1500) % 1;
         ctx.strokeStyle = isRecovering ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.3)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 40 + pulseCycle * 25, 0, 2 * Math.PI);
+        ctx.arc(pos.x, pos.y, 38 + pulseCycle * 22, 0, 2 * Math.PI);
         ctx.stroke();
       }
 
       ctx.fillStyle = isCrashed
-        ? '#fef2f2' // Light Pastel Red
+        ? '#fef2f2'
         : isRecovering
-          ? '#fffbeb' // Light Pastel Yellow
-          : '#ecfdf5'; // Light Pastel Emerald Green
+          ? '#fffbeb'
+          : '#ecfdf5';
 
       ctx.strokeStyle = isCrashed ? '#ef4444' : isRecovering ? '#f59e0b' : '#10b981';
-
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, 40, 0, 2 * Math.PI);
+      ctx.arc(pos.x, pos.y, 38, 0, 2 * Math.PI);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = isCrashed ? '#dc2626' : '#0f172a';
-      ctx.font = '600 11px "Inter", sans-serif';
+      ctx.font = '700 11px "Inter", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(`Broker ${broker.id}`, pos.x, pos.y - 4);
 
@@ -539,21 +586,20 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
 
       if (isController && !isCrashed) {
         ctx.fillStyle = '#d97706';
-        ctx.font = '600 8px "Inter", sans-serif';
-        ctx.fillText('CONTROLLER', pos.x, pos.y + 20);
+        ctx.font = '700 8px "Inter", sans-serif';
+        ctx.fillText('CONTROLLER', pos.x, pos.y + 19);
       }
 
       if (!isCrashed) {
         const diskPct = broker.diskUsageBytes / broker.maxDiskSizeBytes;
         ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(pos.x - 22, pos.y - 25, 44, 3);
-
+        ctx.fillRect(pos.x - 20, pos.y - 23, 40, 3);
         ctx.fillStyle = diskPct > 0.85 ? '#ef4444' : '#10b981';
-        ctx.fillRect(pos.x - 22, pos.y - 25, 44 * Math.min(diskPct, 1), 3);
+        ctx.fillRect(pos.x - 20, pos.y - 23, 40 * Math.min(diskPct, 1), 3);
       }
     });
 
-    // ── Topic Partitions ──
+    // ── 8. Topic Partitions ──
     for (const topicName in currentState.topics) {
       const partitions = currentState.topics[topicName] || [];
       partitions.forEach((part) => {
@@ -564,75 +610,109 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
         ctx.fillStyle = '#f8fafc';
         ctx.strokeStyle = '#cbd5e1';
         ctx.lineWidth = 1.5;
-        drawRoundRect(ctx, pos.x - 32, pos.y - 18, 64, 36, 6);
+        drawRoundRect(ctx, pos.x - 30, pos.y - 17, 60, 34, 6);
 
         ctx.fillStyle = '#0f172a';
-        ctx.font = '600 9px "Inter", sans-serif';
+        ctx.font = '700 9px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(`${topicName}-${String(part.partition)}`, pos.x, pos.y - 5);
 
-        // Draw log queue segments indicator
         const totalSegments = 4;
         const activeSegments = Math.min(part.highWatermark, totalSegments);
-        const segmentWidth = 8;
+        const segmentWidth = 7;
         const segmentGap = 2;
         const startX = pos.x - ((segmentWidth * totalSegments + segmentGap * (totalSegments - 1)) / 2);
-        const segmentY = pos.y + 10;
+        const segmentY = pos.y + 9;
 
         for (let s = 0; s < totalSegments; s++) {
           ctx.fillStyle = s < activeSegments ? '#3b82f6' : '#e2e8f0';
-          ctx.fillRect(startX + s * (segmentWidth + segmentGap), segmentY, segmentWidth, 4);
+          ctx.fillRect(startX + s * (segmentWidth + segmentGap), segmentY, segmentWidth, 3.5);
         }
 
         ctx.fillStyle = '#2563eb';
-        ctx.font = '600 7px monospace';
+        ctx.font = '700 7.5px monospace';
         ctx.fillText(`HW:${String(part.highWatermark)}`, pos.x, pos.y + 5);
       });
     }
 
-    // ── Animated Message Packets (Priority 2.2) ──
-    particles.current.forEach((particle, index) => {
+    // ── 9. Animated Moving Message Packets & Glowing Trails (Priority 2.2) ──
+    const newlyChained: Particle[] = [];
+
+    particles.current.forEach((particle) => {
       particle.progress += particle.speed;
       particle.x = particle.startX + (particle.endX - particle.startX) * particle.progress;
       particle.y = particle.startY + (particle.endY - particle.startY) * particle.progress;
 
-      // Draw crisp envelope token
+      // Add point to particle trail
+      particle.trail.push({ x: particle.x, y: particle.y, alpha: 0.8 });
+      if (particle.trail.length > 8) particle.trail.shift();
+
+      // Draw Glowing Trail
+      particle.trail.forEach((t, tIdx) => {
+        t.alpha *= 0.85;
+        const radius = (tIdx / particle.trail.length) * 4;
+        ctx.fillStyle = particle.color === '#2563eb'
+          ? `rgba(59, 130, 246, ${String(t.alpha)})`
+          : `rgba(99, 102, 241, ${String(t.alpha)})`;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      // Outer Glow
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = 12;
+
+      // Envelope Container Token
       ctx.fillStyle = particle.color;
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.5;
 
       ctx.beginPath();
-      ctx.rect(particle.x - 8, particle.y - 6, 16, 12);
+      ctx.rect(particle.x - 9, particle.y - 7, 18, 14);
       ctx.fill();
       ctx.stroke();
 
+      // Envelope Flap Lines
       ctx.beginPath();
-      ctx.moveTo(particle.x - 8, particle.y - 6);
+      ctx.moveTo(particle.x - 9, particle.y - 7);
       ctx.lineTo(particle.x, particle.y + 1);
-      ctx.lineTo(particle.x + 8, particle.y - 6);
+      ctx.lineTo(particle.x + 9, particle.y - 7);
       ctx.stroke();
 
-      if (particle.progress >= 1) {
-        // If Leg 1 finishes and chained consumer target exists, spawn Leg 2!
-        if (particle.leg === 1 && particle.chainedTarget) {
-          particles.current.push({
-            id: Math.random().toString(36).substring(7),
-            startX: particle.endX,
-            startY: particle.endY,
-            endX: particle.chainedTarget.x,
-            endY: particle.chainedTarget.y,
-            x: particle.endX,
-            y: particle.endY,
-            progress: 0,
-            speed: 0.035,
-            color: particle.chainedTarget.color,
-            size: 4,
-            leg: 2,
-          });
-        }
-        particles.current.splice(index, 1);
+      // Reset Shadow
+      ctx.shadowBlur = 0;
+
+      // Small Badge / Label
+      if (particle.label) {
+        ctx.fillStyle = '#1e293b';
+        ctx.font = '700 7px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(particle.label, particle.x, particle.y - 9);
+      }
+
+      // If Leg 1 finishes and chained consumer target exists, trigger Leg 2
+      if (particle.progress >= 1 && particle.leg === 1 && particle.chainedTarget) {
+        newlyChained.push({
+          id: Math.random().toString(36).substring(7),
+          startX: particle.endX,
+          startY: particle.endY,
+          endX: particle.chainedTarget.x,
+          endY: particle.chainedTarget.y,
+          x: particle.endX,
+          y: particle.endY,
+          progress: 0,
+          speed: 0.03,
+          color: particle.chainedTarget.color,
+          label: particle.chainedTarget.label,
+          leg: 2,
+          trail: [],
+        });
       }
     });
+
+    // Filter finished particles and add newly chained
+    particles.current = particles.current.filter((p) => p.progress < 1).concat(newlyChained);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>): void => {
@@ -649,7 +729,7 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       const pos = brokerPositions.current.get(brokerId);
       if (pos) {
         const dist = Math.hypot(mouseX - pos.x, mouseY - pos.y);
-        if (dist < 40) {
+        if (dist < 38) {
           const broker = currentState.brokers[brokerId];
           if (broker) {
             onHoverDetails({
@@ -664,7 +744,7 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
                   value: broker.status,
                   color: broker.status === 'ALIVE' ? '#10b981' : '#f43f5e',
                 },
-                { label: 'Host', value: `${broker.host}:${String(broker.port)}` },
+                { label: 'Rack', value: broker.rack ?? 'rack-a' },
                 {
                   label: 'Disk Usage',
                   value: `${(broker.diskUsageBytes / (1024 * 1024)).toFixed(2)} MB`,
@@ -686,10 +766,10 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
         const pos = partitionPositions.current.get(partKey);
         if (pos) {
           if (
-            mouseX >= pos.x - 32 &&
-            mouseX <= pos.x + 32 &&
-            mouseY >= pos.y - 18 &&
-            mouseY <= pos.y + 18
+            mouseX >= pos.x - 30 &&
+            mouseX <= pos.x + 30 &&
+            mouseY >= pos.y - 17 &&
+            mouseY <= pos.y + 17
           ) {
             onHoverDetails({
               title: `Partition [${topicName}-${String(part.partition)}]`,
@@ -711,10 +791,10 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       }
     }
 
-    // Check Producers (Priority 1.1 / 1.3 HUD Tooltip)
+    // Check Producers
     for (const [prodId, pos] of producerPositions.current.entries()) {
       const dist = Math.hypot(mouseX - pos.x, mouseY - pos.y);
-      if (dist < 30) {
+      if (dist < 28) {
         const prod = producersRef.current.find((p) => p.id === prodId);
         if (prod) {
           const partitions = currentState.topics[prod.topic] || [];
@@ -740,10 +820,10 @@ export function Visualizer({ state, producers, consumers = [], onHoverDetails }:
       }
     }
 
-    // Check Consumers (Priority 3.1 Detail Tooltip)
+    // Check Consumers
     for (const [memberId, pos] of consumerPositions.current.entries()) {
       const dist = Math.hypot(mouseX - pos.x, mouseY - pos.y);
-      if (dist < 30) {
+      if (dist < 28) {
         let matchedMember: any = null;
         let matchedGroupId = 'order-processors';
 
