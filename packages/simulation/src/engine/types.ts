@@ -47,8 +47,10 @@ export type ConsumerProtocol = 'range' | 'roundrobin' | 'cooperative-sticky';
 export interface ConsumerGroupMember {
   readonly memberId: string;
   readonly clientId: string;
+  readonly clientHost: string;
   assignedPartitions: { topic: TopicName; partition: PartitionId }[];
   lastHeartbeatTick: VirtualTimestamp;
+  subscribedTopics?: string[] | undefined;
 }
 
 export interface ConsumerGroup {
@@ -74,6 +76,22 @@ export interface TransactionMetadata {
   startTick: VirtualTimestamp;
 }
 
+export type MetadataRecordType =
+  | 'REGISTER_BROKER_RECORD'
+  | 'TOPIC_RECORD'
+  | 'PARTITION_RECORD'
+  | 'LEADER_CHANGE_RECORD'
+  | 'FENCE_BROKER_RECORD'
+  | 'UNFENCE_BROKER_RECORD';
+
+export interface MetadataRecord {
+  offset: number;
+  epoch: number;
+  type: MetadataRecordType;
+  data: Record<string, unknown>;
+  timestamp: VirtualTimestamp;
+}
+
 /**
  * Kafka KRaft controller metadata quorum state
  */
@@ -82,6 +100,7 @@ export interface KRaftControllerState {
   controllerEpoch: number;
   voters: NodeId[];
   metadataOffset: number;
+  metadataLog?: MetadataRecord[] | undefined;
 }
 
 /**
@@ -106,6 +125,8 @@ export interface KafkaClusterState {
  */
 export type SimEventType =
   | 'BROKER_STATUS_CHANGED'
+  | 'BROKER_ADDED'
+  | 'TOPIC_CREATED'
   | 'PARTITION_LEADER_ELECTED'
   | 'ISR_CHANGED'
   | 'HIGH_WATERMARK_ADVANCED'
@@ -120,6 +141,7 @@ export type SimEventType =
   | 'TRANSACTION_COMMITTED'
   | 'TRANSACTION_ABORTED'
   | 'INVARIANT_ASSERTED'
+  | 'KRAFT_LEADER_ELECTED'
   | 'CHAOS_APPLIED';
 
 export interface SimEvent {

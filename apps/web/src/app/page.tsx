@@ -4,19 +4,19 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
-import { Visualizer } from './visualizer';
+import { Visualizer, type ProducerConfig, type ConsumerConfig, type HoverDetails } from './visualizer';
 import { type ConnectionStatus, type EventLogItem, WebSocketClient } from './ws-client';
 
 /* ─── helpers ─── */
 function statusDotClass(s: ConnectionStatus): string {
-  if (s === 'CONNECTED')   return 'status-dot status-dot--connected';
-  if (s === 'CONNECTING')  return 'status-dot status-dot--connecting';
+  if (s === 'CONNECTED') return 'status-dot status-dot--connected';
+  if (s === 'CONNECTING') return 'status-dot status-dot--connecting';
   return 'status-dot status-dot--disconnected';
 }
 
 function statusBadgeClass(s: ConnectionStatus): string {
-  if (s === 'CONNECTED')   return 'status-badge status-badge--connected';
-  if (s === 'CONNECTING')  return 'status-badge status-badge--connecting';
+  if (s === 'CONNECTED') return 'status-badge status-badge--connected';
+  if (s === 'CONNECTING') return 'status-badge status-badge--connecting';
   return 'status-badge status-badge--disconnected';
 }
 
@@ -30,30 +30,52 @@ function logBadgeClass(type: EventLogItem['type']): string {
 
 /* ─── stat tile config ─── */
 const STAT_TILES = [
-  { key: 'tick',    label: 'Live Tick',     tile: 'stat-tile stat-tile--amber', value: 'stat-tile__value stat-tile__value--amber' },
-  { key: 'ctrl',    label: 'Controller',    tile: 'stat-tile stat-tile--amber', value: 'stat-tile__value stat-tile__value--brown' },
-  { key: 'alive',   label: 'Alive Brokers', tile: 'stat-tile stat-tile--green', value: 'stat-tile__value stat-tile__value--green' },
-  { key: 'crashed', label: 'Crashed Nodes', tile: 'stat-tile stat-tile--rose',  value: 'stat-tile__value stat-tile__value--rose'  },
+  { key: 'tick', label: 'Live Tick', tile: 'stat-tile stat-tile--amber', value: 'stat-tile__value stat-tile__value--amber' },
+  { key: 'ctrl', label: 'Controller', tile: 'stat-tile stat-tile--amber', value: 'stat-tile__value stat-tile__value--brown' },
+  { key: 'alive', label: 'Alive Brokers', tile: 'stat-tile stat-tile--green', value: 'stat-tile__value stat-tile__value--green' },
+  { key: 'crashed', label: 'Crashed Nodes', tile: 'stat-tile stat-tile--rose', value: 'stat-tile__value stat-tile__value--rose' },
 ] as const;
 
-/* ══════════════════════════════════════════════ */
 export default function Page(): React.JSX.Element {
   const [restUrl, setRestUrl] = useState('http://localhost:3000');
-  const [wsUrl,   setWsUrl]   = useState('ws://localhost:3001');
-  const [roomId,  setRoomId]  = useState('room-1');
-  const [token,   setToken]   = useState('');
+  const [wsUrl, setWsUrl] = useState('ws://localhost:3001');
+  const [roomId, setRoomId] = useState('room-1');
+  const [token, setToken] = useState('');
 
-  const [status,        setStatus]        = useState<ConnectionStatus>('DISCONNECTED');
-  const [liveState,     setLiveState]     = useState<KafkaClusterState | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('DISCONNECTED');
+  const [liveState, setLiveState] = useState<KafkaClusterState | null>(null);
   const [renderedState, setRenderedState] = useState<KafkaClusterState | null>(null);
-  const [eventLogs,     setEventLogs]     = useState<EventLogItem[]>([]);
-  const [hoverDetails,  setHoverDetails]  = useState<string | null>(null);
+  const [eventLogs, setEventLogs] = useState<EventLogItem[]>([]);
+  const [hoverDetails, setHoverDetails] = useState<HoverDetails | null>(null);
 
-  const [isPaused,     setIsPaused]     = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [playbackTick, setPlaybackTick] = useState(0);
   const [stateHistory, setStateHistory] = useState<KafkaClusterState[]>([]);
-  const [isHalted,     setIsHalted]     = useState(false);
-  const [haltError,    setHaltError]    = useState<string | null>(null);
+  const [isHalted, setIsHalted] = useState(false);
+  const [haltError, setHaltError] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Topic creation state
+  const [newTopicName, setNewTopicName] = useState('payments');
+  const [newPartitions, setNewPartitions] = useState(3);
+
+  // Producer Creation Modal / State (Priority 1.1 & 1.2)
+  const [showAddProducerModal, setShowAddProducerModal] = useState(false);
+  const [producerSelectedTopic, setProducerSelectedTopic] = useState('orders');
+  const [customProducerTopic, setCustomProducerTopic] = useState('');
+
+  const [producers, setProducers] = useState<ProducerConfig[]>([
+    { id: 'producer-1', topic: 'orders' }
+  ]);
+
+  // Consumer Creation Modal / State (Priority 3.1)
+  const [showAddConsumerModal, setShowAddConsumerModal] = useState(false);
+  const [consumerSelectedTopic, setConsumerSelectedTopic] = useState('orders');
+
+  const [consumers, setConsumers] = useState<ConsumerConfig[]>([
+    { id: 'consumer-1', topic: 'orders', joined: false, memberId: null }
+  ]);
 
   const clientRef = useRef<WebSocketClient | null>(null);
 
@@ -73,28 +95,29 @@ export default function Page(): React.JSX.Element {
   }, [liveState, isPaused]);
 
   /* ── connection ── */
-  const handleConnect = () => {
+  const handleConnect = (): void => {
     if (clientRef.current) clientRef.current.disconnect();
     if (!token) { addLog('Cannot connect: auth token missing.', 'ERROR'); return; }
     setIsHalted(false); setHaltError(null); setStateHistory([]);
     const client = new WebSocketClient(wsUrl, token, roomId, {
-      onStateChange:  (s) => { setLiveState(s); },
+      onStateChange: (s) => { setLiveState(s); },
       onStatusChange: (s) => { setStatus(s); },
-      onHalt:         (e) => { setIsHalted(true); setHaltError(e); },
-      onEventLog:     (l) => { setEventLogs((p) => [l, ...p].slice(0, 100)); },
+      onHalt: (e) => { setIsHalted(true); setHaltError(e); },
+      onEventLog: (l) => { setEventLogs((p) => [l, ...p].slice(0, 100)); },
     });
     clientRef.current = client;
     client.connect();
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = (): void => {
     clientRef.current?.disconnect();
     clientRef.current = null;
     setLiveState(null);
     setRenderedState(null);
   };
 
-  const handleSandboxLogin = async () => {
+  const handleSandboxLogin = async (): Promise<void> => {
+    setAuthError(null);
     try {
       addLog('Requesting developer credentials...', 'INFO');
       const res = await fetch(`${restUrl}/auth/dev-login`, {
@@ -103,16 +126,19 @@ export default function Page(): React.JSX.Element {
         body: JSON.stringify({ email: 'admin@the-visualizer.io', name: 'Sandbox Admin' }),
       });
       if (!res.ok) throw new Error(`HTTP ${String(res.status)}`);
-      const data = (await res.json()) as { success: boolean; data?: { token?: string } };
-      const t = data.data?.token;
-      if (t) { setToken(t); addLog('Credentials loaded.', 'SUCCESS'); }
+      const data = (await res.json()) as { success: boolean; token?: string; user?: unknown };
+      const t = data.token;
+      if (t) { setToken(t); setAuthReady(true); setAuthError(null); addLog('Credentials loaded — ready to connect.', 'SUCCESS'); }
       else throw new Error('No token in response');
     } catch (err: unknown) {
-      addLog(`Credentials failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'ERROR');
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setAuthReady(false);
+      setAuthError(msg);
+      addLog(`Credentials failed: ${msg}`, 'ERROR');
     }
   };
 
-  const addLog = (message: string, type: EventLogItem['type']) => {
+  const addLog = (message: string, type: EventLogItem['type']): void => {
     setEventLogs((p) => [
       { id: Math.random().toString(36).substring(7), timestamp: Date.now(), message, type },
       ...p,
@@ -120,12 +146,148 @@ export default function Page(): React.JSX.Element {
   };
 
   /* ── sim actions ── */
-  const handleProduceIntent = () => {
-    clientRef.current?.sendIntent('PRODUCE', { topic: 'orders', value: { orderId: Math.floor(Math.random() * 1000) + 1 } });
-    addLog('Dispatched: PRODUCE on topic "orders"', 'INFO');
+  const handleProduceIntent = (producerId?: string): void => {
+    if (!liveState || producers.length === 0) return;
+    const topicsList = Object.keys(liveState.topics);
+    if (topicsList.length === 0) return;
+
+    const targetProd = producerId
+      ? producers.find((p) => p.id === producerId)
+      : producers[Math.floor(Math.random() * producers.length)];
+    if (!targetProd) return;
+
+    const topic = targetProd.topic;
+    const finalTopic = topicsList.includes(topic) ? topic : topicsList[0]!;
+
+    const partitions = liveState.topics[finalTopic] || [];
+    const partition = partitions.length > 0
+      ? partitions[Math.floor(Math.random() * partitions.length)]!.partition
+      : 0;
+
+    const activePartition = partitions.find((p) => p.partition === partition);
+    const leaderId = activePartition?.leaderBrokerId ?? '1';
+
+    clientRef.current?.sendIntent('PRODUCE', {
+      topic: finalTopic,
+      partition,
+      key: `key-${Math.random().toString(36).substring(7)}`,
+      value: `val-${Math.random().toString(36).substring(7)}`,
+      acks: 1,
+    });
+    addLog(`[${targetProd.id}] Dispatched: PRODUCE → ${finalTopic}/p-${String(partition)} (Broker ${leaderId})`, 'INFO');
   };
 
-  const handleKillBroker = () => {
+  // Priority 1.1 & 1.2: Confirmed Producer Creation
+  const handleConfirmAddProducer = (e: React.SyntheticEvent): void => {
+    e.preventDefault();
+    let finalTopic = producerSelectedTopic;
+
+    if (producerSelectedTopic === '__NEW__') {
+      if (!customProducerTopic.trim()) return;
+      finalTopic = customProducerTopic.trim().toLowerCase();
+
+      // Register new topic on cluster if not existing (Priority 1.2)
+      if (!liveState?.topics[finalTopic]) {
+        clientRef.current?.sendIntent('CREATE_TOPIC', {
+          topic: finalTopic,
+          partitions: 3,
+        });
+        addLog(`Registered new topic "${finalTopic}" on cluster (3 partitions)`, 'INFO');
+      }
+    }
+
+    const newId = `producer-${String(producers.length + 1)}`;
+    setProducers((p) => [...p, { id: newId, topic: finalTopic }]);
+    addLog(`Created Producer Node "${newId}" bound to topic "${finalTopic}"`, 'INFO');
+    setShowAddProducerModal(false);
+    setCustomProducerTopic('');
+  };
+
+  const handleRemoveProducer = (): void => {
+    if (producers.length <= 1) {
+      addLog('Cannot remove the last remaining producer.', 'WARN');
+      return;
+    }
+    const removed = producers[producers.length - 1]!;
+    setProducers((p) => p.slice(0, -1));
+    addLog(`Removed Producer Node "${removed.id}"`, 'INFO');
+  };
+
+  const handleProducerTopicChange = (id: string, newTopic: string): void => {
+    setProducers((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, topic: newTopic } : p))
+    );
+    addLog(`Updated Producer "${id}" target topic to "${newTopic}"`, 'INFO');
+  };
+
+  // Priority 3.1: Confirmed Consumer Creation
+  const handleConfirmAddConsumer = (e: React.SyntheticEvent): void => {
+    e.preventDefault();
+    const newId = `consumer-${String(consumers.length + 1)}`;
+    const topic = consumerSelectedTopic || 'orders';
+
+    setConsumers((c) => [...c, { id: newId, topic, joined: false, memberId: null }]);
+    addLog(`Created Consumer "${newId}" configured for topic "${topic}"`, 'INFO');
+    setShowAddConsumerModal(false);
+  };
+
+  const handleRemoveConsumer = (): void => {
+    if (consumers.length <= 1) {
+      addLog('Cannot remove the last remaining consumer config.', 'WARN');
+      return;
+    }
+    const removed = consumers[consumers.length - 1]!;
+    if (removed.joined && removed.memberId) {
+      clientRef.current?.sendIntent('CONSUMER_LEAVE', {
+        groupId: 'order-processors',
+        memberId: removed.memberId,
+      });
+    }
+    setConsumers((c) => c.slice(0, -1));
+    addLog(`Removed Consumer "${removed.id}"`, 'INFO');
+  };
+
+  const handleConsumerTopicChange = (id: string, newTopic: string): void => {
+    setConsumers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, topic: newTopic } : c))
+    );
+    addLog(`Updated Consumer "${id}" target topic to "${newTopic}"`, 'INFO');
+  };
+
+  const handleConsumerJoinSpecific = (id: string): void => {
+    const cConfig = consumers.find((c) => c.id === id);
+    if (!cConfig || cConfig.joined) return;
+
+    const memberId = `consumer-${Math.random().toString(36).substring(7)}`;
+    clientRef.current?.sendIntent('CONSUMER_JOIN', {
+      groupId: 'order-processors',
+      clientId: id,
+      memberId,
+      topics: [cConfig.topic],
+    });
+
+    setConsumers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, joined: true, memberId } : c))
+    );
+    addLog(`[${id}] Dispatched: CONSUMER_JOIN on topic "${cConfig.topic}"`, 'INFO');
+  };
+
+  const handleConsumerLeaveSpecific = (id: string): void => {
+    const cConfig = consumers.find((c) => c.id === id);
+    if (!cConfig || !cConfig.joined || !cConfig.memberId) return;
+
+    clientRef.current?.sendIntent('CONSUMER_LEAVE', {
+      groupId: 'order-processors',
+      memberId: cConfig.memberId,
+    });
+
+    setConsumers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, joined: false, memberId: null } : c))
+    );
+    addLog(`[${id}] Dispatched: CONSUMER_LEAVE`, 'INFO');
+  };
+
+  const handleKillBroker = (): void => {
     if (!liveState) return;
     const alive = Object.keys(liveState.brokers).filter((id) => liveState.brokers[id]?.status === 'ALIVE');
     if (!alive.length) return;
@@ -136,7 +298,7 @@ export default function Page(): React.JSX.Element {
     }
   };
 
-  const handleRecoverBroker = () => {
+  const handleRecoverBroker = (): void => {
     if (!liveState) return;
     const crashed = Object.keys(liveState.brokers).filter((id) => liveState.brokers[id]?.status === 'CRASHED');
     if (!crashed.length) { addLog('All brokers ALIVE.', 'INFO'); return; }
@@ -147,42 +309,54 @@ export default function Page(): React.JSX.Element {
     }
   };
 
-  const handleConsumerJoin = () => {
-    clientRef.current?.sendIntent('CONSUMER_JOIN', { groupId: 'order-processors', topics: ['orders'] });
-    addLog('Dispatched: CONSUMER_JOIN "order-processors"', 'INFO');
+  const handleAddBroker = (): void => {
+    if (!liveState) return;
+    const currentCount = Object.keys(liveState.brokers).length;
+    const newBrokerId = String(currentCount + 1);
+    clientRef.current?.sendIntent('ADD_BROKER', {
+      brokerId: newBrokerId,
+      rack: `rack-${String.fromCharCode(97 + (currentCount % 3))}`,
+    });
+    addLog(`Dispatched: ADD_BROKER id "${newBrokerId}"`, 'INFO');
   };
 
-  const handleConsumerLeave = () => {
-    clientRef.current?.sendIntent('CONSUMER_LEAVE', { groupId: 'order-processors' });
-    addLog('Dispatched: CONSUMER_LEAVE "order-processors"', 'INFO');
+  const handleCreateTopic = (e: React.SyntheticEvent): void => {
+    e.preventDefault();
+    if (!newTopicName.trim()) return;
+    const topic = newTopicName.trim().toLowerCase();
+    clientRef.current?.sendIntent('CREATE_TOPIC', {
+      topic,
+      partitions: newPartitions,
+    });
+    addLog(`Dispatched: CREATE_TOPIC "${topic}" (${String(newPartitions)} partitions)`, 'INFO');
   };
 
-  const handleScrubChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleScrubChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const v = parseInt(e.target.value, 10);
     setPlaybackTick(v);
-    const s = stateHistory.find((s) => s.tick === v);
+    const s = stateHistory.find((item) => item.tick === v);
     if (s) setRenderedState(s);
   };
 
   /* ── derived ── */
-  const aliveBrokers   = Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'ALIVE').length;
+  const aliveBrokers = Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'ALIVE').length;
   const crashedBrokers = Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'CRASHED').length;
   const connected = status === 'CONNECTED';
 
   const statValues: Record<string, string> = {
-    tick:    String(liveState?.tick ?? 0),
-    ctrl:    liveState?.kraft.activeControllerId ?? 'NONE',
-    alive:   String(aliveBrokers),
+    tick: String(liveState?.tick ?? 0),
+    ctrl: liveState?.kraft.activeControllerId ?? 'NONE',
+    alive: String(aliveBrokers),
     crashed: String(crashedBrokers),
   };
 
-  /* ══════════ RENDER ══════════ */
+  const availableTopics = liveState ? Object.keys(liveState.topics) : ['orders'];
+
   return (
     <div className="app-shell">
 
       {/* ── Header ── */}
       <header className="app-header">
-
         <div className="header-brand">
           <span className={statusDotClass(status)} />
           <h1 className="header-brand-title">TheVisualizer</h1>
@@ -190,7 +364,6 @@ export default function Page(): React.JSX.Element {
         </div>
 
         <div className="header-right">
-          {/* Connection pill */}
           <div className="connection-pill">
             <div className="connection-field">
               <span className="connection-field-label">REST Gateway</span>
@@ -226,14 +399,21 @@ export default function Page(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Actions */}
           <div className="header-actions">
             <button onClick={() => { void handleSandboxLogin(); }} className="btn btn--ghost">
               Auth Dev
             </button>
+
+            {authError
+              ? <span className="status-badge status-badge--disconnected" title={authError}>Auth Failed</span>
+              : authReady
+                ? <span className="status-badge status-badge--connected">Auth Ready</span>
+                : <span className="status-badge status-badge--connecting">No Auth</span>
+            }
+
             {connected
               ? <button onClick={handleDisconnect} className="btn btn--rose">Disconnect</button>
-              : <button onClick={handleConnect}    className="btn btn--emerald">Connect</button>
+              : <button onClick={handleConnect} className="btn btn--emerald" disabled={!authReady}>Connect</button>
             }
           </div>
         </div>
@@ -258,13 +438,202 @@ export default function Page(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Simulation Control */}
+          {/* Producers card (Priority 1.1 & 1.3) */}
           <div className="card card--blue">
-            <p className="card-title card-title--blue">Simulation Control</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p className="card-title card-title--blue">Producers ({producers.length})</p>
+            </div>
+            
             <div className="btn-row">
-              <button onClick={handleProduceIntent}  disabled={!connected || isHalted} className="btn btn--primary">Produce Msg</button>
-              <button onClick={handleConsumerJoin}   disabled={!connected || isHalted} className="btn btn--indigo">Join Consumer</button>
-              <button onClick={handleConsumerLeave}  disabled={!connected || isHalted} className="btn btn--ghost">Leave Consumer</button>
+              <button
+                onClick={() => setShowAddProducerModal(true)}
+                disabled={!connected || isHalted}
+                className="btn btn--primary"
+              >
+                ➕ Add Producer
+              </button>
+              <button
+                onClick={handleRemoveProducer}
+                disabled={!connected || isHalted || producers.length <= 1}
+                className="btn btn--ghost"
+              >
+                ➖ Remove Producer
+              </button>
+            </div>
+
+            {/* Inline Add Producer Modal/Form */}
+            {showAddProducerModal && (
+              <form onSubmit={handleConfirmAddProducer} className="form-body" style={{ background: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                <span className="form-label" style={{ fontWeight: 700, color: '#1e40af' }}>Bind Producer to Topic</span>
+                <select
+                  value={producerSelectedTopic}
+                  onChange={(e) => setProducerSelectedTopic(e.target.value)}
+                  className="producer-select"
+                  style={{ width: '100%', marginBottom: '8px' }}
+                >
+                  {availableTopics.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                  <option value="__NEW__">➕ Create New Topic...</option>
+                </select>
+
+                {producerSelectedTopic === '__NEW__' && (
+                  <input
+                    type="text"
+                    placeholder="New Topic Name (e.g. analytics)"
+                    value={customProducerTopic}
+                    onChange={(e) => setCustomProducerTopic(e.target.value)}
+                    className="form-input"
+                    style={{ marginBottom: '8px' }}
+                    required
+                  />
+                )}
+
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button type="submit" className="btn btn--primary" style={{ flex: 1 }}>Confirm</button>
+                  <button type="button" onClick={() => setShowAddProducerModal(false)} className="btn btn--ghost">Cancel</button>
+                </div>
+              </form>
+            )}
+
+            <div className="card-divider form-body">
+              <span className="form-label" style={{ color: 'rgba(255,255,255,0.7)' }}>Active Producers</span>
+              <div className="producer-list-container">
+                {producers.map((prod) => {
+                  const partitions = liveState?.topics[prod.topic] || [];
+                  const activeLeader = partitions.find(
+                    (p) => p.leaderBrokerId && liveState?.brokers[p.leaderBrokerId]?.status === 'ALIVE',
+                  )?.leaderBrokerId;
+
+                  return (
+                    <div key={prod.id} className="producer-row">
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span className="producer-label">P-{prod.id.substring(9)}</span>
+                        <span style={{ fontSize: '7.5px', color: activeLeader ? '#059669' : '#e11d48', fontWeight: 600 }}>
+                          {activeLeader ? `→ B${activeLeader}` : '→ OFFLINE'}
+                        </span>
+                      </div>
+                      <select
+                        value={prod.topic}
+                        onChange={(e) => handleProducerTopicChange(prod.id, e.target.value)}
+                        className="producer-select"
+                        disabled={!connected || isHalted}
+                      >
+                        {availableTopics.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleProduceIntent(prod.id)}
+                        disabled={!connected || isHalted}
+                        className="producer-row-btn"
+                        title="Produce Message"
+                      >
+                        ⚡
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="card-divider btn-row--single">
+              <button
+                onClick={() => handleProduceIntent()}
+                disabled={!connected || isHalted || producers.length === 0}
+                className="btn btn--primary"
+              >
+                ⚡ Produce (All)
+              </button>
+            </div>
+          </div>
+
+          {/* Consumers card (Priority 3.1) */}
+          <div className="card card--purple">
+            <p className="card-title card-title--purple">Consumers ({consumers.length})</p>
+            <div className="btn-row">
+              <button
+                onClick={() => setShowAddConsumerModal(true)}
+                disabled={!connected || isHalted}
+                className="btn btn--indigo"
+              >
+                ➕ Add Consumer
+              </button>
+              <button
+                onClick={handleRemoveConsumer}
+                disabled={!connected || isHalted || consumers.length <= 1}
+                className="btn btn--ghost"
+              >
+                ➖ Remove Consumer
+              </button>
+            </div>
+
+            {/* Inline Add Consumer Modal */}
+            {showAddConsumerModal && (
+              <form onSubmit={handleConfirmAddConsumer} className="form-body" style={{ background: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #e9d5ff' }}>
+                <span className="form-label" style={{ fontWeight: 700, color: '#6b21a8' }}>Select Subscribed Topic</span>
+                <select
+                  value={consumerSelectedTopic}
+                  onChange={(e) => setConsumerSelectedTopic(e.target.value)}
+                  className="producer-select"
+                  style={{ width: '100%', marginBottom: '8px' }}
+                >
+                  {availableTopics.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button type="submit" className="btn btn--indigo" style={{ flex: 1 }}>Confirm</button>
+                  <button type="button" onClick={() => setShowAddConsumerModal(false)} className="btn btn--ghost">Cancel</button>
+                </div>
+              </form>
+            )}
+
+            <div className="card-divider form-body">
+              <span className="form-label" style={{ color: 'rgba(255,255,255,0.7)' }}>Consumer Subscriptions</span>
+              <div className="producer-list-container">
+                {consumers.map((c) => (
+                  <div key={c.id} className="producer-row">
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span className="producer-label" style={{ minWidth: '28px' }}>C-{c.id.substring(9)}</span>
+                      <span style={{ fontSize: '7.5px', color: c.joined ? '#059669' : '#64748b', fontWeight: 600 }}>
+                        {c.joined ? '● JOINED' : '○ IDLE'}
+                      </span>
+                    </div>
+                    <select
+                      value={c.topic}
+                      onChange={(e) => handleConsumerTopicChange(c.id, e.target.value)}
+                      className="producer-select"
+                      disabled={!connected || isHalted || c.joined}
+                    >
+                      {availableTopics.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    {c.joined ? (
+                      <button
+                        onClick={() => handleConsumerLeaveSpecific(c.id)}
+                        disabled={!connected || isHalted}
+                        className="producer-row-btn"
+                        style={{ background: '#f43f5e' }}
+                        title="Leave Consumer Group"
+                      >
+                        ❌
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleConsumerJoinSpecific(c.id)}
+                        disabled={!connected || isHalted}
+                        className="producer-row-btn"
+                        style={{ background: '#10b981' }}
+                        title="Join Consumer Group"
+                      >
+                        ✔
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -272,9 +641,46 @@ export default function Page(): React.JSX.Element {
           <div className="card card--pink">
             <p className="card-title card-title--pink">Chaos Laboratory</p>
             <div className="btn-row">
-              <button onClick={handleKillBroker}    disabled={!connected || isHalted} className="btn btn--rose">💥 Crash Broker</button>
+              <button onClick={handleKillBroker} disabled={!connected || isHalted} className="btn btn--rose">💥 Crash Broker</button>
               <button onClick={handleRecoverBroker} disabled={!connected || isHalted} className="btn btn--emerald">🔧 Recover Broker</button>
             </div>
+          </div>
+
+          {/* Cluster Management */}
+          <div className="card card--white">
+            <p className="card-title card-title--gray">Cluster Management</p>
+            <div className="btn-row--single">
+              <button onClick={handleAddBroker} disabled={!connected || isHalted} className="btn btn--primary">
+                ➕ Add Broker Node
+              </button>
+            </div>
+            <form onSubmit={handleCreateTopic} className="form-body">
+              <div className="form-group">
+                <span className="form-label">Topic Name</span>
+                <input
+                  type="text"
+                  value={newTopicName}
+                  onChange={(e) => setNewTopicName(e.target.value)}
+                  className="form-input"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <span className="form-label">Partitions</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={newPartitions}
+                  onChange={(e) => setNewPartitions(parseInt(e.target.value, 10))}
+                  className="form-input"
+                  required
+                />
+              </div>
+              <button type="submit" disabled={!connected || isHalted} className="btn btn--indigo">
+                📁 Create Topic
+              </button>
+            </form>
           </div>
 
           {/* Playback Scrubber */}
@@ -309,11 +715,27 @@ export default function Page(): React.JSX.Element {
           </div>
         </aside>
 
-        {/* ── Center Canvas ── */}
+        {/* ── Center Canvas (Priority 2.1, 2.2, 4.1) ── */}
         <main className="canvas-panel">
-          <Visualizer state={renderedState} onHoverDetails={setHoverDetails} />
+          <Visualizer
+            state={renderedState}
+            producers={producers}
+            consumers={consumers}
+            onHoverDetails={setHoverDetails}
+          />
           {hoverDetails && (
-            <div className="hover-tooltip">{hoverDetails}</div>
+            <div className="hover-tooltip">
+              <p className="hover-tooltip__title">{hoverDetails.title}</p>
+              {hoverDetails.subtitle && <p className="hover-tooltip__subtitle">{hoverDetails.subtitle}</p>}
+              <div className="hover-tooltip__stats">
+                {hoverDetails.stats.map((s, idx) => (
+                  <div key={idx} className="hover-tooltip__stat-row">
+                    <span className="hover-tooltip__stat-label">{s.label}:</span>
+                    <span className="hover-tooltip__stat-value" style={s.color ? { color: s.color } : undefined}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
           {isPaused && (
             <div className="scrub-badge">❚❚ Scrubbing · Tick {String(playbackTick)}</div>

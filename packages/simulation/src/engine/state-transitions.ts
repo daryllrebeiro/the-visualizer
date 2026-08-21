@@ -27,6 +27,12 @@ export function pureStateTransition(
     case 'BROKER_STATUS_CHANGED':
       handleBrokerStatusChanged(nextState, event, emittedEvents);
       break;
+    case 'BROKER_ADDED':
+      handleBrokerAdded(nextState, event);
+      break;
+    case 'TOPIC_CREATED':
+      handleTopicCreated(nextState, event);
+      break;
     case 'RECORD_PRODUCED':
       handleRecordProduced(nextState, event, emittedEvents);
       break;
@@ -64,10 +70,86 @@ function handleBrokerStatusChanged(
     broker.status = status;
     broker.lastHeartbeatTick = event.tick;
 
-    // If broker crashed, trigger partition leadership migration
     if (status === 'CRASHED') {
+      appendMetadataRecord(state, 'FENCE_BROKER_RECORD', { brokerId }, event.tick);
+      // If active controller crashed, elect a successor from voters quorum
+      triggerKRaftControllerElection(state, brokerId, event.tick, emittedEvents);
+      // Trigger partition leadership migration
       triggerLeaderElectionForCrashedBroker(state, brokerId, event.tick, emittedEvents);
+    } else if (status === 'ALIVE' || status === 'RECOVERING') {
+      appendMetadataRecord(state, 'UNFENCE_BROKER_RECORD', { brokerId }, event.tick);
     }
+  }
+}
+
+function appendMetadataRecord(
+  state: KafkaClusterState,
+  type: any,
+  data: Record<string, unknown>,
+  tick: number,
+): void {
+  if (!state.kraft.metadataLog) {
+    state.kraft.metadataLog = [];
+  }
+  const offset = state.kraft.metadataOffset ?? state.kraft.metadataLog.length;
+  state.kraft.metadataLog.push({
+    offset,
+    epoch: state.kraft.controllerEpoch,
+    type,
+    data,
+    timestamp: tick,
+  });
+  state.kraft.metadataOffset = offset + 1;
+}
+
+function triggerKRaftControllerElection(
+  state: KafkaClusterState,
+  crashedBrokerId: string,
+  tick: number,
+  emittedEvents: SimEvent[],
+): void {
+  if (state.kraft.activeControllerId !== crashedBrokerId) {
+    return;
+  }
+
+  const activeVoters = state.kraft.voters.filter(
+    (vId) => vId !== crashedBrokerId && state.brokers[vId]?.status === 'ALIVE',
+  );
+
+  state.kraft.controllerEpoch += 1;
+
+  if (activeVoters.length > 0) {
+    const newControllerId = activeVoters[0]!;
+    state.kraft.activeControllerId = newControllerId;
+
+    appendMetadataRecord(
+      state,
+      'LEADER_CHANGE_RECORD',
+      { leaderId: newControllerId, epoch: state.kraft.controllerEpoch },
+      tick,
+    );
+
+    emittedEvents.push({
+      id: `kraft-elect-${String(tick)}`,
+      tick,
+      type: 'KRAFT_LEADER_ELECTED' as any,
+      payload: {
+        activeControllerId: newControllerId,
+        controllerEpoch: state.kraft.controllerEpoch,
+      },
+    });
+  } else {
+    state.kraft.activeControllerId = null;
+
+    emittedEvents.push({
+      id: `kraft-quorum-lost-${String(tick)}`,
+      tick,
+      type: 'KRAFT_LEADER_ELECTED' as any,
+      payload: {
+        activeControllerId: null,
+        controllerEpoch: state.kraft.controllerEpoch,
+      },
+    });
   }
 }
 
@@ -242,12 +324,15 @@ function handleConsumerRebalance(
   if (event.type === 'CONSUMER_JOINED') {
     const memberId = event.payload.memberId as string;
     const clientId = event.payload.clientId as string;
+    const topics = (event.payload.topics as string[]) || ['orders'];
 
     group.members[memberId] = {
       memberId,
       clientId,
+      clientHost: '127.0.0.1',
       assignedPartitions: [],
       lastHeartbeatTick: event.tick,
+      subscribedTopics: topics,
     };
     group.state = 'PreparingRebalance';
   } else if (event.type === 'CONSUMER_LEFT') {
@@ -267,27 +352,26 @@ function handleConsumerRebalance(
     const membersList = Object.values(group.members);
 
     if (membersList.length > 0) {
-      // Simple range-based assignment
-      const allPartitions: { topic: string; partition: number }[] = [];
-      for (const topic of topics) {
-        const parts = state.topics[topic] ?? [];
-        for (const p of parts) {
-          allPartitions.push({ topic, partition: p.partition });
-        }
-      }
-
-      // Clear all assignments
+      // Clear all assignments first
       for (const m of membersList) {
         m.assignedPartitions = [];
       }
 
-      // Distribute partitions deterministically
-      rng.shuffle(allPartitions);
-      for (let i = 0; i < allPartitions.length; i++) {
-        const part = allPartitions[i];
-        const member = membersList[i % membersList.length];
-        if (part !== undefined && member !== undefined) {
-          member.assignedPartitions.push(part);
+      // Distribute partitions deterministically per topic
+      for (const topic of topics) {
+        const parts = state.topics[topic] ?? [];
+        const subscribingMembers = membersList.filter(
+          (m) => !m.subscribedTopics || m.subscribedTopics.includes(topic)
+        );
+
+        if (subscribingMembers.length > 0) {
+          const allPartitionsOfTopic = parts.map((p) => ({ topic, partition: p.partition }));
+          rng.shuffle(allPartitionsOfTopic);
+          for (let i = 0; i < allPartitionsOfTopic.length; i++) {
+            const part = allPartitionsOfTopic[i]!;
+            const member = subscribingMembers[i % subscribingMembers.length]!;
+            member.assignedPartitions.push(part);
+          }
         }
       }
 
@@ -317,3 +401,74 @@ function handleConsumerRebalance(
     }
   }
 }
+
+function handleBrokerAdded(state: any, event: any): void {
+  const brokerId = event.payload.brokerId as string;
+  const rack = (event.payload.rack as string) || `rack-${String(Object.keys(state.brokers).length)}`;
+  if (!state.brokers[brokerId]) {
+    state.brokers[brokerId] = {
+      id: brokerId,
+      rack,
+      status: 'ALIVE',
+      diskUsageBytes: 0,
+      maxDiskSizeBytes: 10 * 1024 * 1024 * 1024,
+      lastHeartbeatTick: event.tick,
+    };
+    // Add to voters list
+    if (!state.kraft.voters.includes(brokerId)) {
+      state.kraft.voters.push(brokerId);
+    }
+    appendMetadataRecord(state, 'REGISTER_BROKER_RECORD', { brokerId, rack: rack ?? null }, event.tick);
+  }
+}
+
+function handleTopicCreated(state: any, event: any): void {
+  const topicName = event.payload.topic as string;
+  const partitionCount = event.payload.partitions as number;
+
+  if (state.topics[topicName]) return; // Topic already exists
+
+  const aliveBrokers = Object.keys(state.brokers).filter(
+    (id) => state.brokers[id]?.status === 'ALIVE',
+  );
+  if (aliveBrokers.length === 0) return; // No alive brokers to assign
+
+  appendMetadataRecord(state, 'TOPIC_RECORD', { topic: topicName, partitions: partitionCount }, event.tick);
+
+  const partitionsArray: any[] = [];
+  for (let p = 0; p < partitionCount; p++) {
+    // Round-robin leader assignment
+    const leaderIndex = p % aliveBrokers.length;
+    const leaderId = aliveBrokers[leaderIndex]!;
+
+    // Replicas: up to 3 brokers if available
+    const replicasArray = aliveBrokers.slice(0, 3).map((brokerId) => ({
+      brokerId,
+      logEndOffset: 0,
+      lastCaughtUpTick: event.tick,
+      isInSync: true,
+    }));
+
+    partitionsArray.push({
+      topic: topicName,
+      partition: p,
+      leaderBrokerId: leaderId,
+      leaderEpoch: 1,
+      isr: replicasArray.map((r) => r.brokerId),
+      replicas: replicasArray,
+      highWatermark: 0,
+      minInsyncReplicas: 1,
+      uncleanLeaderElectionEnabled: false,
+    });
+
+    appendMetadataRecord(
+      state,
+      'PARTITION_RECORD',
+      { topic: topicName, partition: p, leader: leaderId, isr: replicasArray.map((r) => r.brokerId) },
+      event.tick,
+    );
+  }
+
+  state.topics[topicName] = partitionsArray;
+}
+

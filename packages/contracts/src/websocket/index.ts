@@ -69,6 +69,18 @@ export const IntentRequestSnapshotSchema = IntentBaseSchema.extend({
   type: z.literal('INTENT_REQUEST_SNAPSHOT'),
 });
 
+export const IntentAddBrokerSchema = IntentBaseSchema.extend({
+  type: z.literal('INTENT_ADD_BROKER'),
+  brokerId: z.string().min(1).max(64),
+  rack: z.string().optional(),
+});
+
+export const IntentCreateTopicSchema = IntentBaseSchema.extend({
+  type: z.literal('INTENT_CREATE_TOPIC'),
+  topic: z.string().min(1).max(249),
+  partitions: z.number().int().positive().max(10),
+});
+
 /**
  * Discriminated union of all valid client intents.
  * Validated on the server before any simulation action is taken.
@@ -84,6 +96,8 @@ export const ClientIntentSchema = z.discriminatedUnion('type', [
   IntentChaosNetworkPartitionSchema,
   IntentSimControlSchema,
   IntentRequestSnapshotSchema,
+  IntentAddBrokerSchema,
+  IntentCreateTopicSchema,
 ]);
 export type ClientIntent = z.infer<typeof ClientIntentSchema>;
 

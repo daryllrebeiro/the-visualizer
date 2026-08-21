@@ -17,7 +17,19 @@ export { SimulationEngine } from './engine/simulation-engine.js';
 export { InvariantChecker } from './invariants/invariant-checker.js';
 export { SnapshotManager } from './snapshot/snapshot-manager.js';
 
+export { PartitionLog } from './domain/partition-log.js';
+export { InMemoryStorageAdapter } from './domain/storage-adapter.js';
+export { KafkaOracleHarness, type OracleScenarioResult } from './oracle/oracle-harness.js';
+
 export type { SimulationConfig } from './engine/simulation-engine.js';
 export type { ScheduledEvent, VirtualTimestamp } from './scheduler/virtual-timeline.js';
 export type { InvariantViolation } from './invariants/invariant-checker.js';
 export type { Snapshot, SnapshotMetadata } from './snapshot/snapshot-manager.js';
+export type {
+  LogRecord,
+  LogSegment,
+  AppendResult,
+  FetchResult,
+  PartitionLogOptions,
+} from './domain/partition-log.js';
+export type { StorageAdapter } from './domain/storage-adapter.js';

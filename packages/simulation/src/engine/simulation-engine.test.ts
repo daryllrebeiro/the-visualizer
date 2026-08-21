@@ -205,6 +205,7 @@ describe('SimulationEngine state transitions & snapshots', () => {
           'member-1': {
             memberId: 'member-1',
             clientId: 'client-1',
+            clientHost: '127.0.0.1',
             assignedPartitions: [],
             lastHeartbeatTick: 0,
           },
@@ -225,5 +226,142 @@ describe('SimulationEngine state transitions & snapshots', () => {
 
     expect(violationDetected).toBe(true);
     expect(engine.status).toBe('HALTED');
+  });
+
+  it('should filter partition assignments strictly by member topic subscriptions', () => {
+    let rebalanceEvent: SimEvent | undefined;
+    engine.registerCallbacks({
+      onEventBatch: (events) => {
+        const found = events.find((e) => e.type === 'REBALANCE_COMPLETED');
+        if (found) rebalanceEvent = found;
+      },
+      onInvariantViolation: () => {},
+      onResourceLimitExceeded: () => {},
+    });
+
+    // Create a second topic "payments"
+    engine.scheduleEvent(5, 'topic-evt', 'TOPIC_CREATED' as any, {
+      topic: 'payments',
+      partitions: 1,
+    });
+
+    // Consumer-1 joins subscribed only to 'orders'
+    engine.scheduleEvent(10, 'c1-join', 'CONSUMER_JOINED', {
+      groupId: 'order-processors',
+      memberId: 'c1',
+      clientId: 'client-c1',
+      topics: ['orders'],
+    });
+
+    // Consumer-2 joins subscribed only to 'payments'
+    engine.scheduleEvent(15, 'c2-join', 'CONSUMER_JOINED', {
+      groupId: 'order-processors',
+      memberId: 'c2',
+      clientId: 'client-c2',
+      topics: ['payments'],
+    });
+
+    engine.step(20);
+
+    const state = engine.state;
+    expect(state).toBeDefined();
+    if (state) {
+      const group = state.consumerGroups['order-processors'];
+      expect(group?.state).toBe('Stable');
+      const c1 = group?.members['c1'];
+      const c2 = group?.members['c2'];
+
+      // C1 should only have orders partitions
+      expect(c1?.assignedPartitions.every((p) => p.topic === 'orders')).toBe(true);
+      expect(c1?.assignedPartitions.length).toBeGreaterThan(0);
+
+      // C2 should only have payments partitions
+      expect(c2?.assignedPartitions.every((p) => p.topic === 'payments')).toBe(true);
+      expect(c2?.assignedPartitions.length).toBeGreaterThan(0);
+      expect(rebalanceEvent).toBeDefined();
+    }
+  });
+
+  it('should mark partition offline (leader=null) when all ISR replicas crash', () => {
+    let leaderEvents: SimEvent[] = [];
+    engine.registerCallbacks({
+      onEventBatch: (events) => {
+        leaderEvents.push(...events.filter((e) => e.type === 'PARTITION_LEADER_ELECTED'));
+      },
+      onInvariantViolation: () => {},
+      onResourceLimitExceeded: () => {},
+    });
+
+    // Crash all 3 brokers in the cluster
+    engine.scheduleEvent(10, 'crash-1', 'BROKER_STATUS_CHANGED', { brokerId: 'broker-1', status: 'CRASHED' });
+    engine.scheduleEvent(11, 'crash-2', 'BROKER_STATUS_CHANGED', { brokerId: 'broker-2', status: 'CRASHED' });
+    engine.scheduleEvent(12, 'crash-3', 'BROKER_STATUS_CHANGED', { brokerId: 'broker-3', status: 'CRASHED' });
+
+    engine.step(20);
+
+    const state = engine.state;
+    expect(state).toBeDefined();
+    if (state) {
+      const partition = state.topics['orders']?.[0];
+      expect(partition?.leaderBrokerId).toBeNull();
+      expect(leaderEvents.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('should support dynamic broker addition', () => {
+    engine.scheduleEvent(10, 'add-b4', 'BROKER_ADDED' as any, {
+      brokerId: 'broker-4',
+      rack: 'rack-a',
+    });
+
+    engine.step(15);
+
+    const state = engine.state;
+    expect(state).toBeDefined();
+    if (state) {
+      expect(state.brokers['broker-4']).toBeDefined();
+      expect(state.brokers['broker-4']?.status).toBe('ALIVE');
+      expect(state.kraft.voters).toContain('broker-4');
+    }
+  });
+
+  it('should elect new KRaft controller and append metadata log entries when active controller crashes', () => {
+    // Initial active controller is broker-1
+    const initialState = engine.state;
+    if (initialState) {
+      initialState.kraft.activeControllerId = 'broker-1';
+      initialState.kraft.voters = ['broker-1', 'broker-2', 'broker-3'];
+    }
+
+    let kraftEvents: SimEvent[] = [];
+    engine.registerCallbacks({
+      onEventBatch: (events) => {
+        kraftEvents.push(...events.filter((e) => e.type === 'KRAFT_LEADER_ELECTED'));
+      },
+      onInvariantViolation: () => {},
+      onResourceLimitExceeded: () => {},
+    });
+
+    // Crash the active controller broker-1 at tick 10
+    engine.scheduleEvent(10, 'crash-ctrl', 'BROKER_STATUS_CHANGED', {
+      brokerId: 'broker-1',
+      status: 'CRASHED',
+    });
+
+    engine.step(15);
+
+    const state = engine.state;
+    expect(state).toBeDefined();
+    if (state) {
+      // New controller should be broker-2 (first surviving voter in quorum)
+      expect(state.kraft.activeControllerId).toBe('broker-2');
+      expect(state.kraft.controllerEpoch).toBeGreaterThan(0);
+      expect(state.kraft.metadataLog).toBeDefined();
+      expect(state.kraft.metadataLog?.length).toBeGreaterThan(0);
+
+      // Should have emitted a KRAFT_LEADER_ELECTED event
+      expect(kraftEvents.length).toBeGreaterThan(0);
+      expect(kraftEvents[0]?.payload['activeControllerId']).toBe('broker-2');
+    }
   });
 });

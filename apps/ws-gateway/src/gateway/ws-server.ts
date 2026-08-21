@@ -104,14 +104,72 @@ const DEFAULT_TOPOLOGY: KafkaClusterState = {
       rack: 'rack-c',
     },
   },
-  topics: {},
+  topics: {
+    orders: [
+      {
+        topic: 'orders' as never,
+        partition: 0 as never,
+        leaderBrokerId: '1' as never,
+        leaderEpoch: 1,
+        isr: ['1' as never, '2' as never, '3' as never],
+        replicas: [
+          { brokerId: '1' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+          { brokerId: '2' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+          { brokerId: '3' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+        ],
+        highWatermark: 0,
+        minInsyncReplicas: 1,
+        uncleanLeaderElectionEnabled: false,
+      },
+      {
+        topic: 'orders' as never,
+        partition: 1 as never,
+        leaderBrokerId: '2' as never,
+        leaderEpoch: 1,
+        isr: ['1' as never, '2' as never, '3' as never],
+        replicas: [
+          { brokerId: '1' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+          { brokerId: '2' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+          { brokerId: '3' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+        ],
+        highWatermark: 0,
+        minInsyncReplicas: 1,
+        uncleanLeaderElectionEnabled: false,
+      },
+      {
+        topic: 'orders' as never,
+        partition: 2 as never,
+        leaderBrokerId: '3' as never,
+        leaderEpoch: 1,
+        isr: ['1' as never, '2' as never, '3' as never],
+        replicas: [
+          { brokerId: '1' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+          { brokerId: '2' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+          { brokerId: '3' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+        ],
+        highWatermark: 0,
+        minInsyncReplicas: 1,
+        uncleanLeaderElectionEnabled: false,
+      },
+    ],
+  },
   kraft: {
     activeControllerId: '1' as never,
     controllerEpoch: 1,
     voters: ['1' as never, '2' as never, '3' as never],
     metadataOffset: 0,
   },
-  consumerGroups: {},
+  consumerGroups: {
+    'order-processors': {
+      id: 'order-processors' as never,
+      state: 'Empty',
+      protocol: 'range',
+      generationId: 0,
+      leaderMemberId: null,
+      members: {},
+      committedOffsets: {},
+    },
+  },
 };
 
 export function createWebSocketServer(server: http.Server): WebSocketServer {
@@ -251,6 +309,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                   payload: {
                     roomId: targetRoomId,
                     state: currentState,
+                    tick: currentState ? currentState.tick : 0,
                   },
                 }),
               );

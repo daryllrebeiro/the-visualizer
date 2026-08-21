@@ -20,7 +20,7 @@ const nextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws://localhost:3002 ws://localhost:8080 wss://localhost:3002 wss://localhost:8080 http://localhost:3001 http://localhost:8000 https://localhost:3001 https://localhost:8000;",
+              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:3000 http://localhost:3001 http://localhost:3002 http://localhost:8000 ws://localhost:3001 ws://localhost:3002 ws://localhost:8080 wss://localhost:3001 wss://localhost:3002 wss://localhost:8080 https://localhost:3000 https://localhost:3001 https://localhost:8000;",
           },
           {
             key: 'Strict-Transport-Security',

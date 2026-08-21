@@ -108,6 +108,7 @@ describe('InvariantChecker safety policies', () => {
         'member-1': {
           memberId: 'member-1',
           clientId: 'client-1',
+          clientHost: '127.0.0.1',
           assignedPartitions: [],
           lastHeartbeatTick: 0,
         },

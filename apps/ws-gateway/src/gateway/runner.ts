@@ -138,8 +138,27 @@ export class SimulationRunner {
               engineEventType = 'RECORD_PRODUCED';
             } else if (normalizedType === 'INTENT_CONSUMER_JOIN') {
               engineEventType = 'CONSUMER_JOINED';
+              // Inject client-assigned memberId since it's coordinated at the runner/coordinator level
+              engineEventPayload = {
+                groupId: intent.payload.groupId,
+                clientId: intent.payload.clientId,
+                memberId: intent.payload.memberId || `member-${Math.random().toString(36).substring(7)}`,
+                topics: intent.payload.topics || ['orders'],
+              };
             } else if (normalizedType === 'INTENT_CONSUMER_LEAVE') {
               engineEventType = 'CONSUMER_LEFT';
+            } else if (normalizedType === 'INTENT_ADD_BROKER') {
+              engineEventType = 'BROKER_ADDED';
+              engineEventPayload = {
+                brokerId: intent.payload.brokerId,
+                rack: intent.payload.rack,
+              };
+            } else if (normalizedType === 'INTENT_CREATE_TOPIC') {
+              engineEventType = 'TOPIC_CREATED';
+              engineEventPayload = {
+                topic: intent.payload.topic,
+                partitions: intent.payload.partitions,
+              };
             } else if (normalizedType === 'INTENT_CHAOS_KILL_BROKER') {
               engineEventType = 'BROKER_STATUS_CHANGED';
               engineEventPayload = {
@@ -197,6 +216,41 @@ export class SimulationRunner {
       const previousState = engine.state
         ? (JSON.parse(JSON.stringify(engine.state)) as KafkaClusterState)
         : null;
+
+      // 2.5. Simulate automatic consumer poll & offset commits
+      if (engine.state) {
+        for (const groupId in engine.state.consumerGroups) {
+          const group = engine.state.consumerGroups[groupId];
+          if (!group || group.state !== 'Stable') continue;
+
+          for (const memberId in group.members) {
+            const member = group.members[memberId];
+            if (!member) continue;
+
+            for (const ap of member.assignedPartitions) {
+              const partitionObj = engine.state.topics[ap.topic]?.find(
+                (p: any) => p.partition === ap.partition,
+              );
+              if (!partitionObj) continue;
+
+              const currentCommit = group.committedOffsets[ap.topic]?.[ap.partition] ?? 0;
+              if (partitionObj.highWatermark > currentCommit) {
+                engine.scheduleEvent(
+                  engine.currentTick,
+                  `consume-${ap.topic}-${String(ap.partition)}-${Math.random().toString(36).substring(7)}`,
+                  'RECORD_CONSUMED' as any,
+                  {
+                    groupId,
+                    topic: ap.topic,
+                    partition: ap.partition,
+                    offset: partitionObj.highWatermark,
+                  },
+                );
+              }
+            }
+          }
+        }
+      }
 
       // 3. Step the engine forward by 1 tick
       engine.step(1);

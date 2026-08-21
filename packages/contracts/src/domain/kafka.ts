@@ -82,6 +82,7 @@ export const ConsumerGroupMemberSchema = z.object({
     }),
   ),
   lastHeartbeatTick: z.number().nonnegative(),
+  subscribedTopics: z.array(z.string().min(1).max(255)).optional(),
 });
 export type ConsumerGroupMember = z.infer<typeof ConsumerGroupMemberSchema>;
 
@@ -121,11 +122,31 @@ export type TransactionMetadata = z.infer<typeof TransactionMetadataSchema>;
 
 // ─── KRaft ───────────────────────────────────────────────────────────────────
 
+export const MetadataRecordTypeSchema = z.enum([
+  'REGISTER_BROKER_RECORD',
+  'TOPIC_RECORD',
+  'PARTITION_RECORD',
+  'LEADER_CHANGE_RECORD',
+  'FENCE_BROKER_RECORD',
+  'UNFENCE_BROKER_RECORD',
+]);
+export type MetadataRecordType = z.infer<typeof MetadataRecordTypeSchema>;
+
+export const MetadataRecordSchema = z.object({
+  offset: z.number().nonnegative(),
+  epoch: z.number().nonnegative(),
+  type: MetadataRecordTypeSchema,
+  data: z.record(z.string(), z.unknown()),
+  timestamp: z.number().nonnegative(),
+});
+export type MetadataRecord = z.infer<typeof MetadataRecordSchema>;
+
 export const KRaftControllerStateSchema = z.object({
   activeControllerId: NodeIdSchema.nullable(),
   controllerEpoch: z.number().nonnegative(),
   voters: z.array(NodeIdSchema),
   metadataOffset: z.number().nonnegative(),
+  metadataLog: z.array(MetadataRecordSchema).optional(),
 });
 export type KRaftControllerState = z.infer<typeof KRaftControllerStateSchema>;
 

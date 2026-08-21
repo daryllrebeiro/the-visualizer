@@ -133,7 +133,7 @@ export class WebSocketClient {
     if (msg.type === 'INIT_SNAPSHOT') {
       const { state, tick } = msg.payload;
       this.state = JSON.parse(JSON.stringify(state)) as KafkaClusterState;
-      this.state.tick = tick;
+      this.state.tick = tick !== undefined ? tick : (state?.tick ?? 0);
       this.expectedSequence = null;
       this.pendingUpdates.clear();
       this.callbacks.onStateChange(this.state);
@@ -143,6 +143,22 @@ export class WebSocketClient {
 
     if (msg.type === 'ROOM_JOINED') {
       this.addLog(`Successfully joined room "${String(msg.payload.roomId)}"`, 'SUCCESS');
+      return;
+    }
+
+    if (msg.type === 'MSG_INTENT_ACK') {
+      const { status, reason } = msg.payload;
+      if (status === 'REJECTED') {
+        this.addLog(`Intent rejected: ${String(reason)}`, 'ERROR');
+      } else {
+        this.addLog(`Intent accepted`, 'SUCCESS');
+      }
+      return;
+    }
+
+    if (msg.type === 'SESSION_ERROR') {
+      const { code, message } = msg.payload;
+      this.addLog(`Session error (${String(code)}): ${String(message)}`, 'ERROR');
       return;
     }
 
@@ -208,6 +224,13 @@ export class WebSocketClient {
       const { error, tick } = msg.payload;
       this.callbacks.onHalt(error, tick);
       this.addLog(`SAFETY HALT: ${String(error)} (tick ${String(tick)})`, 'ERROR');
+    } else if (msg.type === 'INTENT_ACK') {
+      const { status, reason } = msg.payload;
+      if (status === 'REJECTED') {
+        this.addLog(`Execution failed: ${String(reason)}`, 'WARN');
+      } else {
+        this.addLog(`Execution completed successfully`, 'SUCCESS');
+      }
     }
   }
 
