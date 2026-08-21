@@ -235,14 +235,27 @@ export default function Page(): React.JSX.Element {
     addLog(`Updated Producer "${id}" target topic to "${newTopic}"`, 'INFO');
   };
 
-  // Priority 3.1: Confirmed Consumer Creation
+  // Confirmed Consumer Creation with Immediate Group Join
   const handleConfirmAddConsumer = (e: React.SyntheticEvent): void => {
     e.preventDefault();
     const newId = `consumer-${String(consumers.length + 1)}`;
     const topic = consumerSelectedTopic || 'orders';
 
-    setConsumers((c) => [...c, { id: newId, topic, joined: false, memberId: null }]);
-    addLog(`Created Consumer "${newId}" configured for topic "${topic}"`, 'INFO');
+    // Auto-join to group
+    if (connected) {
+      clientRef.current?.sendIntent('CONSUMER_JOIN', {
+        groupId: 'order-processors',
+        clientId: newId,
+        memberId: newId,
+        topics: [topic],
+      });
+      setConsumers((c) => [...c, { id: newId, topic, joined: true, memberId: newId }]);
+      addLog(`Created & Joined Consumer "${newId}" for topic "${topic}"`, 'INFO');
+    } else {
+      setConsumers((c) => [...c, { id: newId, topic, joined: false, memberId: null }]);
+      addLog(`Created Consumer "${newId}" configured for topic "${topic}"`, 'INFO');
+    }
+
     setShowAddConsumerModal(false);
   };
 
