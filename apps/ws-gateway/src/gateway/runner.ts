@@ -18,6 +18,15 @@ import { SimulationEngine } from '@the-visualizer/simulation';
 import { config } from '../config.js';
 import { roomManager } from './room-manager.js';
 
+export interface AutoProducerSchedule {
+  producerId: string;
+  topic: string;
+  intervalSeconds: number;
+  intervalTicks: number;
+  lastFiredTick: number;
+  enabled: boolean;
+}
+
 export interface RoomSession {
   roomId: string;
   engine: SimulationEngine;
@@ -25,6 +34,7 @@ export interface RoomSession {
   timer: NodeJS.Timeout | null;
   isHalted: boolean;
   isPaused?: boolean;
+  autoProducers: Map<string, AutoProducerSchedule>;
 }
 
 export class SimulationRunner {
@@ -87,6 +97,7 @@ export class SimulationRunner {
       timer: null,
       isHalted: false,
       isPaused: false,
+      autoProducers: new Map(),
     };
 
     this.activeSessions.set(roomId, session);
@@ -171,6 +182,46 @@ export class SimulationRunner {
                 brokerId: intent.payload.brokerId,
                 status: 'ALIVE',
               };
+            } else if (normalizedType === 'INTENT_SET_AUTO_PRODUCE') {
+              const { producerId, topic, intervalSeconds, enabled } = intent.payload;
+              const isEnabled = Boolean(enabled);
+              if (!isEnabled) {
+                session.autoProducers.delete(producerId);
+              } else {
+                const clampedSec = Math.max(0.5, Math.min(30.0, Number(intervalSeconds) || 3.0));
+                const intervalTicks = Math.round(clampedSec * 10);
+
+                const existing = session.autoProducers.get(producerId);
+                session.autoProducers.set(producerId, {
+                  producerId,
+                  topic: topic || 'orders',
+                  intervalSeconds: clampedSec,
+                  intervalTicks,
+                  lastFiredTick: existing?.lastFiredTick ?? (session.tickCount - intervalTicks),
+                  enabled: true,
+                });
+              }
+
+              await roomManager.publishRoomUpdate(roomId, {
+                type: 'INTENT_ACK',
+                payload: {
+                  intentId: intent.id || '',
+                  status: 'ACCEPTED',
+                },
+              });
+              continue;
+            } else if (normalizedType === 'INTENT_REMOVE_AUTO_PRODUCE') {
+              const { producerId } = intent.payload;
+              session.autoProducers.delete(producerId);
+
+              await roomManager.publishRoomUpdate(roomId, {
+                type: 'INTENT_ACK',
+                payload: {
+                  intentId: intent.id || '',
+                  status: 'ACCEPTED',
+                },
+              });
+              continue;
             } else if (normalizedType === 'INTENT_SIM_CONTROL') {
               const action = intent.payload.action;
               if (action === 'PLAY') {
@@ -247,6 +298,38 @@ export class SimulationRunner {
                   },
                 );
               }
+            }
+          }
+        }
+      }
+
+      // 2.6. Evaluate and dispatch auto-produced messages
+      if (engine.state) {
+        for (const [, entry] of session.autoProducers) {
+          if (!entry.enabled) continue;
+          const ticksElapsed = session.tickCount - entry.lastFiredTick;
+          if (ticksElapsed >= entry.intervalTicks) {
+            entry.lastFiredTick = session.tickCount;
+
+            const partitions = engine.state.topics[entry.topic] ?? [];
+            const activePartitions = partitions.filter(
+              (p) => p.leaderBrokerId && engine.state?.brokers[p.leaderBrokerId]?.status === 'ALIVE',
+            );
+
+            if (activePartitions.length > 0) {
+              const targetPart = activePartitions[Math.floor(Math.random() * activePartitions.length)]!;
+              engine.scheduleEvent(
+                engine.currentTick,
+                `auto-${entry.producerId}-${String(session.tickCount)}`,
+                'RECORD_PRODUCED' as any,
+                {
+                  topic: entry.topic,
+                  partition: targetPart.partition,
+                  key: `auto-${entry.producerId}-${String(session.tickCount)}`,
+                  value: `auto-val-${Math.random().toString(36).substring(7)}`,
+                  acks: 1,
+                },
+              );
             }
           }
         }

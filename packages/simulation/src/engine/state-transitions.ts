@@ -318,8 +318,22 @@ function handleConsumerRebalance(
   emittedEvents: SimEvent[],
 ): void {
   const groupId = event.payload.groupId as string;
-  const group = state.consumerGroups[groupId];
-  if (!group) return;
+  let group = state.consumerGroups[groupId];
+
+  // Auto-create group on first join if it doesn't exist
+  if (!group) {
+    if (event.type !== 'CONSUMER_JOINED') return;
+    group = {
+      id: groupId as never,
+      state: 'Empty',
+      protocol: 'range',
+      generationId: 0,
+      leaderMemberId: null,
+      members: {},
+      committedOffsets: {},
+    };
+    state.consumerGroups[groupId] = group;
+  }
 
   if (event.type === 'CONSUMER_JOINED') {
     const memberId = event.payload.memberId as string;

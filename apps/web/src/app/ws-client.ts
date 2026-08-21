@@ -212,7 +212,22 @@ export class WebSocketClient {
         const result = applyPatch(this.state, patch as Operation[]);
         this.state = result.newDocument as KafkaClusterState;
         this.state.tick = tick;
-        this.callbacks.onStateChange(this.state);
+        this.callbacks.onStateChange(JSON.parse(JSON.stringify(this.state)) as KafkaClusterState);
+
+        // Surface cluster-level record commits and high watermark advances to event log
+        for (const op of (patch as Operation[])) {
+          if (op.path.includes('highWatermark') && 'value' in op && typeof op.value === 'number') {
+            const match = /\/topics\/([^/]+)\/(\d+)\/highWatermark/.exec(op.path);
+            if (match) {
+              const topic = match[1] ?? 'topic';
+              const partition = match[2] ?? '0';
+              this.addLog(
+                `[Cluster] Committed record on ${topic}/p-${partition} (HW: ${String(op.value)})`,
+                'INFO',
+              );
+            }
+          }
+        }
       } catch {
         this.addLog(
           `Failed to apply delta patch at tick ${String(tick)}. Requesting resync.`,

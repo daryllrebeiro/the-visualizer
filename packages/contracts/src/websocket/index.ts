@@ -81,6 +81,19 @@ export const IntentCreateTopicSchema = IntentBaseSchema.extend({
   partitions: z.number().int().positive().max(10),
 });
 
+export const IntentSetAutoProduceSchema = IntentBaseSchema.extend({
+  type: z.literal('INTENT_SET_AUTO_PRODUCE'),
+  producerId: z.string().min(1).max(64),
+  topic: z.string().min(1).max(249),
+  intervalSeconds: z.number().positive().max(300),
+  enabled: z.boolean(),
+});
+
+export const IntentRemoveAutoProduceSchema = IntentBaseSchema.extend({
+  type: z.literal('INTENT_REMOVE_AUTO_PRODUCE'),
+  producerId: z.string().min(1).max(64),
+});
+
 /**
  * Discriminated union of all valid client intents.
  * Validated on the server before any simulation action is taken.
@@ -98,6 +111,8 @@ export const ClientIntentSchema = z.discriminatedUnion('type', [
   IntentRequestSnapshotSchema,
   IntentAddBrokerSchema,
   IntentCreateTopicSchema,
+  IntentSetAutoProduceSchema,
+  IntentRemoveAutoProduceSchema,
 ]);
 export type ClientIntent = z.infer<typeof ClientIntentSchema>;
 

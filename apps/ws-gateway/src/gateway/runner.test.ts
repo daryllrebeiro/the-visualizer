@@ -155,4 +155,70 @@ describe('Authoritative Simulation Runner Tests', () => {
     expect(session?.isHalted).toBe(true);
     simulationRunner.stopSession(testRoomId);
   });
+
+  it('should register and execute auto-producer schedules', async () => {
+    // Add topic and partition with alive broker leader
+    const autoTopology: KafkaClusterState = {
+      ...mockTopology,
+      topics: {
+        orders: [
+          {
+            topic: 'orders' as never,
+            partition: 0 as never,
+            leaderBrokerId: '1' as never,
+            leaderEpoch: 1,
+            replicas: [
+              {
+                brokerId: '1' as never,
+                logEndOffset: 0,
+                lastCaughtUpTick: 0,
+                isInSync: true,
+              },
+            ],
+            isr: ['1' as never],
+            highWatermark: 0,
+            minInsyncReplicas: 1,
+            uncleanLeaderElectionEnabled: false,
+          },
+        ],
+      },
+    };
+
+    simulationRunner.startSession(testRoomId, autoTopology);
+    const session = simulationRunner.getSession(testRoomId);
+    expect(session).toBeDefined();
+
+    // 1. Send INTENT_SET_AUTO_PRODUCE
+    const setAutoIntent = {
+      type: 'INTENT_SET_AUTO_PRODUCE',
+      payload: {
+        producerId: 'producer-test',
+        topic: 'orders',
+        intervalSeconds: 0.5, // 5 ticks
+        enabled: true,
+      },
+    };
+    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(setAutoIntent));
+
+    // Wait 300ms for intent processing
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(session?.autoProducers.has('producer-test')).toBe(true);
+    expect(session?.autoProducers.get('producer-test')?.enabled).toBe(true);
+    expect(session?.autoProducers.get('producer-test')?.intervalTicks).toBe(5);
+
+    // 2. Send INTENT_REMOVE_AUTO_PRODUCE
+    const removeAutoIntent = {
+      type: 'INTENT_REMOVE_AUTO_PRODUCE',
+      payload: {
+        producerId: 'producer-test',
+      },
+    };
+    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(removeAutoIntent));
+
+    // Wait 250ms for intent processing
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(session?.autoProducers.has('producer-test')).toBe(false);
+
+    simulationRunner.stopSession(testRoomId);
+  });
 });

@@ -73,15 +73,17 @@ export default function Page(): React.JSX.Element {
   const [produceTrigger, setProduceTrigger] = useState<ProduceTrigger | null>(null);
 
   const [producers, setProducers] = useState<ProducerConfig[]>([
-    { id: 'producer-1', topic: 'orders' },
+    { id: 'producer-1', topic: 'orders', autoProduceEnabled: false, autoProduceInterval: 3.0 },
   ]);
 
   // Consumer state
   const [showAddConsumerModal, setShowAddConsumerModal] = useState(false);
   const [consumerSelectedTopic, setConsumerSelectedTopic] = useState('orders');
+  const [consumerSelectedGroup, setConsumerSelectedGroup] = useState('order-processors');
+  const [customConsumerGroup, setCustomConsumerGroup] = useState('');
 
   const [consumers, setConsumers] = useState<ConsumerConfig[]>([
-    { id: 'consumer-1', topic: 'orders', joined: false, memberId: null },
+    { id: 'consumer-1', topic: 'orders', groupId: 'order-processors', joined: false, memberId: null },
   ]);
 
   const clientRef = useRef<WebSocketClient | null>(null);
@@ -107,8 +109,25 @@ export default function Page(): React.JSX.Element {
     if (!token) { addLog('Cannot connect: auth token missing.', 'ERROR'); return; }
     setIsHalted(false); setHaltError(null); setStateHistory([]);
     const client = new WebSocketClient(wsUrl, token, roomId, {
-      onStateChange: (s) => { setLiveState(s); },
-      onStatusChange: (s) => { setStatus(s); },
+      onStateChange: (s) => {
+        setLiveState({ ...s });
+      },
+      onStatusChange: (s) => {
+        setStatus(s);
+        if (s === 'CONNECTED') {
+          // Re-sync any active auto-produce schedules upon connecting
+          producers.forEach((p) => {
+            if (p.autoProduceEnabled) {
+              client.sendIntent('SET_AUTO_PRODUCE', {
+                producerId: p.id,
+                topic: p.topic,
+                intervalSeconds: p.autoProduceInterval ?? 3.0,
+                enabled: true,
+              });
+            }
+          });
+        }
+      },
       onHalt: (e) => { setIsHalted(true); setHaltError(e); },
       onEventLog: (l) => { setEventLogs((p) => [l, ...p].slice(0, 100)); },
     });
@@ -193,6 +212,15 @@ export default function Page(): React.JSX.Element {
     addLog(`[${targetProd.id}] Dispatched: PRODUCE → ${finalTopic}/p-${String(partition)} (Broker ${leaderId})`, 'INFO');
   };
 
+  const handleProduceAll = (): void => {
+    if (!liveState || producers.length === 0) return;
+    producers.forEach((prod, idx) => {
+      setTimeout(() => {
+        handleProduceIntent(prod.id);
+      }, idx * 80);
+    });
+  };
+
   // Priority 1.1 & 1.2: Confirmed Producer Creation
   const handleConfirmAddProducer = (e: React.SyntheticEvent): void => {
     e.preventDefault();
@@ -212,7 +240,10 @@ export default function Page(): React.JSX.Element {
     }
 
     const newId = `producer-${String(producers.length + 1)}`;
-    setProducers((p) => [...p, { id: newId, topic: finalTopic }]);
+    setProducers((p) => [
+      ...p,
+      { id: newId, topic: finalTopic, autoProduceEnabled: false, autoProduceInterval: 3.0 },
+    ]);
     addLog(`Created Producer Node "${newId}" bound to topic "${finalTopic}"`, 'INFO');
     setShowAddProducerModal(false);
     setCustomProducerTopic('');
@@ -224,15 +255,86 @@ export default function Page(): React.JSX.Element {
       return;
     }
     const removed = producers[producers.length - 1]!;
+    if (removed.autoProduceEnabled) {
+      clientRef.current?.sendIntent('REMOVE_AUTO_PRODUCE', { producerId: removed.id });
+    }
     setProducers((p) => p.slice(0, -1));
     addLog(`Removed Producer Node "${removed.id}"`, 'INFO');
   };
 
   const handleProducerTopicChange = (id: string, newTopic: string): void => {
     setProducers((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, topic: newTopic } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          if (p.autoProduceEnabled && connected) {
+            clientRef.current?.sendIntent('SET_AUTO_PRODUCE', {
+              producerId: id,
+              topic: newTopic,
+              intervalSeconds: p.autoProduceInterval ?? 3.0,
+              enabled: true,
+            });
+          }
+          return { ...p, topic: newTopic };
+        }
+        return p;
+      })
     );
     addLog(`Updated Producer "${id}" target topic to "${newTopic}"`, 'INFO');
+  };
+
+  const handleToggleAutoProduce = (id: string): void => {
+    setProducers((prev) =>
+      prev.map((p) => {
+        if (p.id === id) {
+          const nextEnabled = !p.autoProduceEnabled;
+          const interval = p.autoProduceInterval ?? 3.0;
+          if (connected) {
+            if (nextEnabled) {
+              clientRef.current?.sendIntent('SET_AUTO_PRODUCE', {
+                producerId: id,
+                topic: p.topic,
+                intervalSeconds: interval,
+                enabled: true,
+              });
+              addLog(`[${id}] Auto-Produce ACTIVE (every ${interval.toFixed(1)}s)`, 'INFO');
+            } else {
+              clientRef.current?.sendIntent('SET_AUTO_PRODUCE', {
+                producerId: id,
+                topic: p.topic,
+                intervalSeconds: interval,
+                enabled: false,
+              });
+              clientRef.current?.sendIntent('REMOVE_AUTO_PRODUCE', {
+                producerId: id,
+              });
+              addLog(`[${id}] Auto-Produce STOPPED`, 'INFO');
+            }
+          }
+          return { ...p, autoProduceEnabled: nextEnabled };
+        }
+        return p;
+      })
+    );
+  };
+
+  const handleAutoProduceIntervalChange = (id: string, intervalSeconds: number): void => {
+    const clamped = Math.max(0.5, Math.min(30.0, Number.isFinite(intervalSeconds) ? intervalSeconds : 3.0));
+    setProducers((prev) =>
+      prev.map((p) => {
+        if (p.id === id) {
+          if (p.autoProduceEnabled && connected) {
+            clientRef.current?.sendIntent('SET_AUTO_PRODUCE', {
+              producerId: id,
+              topic: p.topic,
+              intervalSeconds: clamped,
+              enabled: true,
+            });
+          }
+          return { ...p, autoProduceInterval: clamped };
+        }
+        return p;
+      })
+    );
   };
 
   // Confirmed Consumer Creation with Immediate Group Join
@@ -240,23 +342,29 @@ export default function Page(): React.JSX.Element {
     e.preventDefault();
     const newId = `consumer-${String(consumers.length + 1)}`;
     const topic = consumerSelectedTopic || 'orders';
+    let groupId = consumerSelectedGroup;
+    if (groupId === '__NEW__') {
+      if (!customConsumerGroup.trim()) return;
+      groupId = customConsumerGroup.trim().toLowerCase();
+    }
 
     // Auto-join to group
     if (connected) {
       clientRef.current?.sendIntent('CONSUMER_JOIN', {
-        groupId: 'order-processors',
+        groupId,
         clientId: newId,
         memberId: newId,
         topics: [topic],
       });
-      setConsumers((c) => [...c, { id: newId, topic, joined: true, memberId: newId }]);
-      addLog(`Created & Joined Consumer "${newId}" for topic "${topic}"`, 'INFO');
+      setConsumers((c) => [...c, { id: newId, topic, groupId, joined: true, memberId: newId }]);
+      addLog(`Created & Joined Consumer "${newId}" for topic "${topic}" in group "${groupId}"`, 'INFO');
     } else {
-      setConsumers((c) => [...c, { id: newId, topic, joined: false, memberId: null }]);
-      addLog(`Created Consumer "${newId}" configured for topic "${topic}"`, 'INFO');
+      setConsumers((c) => [...c, { id: newId, topic, groupId, joined: false, memberId: null }]);
+      addLog(`Created Consumer "${newId}" configured for topic "${topic}" in group "${groupId}"`, 'INFO');
     }
 
     setShowAddConsumerModal(false);
+    setCustomConsumerGroup('');
   };
 
   const handleRemoveConsumer = (): void => {
@@ -267,7 +375,7 @@ export default function Page(): React.JSX.Element {
     const removed = consumers[consumers.length - 1]!;
     if (removed.joined && removed.memberId) {
       clientRef.current?.sendIntent('CONSUMER_LEAVE', {
-        groupId: 'order-processors',
+        groupId: removed.groupId,
         memberId: removed.memberId,
       });
     }
@@ -288,7 +396,7 @@ export default function Page(): React.JSX.Element {
 
     const memberId = `consumer-${Math.random().toString(36).substring(7)}`;
     clientRef.current?.sendIntent('CONSUMER_JOIN', {
-      groupId: 'order-processors',
+      groupId: cConfig.groupId,
       clientId: id,
       memberId,
       topics: [cConfig.topic],
@@ -297,7 +405,7 @@ export default function Page(): React.JSX.Element {
     setConsumers((prev) =>
       prev.map((c) => (c.id === id ? { ...c, joined: true, memberId } : c))
     );
-    addLog(`[${id}] Dispatched: CONSUMER_JOIN on topic "${cConfig.topic}"`, 'INFO');
+    addLog(`[${id}] Dispatched: CONSUMER_JOIN on topic "${cConfig.topic}" (group "${cConfig.groupId}")`, 'INFO');
   };
 
   const handleConsumerLeaveSpecific = (id: string): void => {
@@ -305,14 +413,14 @@ export default function Page(): React.JSX.Element {
     if (!cConfig || !cConfig.joined || !cConfig.memberId) return;
 
     clientRef.current?.sendIntent('CONSUMER_LEAVE', {
-      groupId: 'order-processors',
+      groupId: cConfig.groupId,
       memberId: cConfig.memberId,
     });
 
     setConsumers((prev) =>
       prev.map((c) => (c.id === id ? { ...c, joined: false, memberId: null } : c))
     );
-    addLog(`[${id}] Dispatched: CONSUMER_LEAVE`, 'INFO');
+    addLog(`[${id}] Dispatched: CONSUMER_LEAVE (group "${cConfig.groupId}")`, 'INFO');
   };
 
   const handleKillBroker = (): void => {
@@ -525,40 +633,96 @@ export default function Page(): React.JSX.Element {
             )}
 
             <div className="card-divider form-body">
-              <span className="form-label" style={{ color: 'rgba(255,255,255,0.7)' }}>Active Producers</span>
+              <span className="form-label" style={{ color: '#1e3a8a', fontWeight: 700 }}>Active Producers</span>
               <div className="producer-list-container">
                 {producers.map((prod) => {
                   const partitions = liveState?.topics[prod.topic] || [];
-                  const activeLeader = partitions.find(
-                    (p) => p.leaderBrokerId && liveState?.brokers[p.leaderBrokerId]?.status === 'ALIVE',
-                  )?.leaderBrokerId;
+                  const leaderSet = new Set<string>();
+                  for (const p of partitions) {
+                    if (p.leaderBrokerId && liveState?.brokers[p.leaderBrokerId]?.status === 'ALIVE') {
+                      leaderSet.add(p.leaderBrokerId);
+                    }
+                  }
+                  const brokerLabel = leaderSet.size > 0
+                    ? `→ ${Array.from(leaderSet).map((b) => `B${b}`).join(',')}`
+                    : '→ OFFLINE';
+
+                  const interval = prod.autoProduceInterval ?? 3.0;
+                  const rateMsgSec = (1 / interval).toFixed(2);
 
                   return (
-                    <div key={prod.id} className="producer-row">
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span className="producer-label">P-{prod.id.substring(9)}</span>
-                        <span style={{ fontSize: '7.5px', color: activeLeader ? '#059669' : '#e11d48', fontWeight: 600 }}>
-                          {activeLeader ? `→ B${activeLeader}` : '→ OFFLINE'}
-                        </span>
+                    <div key={prod.id} className="producer-item-container">
+                      <div className="producer-row">
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span className="producer-label">P-{prod.id.substring(9)}</span>
+                          <span style={{ fontSize: '7.5px', color: leaderSet.size > 0 ? '#059669' : '#e11d48', fontWeight: 600 }}>
+                            {brokerLabel}
+                          </span>
+                        </div>
+                        <select
+                          value={prod.topic}
+                          onChange={(e) => handleProducerTopicChange(prod.id, e.target.value)}
+                          className="producer-select"
+                          disabled={!connected || isHalted}
+                        >
+                          {availableTopics.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleProduceIntent(prod.id)}
+                          disabled={!connected || isHalted}
+                          className="producer-row-btn"
+                          title="Produce Single Message"
+                        >
+                          ⚡
+                        </button>
+                        <button
+                          onClick={() => handleToggleAutoProduce(prod.id)}
+                          disabled={!connected || isHalted}
+                          className={`producer-auto-toggle-btn ${prod.autoProduceEnabled ? 'producer-auto-toggle-btn--active' : ''}`}
+                          title="Toggle Auto-Produce Cadence"
+                        >
+                          {prod.autoProduceEnabled ? '⏱ ON' : '⏱ OFF'}
+                        </button>
                       </div>
-                      <select
-                        value={prod.topic}
-                        onChange={(e) => handleProducerTopicChange(prod.id, e.target.value)}
-                        className="producer-select"
-                        disabled={!connected || isHalted}
-                      >
-                        {availableTopics.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleProduceIntent(prod.id)}
-                        disabled={!connected || isHalted}
-                        className="producer-row-btn"
-                        title="Produce Message"
-                      >
-                        ⚡
-                      </button>
+
+                      {/* Auto-Produce Cadence Slider & Input Drawer */}
+                      <div className="producer-auto-drawer">
+                        <div className="producer-auto-controls-row">
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="30.0"
+                            step="0.1"
+                            value={interval}
+                            onChange={(e) => handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))}
+                            className="producer-auto-slider"
+                            disabled={!connected || isHalted}
+                            title={`Auto-produce interval: ${interval.toFixed(1)}s`}
+                          />
+                          <input
+                            type="number"
+                            min="0.5"
+                            max="30.0"
+                            step="0.1"
+                            value={interval}
+                            onChange={(e) => handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))}
+                            onBlur={(e) => {
+                              const val = parseFloat(e.target.value);
+                              const clamped = Math.max(0.5, Math.min(30.0, Number.isNaN(val) ? 3.0 : val));
+                              handleAutoProduceIntervalChange(prod.id, clamped);
+                            }}
+                            className="producer-auto-number-input"
+                            disabled={!connected || isHalted}
+                            title="Exact interval in seconds"
+                          />
+                        </div>
+                        <div className="producer-auto-rate-label">
+                          <span>every {interval.toFixed(1)}s</span>
+                          <span>≈ {rateMsgSec} msg/s</span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -567,7 +731,7 @@ export default function Page(): React.JSX.Element {
 
             <div className="card-divider btn-row--single">
               <button
-                onClick={() => handleProduceIntent()}
+                onClick={handleProduceAll}
                 disabled={!connected || isHalted || producers.length === 0}
                 className="btn btn--primary"
               >
@@ -610,6 +774,35 @@ export default function Page(): React.JSX.Element {
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
+
+                <span className="form-label" style={{ fontWeight: 700, color: '#6b21a8', marginTop: '4px' }}>Consumer Group</span>
+                <select
+                  value={consumerSelectedGroup}
+                  onChange={(e) => setConsumerSelectedGroup(e.target.value)}
+                  className="producer-select"
+                  style={{ width: '100%', marginBottom: '8px' }}
+                >
+                  {[...new Set([
+                    ...Object.keys(liveState?.consumerGroups ?? {}),
+                    ...consumers.map((c) => c.groupId),
+                  ])].map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                  <option value="__NEW__">➕ Create New Group...</option>
+                </select>
+
+                {consumerSelectedGroup === '__NEW__' && (
+                  <input
+                    type="text"
+                    placeholder="New Group ID (e.g. analytics-consumers)"
+                    value={customConsumerGroup}
+                    onChange={(e) => setCustomConsumerGroup(e.target.value)}
+                    className="form-input"
+                    style={{ marginBottom: '8px' }}
+                    required
+                  />
+                )}
+
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button type="submit" className="btn btn--indigo" style={{ flex: 1 }}>Confirm</button>
                   <button type="button" onClick={() => setShowAddConsumerModal(false)} className="btn btn--ghost">Cancel</button>
@@ -618,7 +811,7 @@ export default function Page(): React.JSX.Element {
             )}
 
             <div className="card-divider form-body">
-              <span className="form-label" style={{ color: 'rgba(255,255,255,0.7)' }}>Consumer Subscriptions</span>
+              <span className="form-label" style={{ color: '#581c87', fontWeight: 700 }}>Consumer Subscriptions</span>
               <div className="producer-list-container">
                 {consumers.map((c) => (
                   <div key={c.id} className="producer-row">
@@ -626,6 +819,9 @@ export default function Page(): React.JSX.Element {
                       <span className="producer-label" style={{ minWidth: '28px' }}>C-{c.id.substring(9)}</span>
                       <span style={{ fontSize: '7.5px', color: c.joined ? '#059669' : '#64748b', fontWeight: 600 }}>
                         {c.joined ? '● JOINED' : '○ IDLE'}
+                      </span>
+                      <span style={{ fontSize: '6.5px', color: '#581c87', fontWeight: 700 }}>
+                        [{c.groupId.length > 14 ? `${c.groupId.substring(0, 12)}…` : c.groupId}]
                       </span>
                     </div>
                     <select

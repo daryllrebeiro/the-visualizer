@@ -7,12 +7,15 @@ import type { KafkaClusterState } from '@the-visualizer/contracts';
 export interface ProducerConfig {
   id: string;
   topic: string;
-  connectedBrokerId?: string | null | undefined;
+  connectedBrokerIds?: string[];
+  autoProduceEnabled?: boolean;
+  autoProduceInterval?: number;
 }
 
 export interface ConsumerConfig {
   id: string;
   topic: string;
+  groupId: string;
   joined: boolean;
   memberId: string | null;
 }
@@ -88,9 +91,10 @@ export function Visualizer({
   const [hasCustomPositions, setHasCustomPositions] = useState(false);
 
   const particles = useRef<Particle[]>([]);
-  const lastStateRef = useRef<KafkaClusterState | null>(null);
   const stateRef = useRef<KafkaClusterState | null>(null);
   stateRef.current = state;
+
+  const producerLastProduceTimes = useRef<Map<string, number>>(new Map());
 
   const producersRef = useRef<ProducerConfig[]>(producers);
   producersRef.current = producers;
@@ -151,6 +155,9 @@ export function Visualizer({
 
     if (!targetPos) return;
 
+    // Synchronize producer ring countdown
+    producerLastProduceTimes.current.set(producerId, performance.now());
+
     // Spawn Leg 1: Producer → Broker/Partition
     particles.current.push({
       id: Math.random().toString(36).substring(7),
@@ -171,9 +178,14 @@ export function Visualizer({
     });
   };
 
-  // Immediate Trigger on UI Produce Action
+  const lastHwMap = useRef<Map<string, number>>(new Map());
+  const recentManualTriggers = useRef<Map<string, number>>(new Map());
+
+  // Immediate Trigger on UI Produce Action (Manual Click)
   useEffect(() => {
     if (!produceTrigger) return;
+    const key = `${produceTrigger.topic}-${String(produceTrigger.partition)}`;
+    recentManualTriggers.current.set(key, Date.now());
     spawnProduceFlow(
       produceTrigger.producerId,
       produceTrigger.topic,
@@ -181,34 +193,40 @@ export function Visualizer({
     );
   }, [produceTrigger]);
 
-  // Particle Spawning on WebSocket HW Updates
+  // Particle Spawning on WebSocket HW Updates (Kernel Scheduled & Auto-Produce Events)
   useEffect(() => {
     if (!state) return;
-    const lastState = lastStateRef.current;
-    if (!lastState) {
-      lastStateRef.current = state;
-      return;
-    }
 
     for (const topicName in state.topics) {
       const newPartitions = state.topics[topicName] || [];
-      const oldPartitions = lastState.topics[topicName] || [];
 
       for (const newPart of newPartitions) {
-        const oldPart = oldPartitions.find((p) => p.partition === newPart.partition);
-        if (oldPart && newPart.highWatermark > oldPart.highWatermark) {
-          const matchingProducers = producersRef.current.filter((p) => p.topic === topicName);
-          const activeProds = matchingProducers.length > 0 ? matchingProducers : producersRef.current;
+        const key = `${topicName}-${String(newPart.partition)}`;
+        const prevHw = lastHwMap.current.get(key);
 
-          if (activeProds.length > 0) {
-            const targetProd = activeProds[Math.floor(Math.random() * activeProds.length)]!;
-            spawnProduceFlow(targetProd.id, topicName, newPart.partition);
+        if (prevHw !== undefined && newPart.highWatermark > prevHw) {
+          const manualTriggerTs = recentManualTriggers.current.get(key);
+          const isRecentManual = manualTriggerTs !== undefined && (Date.now() - manualTriggerTs < 1200);
+
+          if (isRecentManual) {
+            // Already animated immediately by manual UI button trigger
+            recentManualTriggers.current.delete(key);
+          } else {
+            // Server-scheduled / Auto-produce message arrived
+            const matchingProducers = producersRef.current.filter((p) => p.topic === topicName);
+            const activeProds = matchingProducers.length > 0 ? matchingProducers : producersRef.current;
+
+            if (activeProds.length > 0) {
+              const targetProd = activeProds.find((p) => p.autoProduceEnabled) || activeProds[0]!;
+              spawnProduceFlow(targetProd.id, topicName, newPart.partition);
+            }
           }
         }
+
+        // Store primitive number value for exact next-tick diffing
+        lastHwMap.current.set(key, newPart.highWatermark);
       }
     }
-
-    lastStateRef.current = state;
   }, [state]);
 
   const handleResetLayout = (): void => {
@@ -355,7 +373,7 @@ export function Visualizer({
         allGroupMembers.push({
           memberId: localC.id,
           clientId: localC.id,
-          groupId: 'order-processors',
+          groupId: localC.groupId,
           label: localC.id,
           joined: localC.joined,
           subscribedTopics: [localC.topic],
@@ -409,22 +427,25 @@ export function Visualizer({
       });
     }
 
-    // ── 3. Persistent Producer → Broker Connection Lines (With Dash Stream) ──
+    // ── 3. Persistent Producer → Broker Connection Lines (one per distinct alive leader) ──
     const dashOffset = (timeNow / 35) % 16;
     activeProducers.forEach((prod) => {
       const prodPos = producerPositions.current.get(prod.id);
       if (!prodPos) return;
 
       const partitions = currentState.topics[prod.topic] || [];
-      const activePartition = partitions.find(
-        (p) => p.leaderBrokerId && currentState.brokers[p.leaderBrokerId]?.status === 'ALIVE',
-      ) || partitions[0];
+      // Collect distinct alive leader broker IDs for this producer's topic
+      const leaderSet = new Set<string>();
+      for (const part of partitions) {
+        if (part.leaderBrokerId && currentState.brokers[part.leaderBrokerId]?.status === 'ALIVE') {
+          leaderSet.add(part.leaderBrokerId);
+        }
+      }
+      prod.connectedBrokerIds = Array.from(leaderSet);
 
-      const leaderBrokerId = activePartition?.leaderBrokerId;
-      prod.connectedBrokerId = leaderBrokerId ?? null;
-
-      if (leaderBrokerId) {
-        const brokerPos = brokerPositions.current.get(leaderBrokerId);
+      // Draw one dashed line per connected broker
+      for (const brokerId of leaderSet) {
+        const brokerPos = brokerPositions.current.get(brokerId);
         if (brokerPos) {
           ctx.strokeStyle = '#93c5fd';
           ctx.lineWidth = 2;
@@ -471,6 +492,40 @@ export function Visualizer({
         if (isDragged) {
           ctx.shadowColor = 'rgba(37, 99, 235, 0.4)';
           ctx.shadowBlur = 16;
+        }
+
+        // Auto-Produce Radial Countdown Ring & Status Indicator
+        if (prod.autoProduceEnabled) {
+          const interval = prod.autoProduceInterval ?? 3.0;
+          const duration = interval * 1000;
+          let lastFired = producerLastProduceTimes.current.get(prod.id);
+          if (lastFired === undefined) {
+            lastFired = timeNow;
+            producerLastProduceTimes.current.set(prod.id, timeNow);
+          }
+
+          const elapsed = timeNow - lastFired;
+          const sweepProgress = Math.min(1, Math.max(0, (elapsed % duration) / duration));
+
+          // Track background ring
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.2)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 34, 0, 2 * Math.PI);
+          ctx.stroke();
+
+          // Active progress arc
+          ctx.strokeStyle = sweepProgress >= 0.95 ? '#059669' : '#10b981';
+          ctx.lineWidth = sweepProgress >= 0.95 ? 3 : 2.5;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 34, -Math.PI / 2, -Math.PI / 2 + sweepProgress * 2 * Math.PI);
+          ctx.stroke();
+
+          // Auto-produce badge tag
+          ctx.fillStyle = '#059669';
+          ctx.font = '700 7px "Inter", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`AUTO ${interval.toFixed(1)}s`, pos.x, pos.y - 32);
         }
 
         ctx.fillStyle = '#eff6ff';
@@ -544,6 +599,12 @@ export function Visualizer({
           ctx.font = '700 7.5px monospace';
           ctx.fillText(`${String(member.assignedPartitions.length)} part`, pos.x, pos.y + 18);
         }
+
+        // Group label
+        ctx.fillStyle = '#818cf8';
+        ctx.font = '600 6.5px monospace';
+        const grpLabel = member.groupId.length > 10 ? `${member.groupId.substring(0, 8)}…` : member.groupId;
+        ctx.fillText(`[${grpLabel}]`, pos.x, pos.y + (member.joined && member.assignedPartitions.length > 0 ? 26 : 18));
       }
     });
 
@@ -752,8 +813,11 @@ export function Visualizer({
       }
     });
 
-    // Remove finished particles and append new chained Leg 2 packets
-    particles.current = particles.current.filter((p) => p.progress < 1).concat(newlyChained);
+    // Remove finished particles, append new chained Leg 2 packets, and throttle particle pool to max 50
+    particles.current = particles.current
+      .filter((p) => p.progress < 1)
+      .concat(newlyChained)
+      .slice(-50);
   };
 
   // ── Hit Testing for Draggable Nodes (Priority 3) ──
@@ -916,9 +980,15 @@ export function Visualizer({
         const prod = producersRef.current.find((p) => p.id === prodId);
         if (prod) {
           const partitions = currentState.topics[prod.topic] || [];
-          const activeLeader = partitions.find(
-            (p) => p.leaderBrokerId && currentState.brokers[p.leaderBrokerId]?.status === 'ALIVE',
-          )?.leaderBrokerId;
+          const leaderSet = new Set<string>();
+          for (const p of partitions) {
+            if (p.leaderBrokerId && currentState.brokers[p.leaderBrokerId]?.status === 'ALIVE') {
+              leaderSet.add(p.leaderBrokerId);
+            }
+          }
+          const brokerStr = leaderSet.size > 0
+            ? Array.from(leaderSet).map((b) => `B${b}`).join(', ')
+            : 'No Leaders (OFFLINE)';
 
           onHoverDetails({
             title: `Producer [${prodId.startsWith('producer-') ? `P-${prodId.substring(9)}` : prodId}]`,
@@ -926,9 +996,16 @@ export function Visualizer({
             stats: [
               { label: 'Target Topic', value: prod.topic, color: '#3b82f6' },
               {
-                label: 'Connected Broker',
-                value: activeLeader ? `Broker ${activeLeader}` : 'No Leader (OFFLINE)',
-                color: activeLeader ? '#10b981' : '#f43f5e',
+                label: 'Connected Brokers',
+                value: brokerStr,
+                color: leaderSet.size > 0 ? '#10b981' : '#f43f5e',
+              },
+              {
+                label: 'Auto-Produce',
+                value: prod.autoProduceEnabled
+                  ? `ON (${(prod.autoProduceInterval ?? 3.0).toFixed(1)}s / ${(1 / (prod.autoProduceInterval ?? 3.0)).toFixed(2)} msg/s)`
+                  : 'OFF (Manual)',
+                color: prod.autoProduceEnabled ? '#10b981' : '#64748b',
               },
               { label: 'Status', value: 'Active', color: '#10b981' },
             ],
