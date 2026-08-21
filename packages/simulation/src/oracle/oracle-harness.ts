@@ -5,9 +5,13 @@
  * Validates deterministic simulation engine execution against Kafka reference semantics.
  */
 
-import { makeBroker, makeClusterState, makePartition, resetFactoryCounters } from '@the-visualizer/test-utils';
 import { SimulationEngine } from '../engine/simulation-engine.js';
-import type { KafkaClusterState, SimEvent } from '../engine/types.js';
+import type {
+  BrokerNode,
+  KafkaClusterState,
+  SimEvent,
+  TopicPartition,
+} from '../engine/types.js';
 
 export interface OracleScenarioResult {
   readonly scenarioName: string;
@@ -18,31 +22,79 @@ export interface OracleScenarioResult {
   readonly error?: string | undefined;
 }
 
+function createBroker(id: string, status: 'ALIVE' | 'CRASHED' = 'ALIVE'): BrokerNode {
+  return {
+    id,
+    rack: 'rack-a',
+    status,
+    diskUsageBytes: 0,
+    maxDiskSizeBytes: 10 * 1024 * 1024 * 1024,
+    lastHeartbeatTick: 0,
+  };
+}
+
+function createPartition(
+  topic: string,
+  partition: number,
+  overrides: Partial<TopicPartition> = {},
+): TopicPartition {
+  return {
+    topic,
+    partition,
+    leaderBrokerId: null,
+    leaderEpoch: 0,
+    replicas: [],
+    isr: [],
+    highWatermark: 0,
+    minInsyncReplicas: 1,
+    uncleanLeaderElectionEnabled: false,
+    ...overrides,
+  };
+}
+
+function createClusterState(overrides: Partial<KafkaClusterState> = {}): KafkaClusterState {
+  return {
+    clusterId: '00000000-0000-0000-0000-000000000001',
+    tick: 0,
+    rngState: 42,
+    brokers: {},
+    topics: {},
+    consumerGroups: {},
+    transactions: {},
+    kraft: {
+      activeControllerId: null,
+      controllerEpoch: 0,
+      voters: [],
+      metadataOffset: 0,
+    },
+    ...overrides,
+  };
+}
+
 export class KafkaOracleHarness {
   /**
    * Scenario 1: Strict Replication & High-Watermark Barrier
    * Verifies that HW only advances to min(LEO) across active ISR replicas.
    */
   public static runReplicationScenario(): OracleScenarioResult {
-    resetFactoryCounters();
-    const b1 = makeBroker({ id: '1' as never, status: 'ALIVE' });
-    const b2 = makeBroker({ id: '2' as never, status: 'ALIVE' });
-    const b3 = makeBroker({ id: '3' as never, status: 'ALIVE' });
+    const b1 = createBroker('1', 'ALIVE');
+    const b2 = createBroker('2', 'ALIVE');
+    const b3 = createBroker('3', 'ALIVE');
 
-    const partition = makePartition('orders', {
-      leaderBrokerId: '1' as never,
+    const partition = createPartition('orders', 0, {
+      leaderBrokerId: '1',
       leaderEpoch: 1,
       replicas: [
-        { brokerId: '1' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
-        { brokerId: '2' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
-        { brokerId: '3' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+        { brokerId: '1', logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+        { brokerId: '2', logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
+        { brokerId: '3', logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true },
       ],
-      isr: ['1', '2', '3'] as never[],
+      isr: ['1', '2', '3'],
       highWatermark: 0,
       minInsyncReplicas: 2,
     });
 
-    const state: KafkaClusterState = makeClusterState({
+    const state = createClusterState({
       brokers: { '1': b1, '2': b2, '3': b3 },
       topics: { orders: [partition] },
     });
@@ -111,22 +163,21 @@ export class KafkaOracleHarness {
    * Verifies that when partition leader crashes, leaderEpoch increments and new leader is chosen from ISR.
    */
   public static runLeaderFailoverScenario(): OracleScenarioResult {
-    resetFactoryCounters();
-    const b1 = makeBroker({ id: '1' as never, status: 'ALIVE' });
-    const b2 = makeBroker({ id: '2' as never, status: 'ALIVE' });
+    const b1 = createBroker('1', 'ALIVE');
+    const b2 = createBroker('2', 'ALIVE');
 
-    const partition = makePartition('orders', {
-      leaderBrokerId: '1' as never,
+    const partition = createPartition('orders', 0, {
+      leaderBrokerId: '1',
       leaderEpoch: 1,
       replicas: [
-        { brokerId: '1' as never, logEndOffset: 10, lastCaughtUpTick: 0, isInSync: true },
-        { brokerId: '2' as never, logEndOffset: 10, lastCaughtUpTick: 0, isInSync: true },
+        { brokerId: '1', logEndOffset: 10, lastCaughtUpTick: 0, isInSync: true },
+        { brokerId: '2', logEndOffset: 10, lastCaughtUpTick: 0, isInSync: true },
       ],
-      isr: ['1', '2'] as never[],
+      isr: ['1', '2'],
       highWatermark: 10,
     });
 
-    const state: KafkaClusterState = makeClusterState({
+    const state = createClusterState({
       brokers: { '1': b1, '2': b2 },
       topics: { orders: [partition] },
     });
@@ -168,28 +219,27 @@ export class KafkaOracleHarness {
    * Verifies that each partition is assigned to exactly one consumer in the group.
    */
   public static runConsumerRebalanceScenario(): OracleScenarioResult {
-    resetFactoryCounters();
-    const b1 = makeBroker({ id: '1' as never, status: 'ALIVE' });
+    const b1 = createBroker('1', 'ALIVE');
 
     const pOverrides = {
-      leaderBrokerId: '1' as never,
+      leaderBrokerId: '1',
       leaderEpoch: 1,
-      replicas: [{ brokerId: '1' as never, logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true }],
-      isr: ['1'] as never[],
+      replicas: [{ brokerId: '1', logEndOffset: 0, lastCaughtUpTick: 0, isInSync: true }],
+      isr: ['1'],
     };
 
     // 4 Partitions of 'orders'
-    const p0 = makePartition('orders', { partition: 0 as never, ...pOverrides });
-    const p1 = makePartition('orders', { partition: 1 as never, ...pOverrides });
-    const p2 = makePartition('orders', { partition: 2 as never, ...pOverrides });
-    const p3 = makePartition('orders', { partition: 3 as never, ...pOverrides });
+    const p0 = createPartition('orders', 0, pOverrides);
+    const p1 = createPartition('orders', 1, pOverrides);
+    const p2 = createPartition('orders', 2, pOverrides);
+    const p3 = createPartition('orders', 3, pOverrides);
 
-    const state: KafkaClusterState = makeClusterState({
+    const state = createClusterState({
       brokers: { '1': b1 },
       topics: { orders: [p0, p1, p2, p3] },
       consumerGroups: {
         'analytics-group': {
-          id: 'analytics-group' as never,
+          id: 'analytics-group',
           state: 'Empty',
           protocol: 'range',
           generationId: 0,
