@@ -1,72 +1,67 @@
-# How to Use
+# How to Use — The Visualizer
 
-This guide details the core capabilities of the Visualizer platform and how to interact with the simulation, timeline scrubbing, and chaos laboratory tools.
-
----
-
-## 1. Creating and Loading Topologies
-
-### 1.1 Navigating the Canvas Interface
-The main workspace viewport is divided into three key visual layers:
-1. **Interactive Node Graph (React Flow)**: Visualizes the arrangement of **Producers**, **Broker Nodes**, **Topic Partitions**, and **Consumer Groups**. Drag, zoom, and arrange elements to build custom cluster topologies.
-2. **Real-time Flow Canvas**: Animates message frames as flowing color particles traveling along Bezier splines.
-3. **HUD Control Panel**: Displays the chronological event log, partition health indicators, and simulation speeds.
-
-### 1.2 Visual Cues Reference
-* **Brokers**: Large nodes showing online state (`ALIVE`), CPU load, and disk storage percentages.
-* **Topics & Partitions**: Shows leader replica designations, in-sync replica checklists (green = synced, red = lagging), and offset counters.
-* **Message Particles**: Flowing dots representing records.
-  * **Colors**: Each topic is mapped to a distinct color.
-  * **Size**: Represents the message payload size.
-  * **Speed**: Corresponds directly to partition produce throughput.
+A comprehensive user guide for operating the simulation canvas, deep inspection drawers, interactive scenarios, chaos experiments, and time-travel scrubbing.
 
 ---
 
-## 2. Operating the Simulation
+## 1. Navigating the Canvas Interface
 
-### 2.1 Message Production (Produce Intent)
-* Use the Producer interface to select a topic, set payload values, and select an Acknowledgment level (`acks = 0`, `acks = 1`, or `acks = all`).
-* Click **Produce** to schedule events. You will observe message particles leave the producer node and stream toward the partition's Leader Broker.
+### 1.1 Canvas Viewport & Camera Controls
+* **Mouse Wheel Zoom**: Scroll forward or backward over the canvas to smoothly zoom ($0.3\times \to 2.5\times$).
+* **Canvas Panning**: Click and drag any empty area of the canvas or hold `Alt` + drag to pan the viewport infinitely.
+* **Radar Minimap**: Located in the bottom-right corner, displaying live real-time positions of Brokers (blue/amber), Partitions (indigo), Producers (green), and Consumers (purple).
+* **Camera HUD**: Controls at the bottom-left of the canvas allow you to zoom in (`＋`), zoom out (`－`), reset camera zoom/pan (`100%`), or reset dragged node positions (`↺ Layout`).
 
-### 2.2 Replication Flows
-* When `acks = all`, the leader broker broadcasts messages to follower replicas.
-* Flowing replication arrows visualize follower fetches. The leader only increments the High-Watermark (HW) once minimum in-sync replicas (ISR) write the record, returning the ACK confirmation to the producer.
-
-### 2.3 Consumption and Consumer Groups
-* Create a Consumer Group and add members. The gateway triggers a rebalance event.
-* Reassignment lines link consumers to assigned partitions.
-* As consumers poll and commit offsets, yellow markers (Committed Offset) move forward behind blue markers (High Watermark) on the partition timeline.
-
----
-
-## 3. Time-Travel Scrubber
-The visualizer owns an authoritative history of state deltas:
-* **Play / Pause / Step**: Use the media scrubbing buttons to freeze the simulation or step forward/backward frame-by-frame.
-* **Scrubber Bar**: Drag the timeline slider backward. The engine reverses state transitions using reverse JSON patches, restoring previous offsets, active consumer assignments, and broker statuses.
-* **Fidelity**: Replaying from any point maintains mathematical determinism, ensuring identical results during subsequent steps.
+### 1.2 Interactive Entity Selection (Click-to-Inspect)
+Click any entity on the canvas to open the **Deep Inspection Drawer**:
+* **Broker Nodes**: View status, rack assignment, live disk usage bytes, and KRaft role. Use quick-action buttons to crash (`💥 Crash`) or recover (`🔧 Recover`) that specific broker.
+* **Topic Partitions**: View physical on-disk `.log` segments (`00000000000000000000.log`), sparse index lookups, High-Watermark (HW), Log End Offset (LEO), and the live In-Sync Replica (ISR) matrix.
+* **Consumer Nodes**: Inspect member ID, consumer group state (`Stable`, `PreparingRebalance`), rebalance generation ID, and assigned topic-partitions.
+* **Producer Nodes**: Access the live **Murmur2 Partitioner Playground** to hash test keys and immediately dispatch messages.
 
 ---
 
-## 4. Injecting Chaos
+## 2. Interactive Scenarios & Playbooks
 
-### 4.1 Broker Crash
-1. Open the Chaos Control Dock.
-2. Select an active broker and click **Kill Broker** (`INTENT_CHAOS_KILL_BROKER`).
-3. **Observe the chain reaction**:
-   * The broker node flashes red and offline.
-   * Affected partitions lose their leader, shrinking their In-Sync Replica (ISR) pools.
-   * The Active Controller detects the crash, runs an election, and promotes a surviving replica from the ISR list.
-   * Production traffic automatically redirects to the new leader node.
-4. Click **Recover Broker** to see the broker rejoin, replicate missing segments, and catch up to the ISR.
-
-### 4.2 Network Partition
-* Select a group of brokers to isolate.
-* The visualizer cuts connecting links, simulating a network split.
-* Watch the cluster split into separate controller quorums, causing stale replica updates and fencing errors if split leaders receive writes.
+Click the **🎓 Scenarios** button in the top navigation bar to open pre-packaged educational playbooks:
+1. **Leader Failover & ISR Shrink**: Crashes the active leader broker for a partition, demonstrates immediate ISR shrinkage, controller failover, and follower promotion.
+2. **Cooperative Sticky Rebalancing**: Adds multiple consumers across topics and illustrates zero-downtime cooperative partition handoffs.
+3. **KRaft Metadata Quorum Failover**: Crashes the active KRaft controller node and shows quorum election of a new controller and metadata log reconciliation.
 
 ---
 
-## 5. Sharing Scenarios
-1. Once you create a specific scenario sequence (e.g. broker crash during consumer rebalance), click **Share**.
-2. The platform generates an unlisted `share_token` saved on the server.
-3. Share the URL with colleagues. Anyone opening the link will load the identical topology layout and seed, replaying the exact chaos scenario in their browser.
+## 3. Operating the Simulation
+
+### 3.1 Key-Based Record Production (Murmur2)
+1. In the sidebar Producer card or Entity Inspector, specify a target topic and test key (e.g. `order-98214`).
+2. The UI computes the exact partition via `toPositive(murmur2(key)) % partitions`.
+3. Select an Acknowledgment level (`acks = 0`, `acks = 1`, or `acks = all / -1`).
+4. Click **Produce** to dispatch the record. Observe message packets flow to the leader broker and replicate to follower brokers before advancing the High Watermark.
+
+### 3.2 Auto-Produce Interval Timer
+1. Enable **Auto-Produce** on any producer node.
+2. Set the interval (e.g. `3.0s` or `1.0s`).
+3. The circular progress ring around the producer visually indicates timer progress, streaming records synchronously with each completed cycle.
+
+### 3.3 Consumer Groups & Polling
+1. Select a Consumer and click **✔ Join Group** (`INTENT_CONSUMER_JOIN`).
+2. The coordinator triggers a rebalance and maps assigned partitions.
+3. As records arrive on the partition, consumers automatically poll and commit offsets, advancing committed offset markers.
+
+---
+
+## 4. Time-Travel Scrubber & JSON Trace Recording
+
+* **Pause / Resume**: Click **❚❚ Pause Stream** to freeze the simulation timeline.
+* **Scrubber Slider**: Drag the slider backward in time to inspect previous states. The engine rewinds state transitions using reverse JSON patches.
+* **💾 Export Trace**: Click **Export Trace** to download the complete simulation timeline as a deterministic `.json` trace file.
+* **📂 Import Trace**: Click **Import** to load a saved `.json` trace file and replay offline simulations.
+
+---
+
+## 5. Chaos Engineering Laboratory
+
+* **💥 Crash Broker**: Injects random broker failures (`INTENT_CHAOS_KILL_BROKER`) to test partition failover.
+* **🔧 Recover Broker**: Restores crashed brokers (`INTENT_CHAOS_RECOVER_BROKER`) to verify replica catch-up and ISR expansion.
+* **📁 Create Topic**: Dynamically provisions new topics with custom partition counts.
+* **➕ Add Broker**: Scales the cluster dynamically by adding live broker nodes with rack tags.
