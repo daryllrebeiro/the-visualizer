@@ -5,11 +5,20 @@ import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 export type ConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED';
 
+export interface EntityRef {
+  type: 'producer' | 'broker' | 'consumer' | 'partition' | 'topic' | 'controller' | 'consumerGroup';
+  id: string;
+}
+
 export interface EventLogItem {
   id: string;
   timestamp: number;
+  tick?: number | undefined;
   message: string;
   type: 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR';
+  eventType?: string | undefined;
+  involvedEntities?: EntityRef[] | undefined;
+  payload?: Record<string, unknown> | undefined;
 }
 
 export interface WsClientCallbacks {

@@ -11,7 +11,7 @@ import {
   type HoverDetails,
   type ProduceTrigger,
 } from './visualizer';
-import { type ConnectionStatus, type EventLogItem, WebSocketClient } from './ws-client';
+import { type ConnectionStatus, type EntityRef, type EventLogItem, WebSocketClient } from './ws-client';
 import { EntityInspector, type InspectableEntity } from '../components/inspector/EntityInspector';
 import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
 
@@ -176,11 +176,29 @@ export default function Page(): React.JSX.Element {
     }
   };
 
-  const addLog = (message: string, type: EventLogItem['type']): void => {
+  const addLog = (
+    message: string,
+    type: EventLogItem['type'],
+    meta?: {
+      tick?: number;
+      eventType?: string;
+      involvedEntities?: EntityRef[];
+      payload?: Record<string, unknown>;
+    },
+  ): void => {
     setEventLogs((p) => [
-      { id: Math.random().toString(36).substring(7), timestamp: Date.now(), message, type },
+      {
+        id: Math.random().toString(36).substring(7),
+        timestamp: Date.now(),
+        tick: meta?.tick ?? liveState?.tick ?? 0,
+        message,
+        type,
+        eventType: meta?.eventType,
+        involvedEntities: meta?.involvedEntities ?? [],
+        payload: meta?.payload,
+      },
       ...p,
-    ].slice(0, 100));
+    ].slice(0, 1000));
   };
 
   /* ── sim actions ── */
@@ -214,14 +232,30 @@ export default function Page(): React.JSX.Element {
       timestamp: Date.now(),
     });
 
+    const key = `key-${Math.random().toString(36).substring(7)}`;
+    const value = `val-${Math.random().toString(36).substring(7)}`;
+
     clientRef.current?.sendIntent('PRODUCE', {
       topic: finalTopic,
       partition,
-      key: `key-${Math.random().toString(36).substring(7)}`,
-      value: `val-${Math.random().toString(36).substring(7)}`,
+      key,
+      value,
       acks: 1,
     });
-    addLog(`[${targetProd.id}] Dispatched: PRODUCE → ${finalTopic}/p-${String(partition)} (Broker ${leaderId})`, 'INFO');
+    addLog(
+      `[${targetProd.id}] Dispatched: PRODUCE → ${finalTopic}/p-${String(partition)} (Broker ${leaderId})`,
+      'INFO',
+      {
+        eventType: 'RECORD_PRODUCED',
+        involvedEntities: [
+          { type: 'producer', id: targetProd.id },
+          { type: 'broker', id: leaderId },
+          { type: 'partition', id: `${finalTopic}-${String(partition)}` },
+          { type: 'topic', id: finalTopic },
+        ],
+        payload: { topic: finalTopic, partition, key, acks: 1, leaderBrokerId: leaderId },
+      },
+    );
   };
 
   const handleProduceAll = (): void => {
@@ -417,7 +451,20 @@ export default function Page(): React.JSX.Element {
     setConsumers((prev) =>
       prev.map((c) => (c.id === id ? { ...c, joined: true, memberId } : c))
     );
-    addLog(`[${id}] Dispatched: CONSUMER_JOIN on topic "${cConfig.topic}" (group "${cConfig.groupId}")`, 'INFO');
+    addLog(
+      `[${id}] Dispatched: CONSUMER_JOIN on topic "${cConfig.topic}" (group "${cConfig.groupId}")`,
+      'INFO',
+      {
+        eventType: 'CONSUMER_JOINED',
+        involvedEntities: [
+          { type: 'consumer', id: memberId },
+          { type: 'consumer', id: id },
+          { type: 'consumerGroup', id: cConfig.groupId },
+          { type: 'topic', id: cConfig.topic },
+        ],
+        payload: { memberId, clientId: id, groupId: cConfig.groupId, topic: cConfig.topic },
+      },
+    );
   };
 
   const handleConsumerLeaveSpecific = (id: string): void => {
@@ -429,22 +476,57 @@ export default function Page(): React.JSX.Element {
       memberId: cConfig.memberId,
     });
 
+    const leavingMemberId = cConfig.memberId;
     setConsumers((prev) =>
       prev.map((c) => (c.id === id ? { ...c, joined: false, memberId: null } : c))
     );
-    addLog(`[${id}] Dispatched: CONSUMER_LEAVE (group "${cConfig.groupId}")`, 'INFO');
+    addLog(
+      `[${id}] Dispatched: CONSUMER_LEAVE (group "${cConfig.groupId}")`,
+      'INFO',
+      {
+        eventType: 'CONSUMER_LEFT',
+        involvedEntities: [
+          { type: 'consumer', id: leavingMemberId },
+          { type: 'consumer', id: id },
+          { type: 'consumerGroup', id: cConfig.groupId },
+        ],
+        payload: { memberId: leavingMemberId, clientId: id, groupId: cConfig.groupId },
+      },
+    );
   };
 
   const handleCrashSpecificBroker = (brokerId: string): void => {
     if (!liveState || !clientRef.current) return;
     clientRef.current.sendIntent('CHAOS_KILL_BROKER', { brokerId });
-    addLog(`💥 Chaos triggered: Crashed Broker Node #${brokerId}`, 'WARN');
+    addLog(
+      `💥 Chaos triggered: Crashed Broker Node #${brokerId}`,
+      'WARN',
+      {
+        eventType: 'BROKER_STATUS_CHANGED',
+        involvedEntities: [
+          { type: 'broker', id: brokerId },
+          { type: 'controller', id: liveState.kraft.activeControllerId ?? '1' },
+        ],
+        payload: { brokerId, nextStatus: 'CRASHED' },
+      },
+    );
   };
 
   const handleRecoverSpecificBroker = (brokerId: string): void => {
     if (!liveState || !clientRef.current) return;
     clientRef.current.sendIntent('CHAOS_RECOVER_BROKER', { brokerId });
-    addLog(`🔄 Chaos recovery: Restored Broker Node #${brokerId} to ALIVE`, 'INFO');
+    addLog(
+      `🔄 Chaos recovery: Restored Broker Node #${brokerId} to ALIVE`,
+      'INFO',
+      {
+        eventType: 'BROKER_STATUS_CHANGED',
+        involvedEntities: [
+          { type: 'broker', id: brokerId },
+          { type: 'controller', id: liveState.kraft.activeControllerId ?? '1' },
+        ],
+        payload: { brokerId, nextStatus: 'ALIVE' },
+      },
+    );
   };
 
   const handleProduceKey = (topic: string, key: string, value: string): void => {
@@ -454,6 +536,8 @@ export default function Page(): React.JSX.Element {
 
     // Use Murmur2 Key Partitioner
     const targetPart = Math.abs(key.split('').reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)) % partitions.length;
+    const activePartition = partitions.find((p) => p.partition === targetPart);
+    const leaderId = activePartition?.leaderBrokerId ?? '1';
 
     setProduceTrigger({
       id: Math.random().toString(36).substring(7),
@@ -470,7 +554,20 @@ export default function Page(): React.JSX.Element {
       value,
       acks: 1,
     });
-    addLog(`[Keyed Produce] key="${key}" → Murmur2 routed to ${topic}/p-${String(targetPart)}`, 'INFO');
+    addLog(
+      `[Keyed Produce] key="${key}" → Murmur2 routed to ${topic}/p-${String(targetPart)} (Broker ${leaderId})`,
+      'INFO',
+      {
+        eventType: 'RECORD_PRODUCED',
+        involvedEntities: [
+          { type: 'producer', id: 'producer-1' },
+          { type: 'broker', id: leaderId },
+          { type: 'partition', id: `${topic}-${String(targetPart)}` },
+          { type: 'topic', id: topic },
+        ],
+        payload: { topic, partition: targetPart, key, value, leaderBrokerId: leaderId },
+      },
+    );
   };
 
   const handleResetSimulation = (): void => {
@@ -1278,10 +1375,11 @@ export default function Page(): React.JSX.Element {
         </aside>
       </div>
 
-      {/* ── Deep Inspection Drawer ── */}
+      {/* ── Deep Inspection Drawer (Per-Entity Event Log & Metadata) ── */}
       <EntityInspector
         entity={inspectEntity}
         state={renderedState}
+        eventLogs={eventLogs}
         onClose={() => setInspectEntity(null)}
         onCrashBroker={handleCrashSpecificBroker}
         onRecoverBroker={handleRecoverSpecificBroker}
