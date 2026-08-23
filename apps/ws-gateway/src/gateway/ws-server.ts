@@ -6,6 +6,8 @@ import type { WebSocket } from 'ws';
 
 import { ClientIntentSchema, type KafkaClusterState } from '@the-visualizer/contracts';
 import {
+  captureException,
+  logger,
   wsConnectionDropsTotal,
   wsMessagesReceivedTotal,
   wsMessagesSentTotal,
@@ -67,7 +69,7 @@ function checkConnectionRateLimit(ws: ExtendedWebSocket): { allowed: boolean; te
   return { allowed: false, terminate: false };
 }
 
-const DEFAULT_TOPOLOGY: KafkaClusterState = {
+export const DEFAULT_TOPOLOGY: KafkaClusterState = {
   clusterId: '12345678-1234-1234-1234-123456789012',
   tick: 0,
   rngState: 0,
@@ -382,8 +384,9 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             type: normalizedType,
             payload: parseResult.data,
           });
-        } catch {
-          // Failed to parse frame payload
+        } catch (err) {
+          logger.warn({ err, userId: ws.userId }, 'Failed to parse incoming WebSocket message frame');
+          captureException(err, { service: 'ws-gateway', userId: ws.userId });
         }
       })();
     });

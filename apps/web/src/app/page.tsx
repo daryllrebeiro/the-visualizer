@@ -64,6 +64,13 @@ export default function Page(): React.JSX.Element {
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // Reset & Replay State
+  const [resetCounter, setResetCounter] = useState(0);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState<1 | 2 | 4>(1);
+  const replayIndexRef = useRef<number>(0);
+  const replayTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Topic creation state
   const [newTopicName, setNewTopicName] = useState('payments');
   const [newPartitions, setNewPartitions] = useState(3);
@@ -466,6 +473,64 @@ export default function Page(): React.JSX.Element {
     addLog(`[Keyed Produce] key="${key}" → Murmur2 routed to ${topic}/p-${String(targetPart)}`, 'INFO');
   };
 
+  const handleResetSimulation = (): void => {
+    if (clientRef.current && connected) {
+      clientRef.current.sendIntent('RESET', {});
+    }
+    setResetCounter((c) => c + 1);
+    setStateHistory([]);
+    setEventLogs([]);
+    setIsPaused(false);
+    setIsReplaying(false);
+    if (replayTimerRef.current) {
+      clearInterval(replayTimerRef.current);
+      replayTimerRef.current = null;
+    }
+    setProducers([{ id: 'producer-1', topic: 'orders', autoProduceEnabled: false, autoProduceInterval: 3.0 }]);
+    setConsumers([{ id: 'consumer-1', topic: 'orders', groupId: 'order-processors', joined: false, memberId: null }]);
+    addLog('🔄 Simulation reset: Topology restored to default, scheduler and caches cleared.', 'INFO');
+  };
+
+  const handleToggleReplay = (): void => {
+    if (isReplaying) {
+      if (replayTimerRef.current) {
+        clearInterval(replayTimerRef.current);
+        replayTimerRef.current = null;
+      }
+      setIsReplaying(false);
+      addLog('❚❚ Event replay paused.', 'INFO');
+    } else {
+      if (stateHistory.length < 2) {
+        addLog('Cannot replay: state history requires at least 2 recorded timeline frames.', 'WARN');
+        return;
+      }
+      setIsPaused(true);
+      setIsReplaying(true);
+      replayIndexRef.current = 0;
+
+      if (replayTimerRef.current) clearInterval(replayTimerRef.current);
+      addLog(`🎬 Started animated event replay at ${String(replaySpeed)}x speed...`, 'INFO');
+
+      replayTimerRef.current = setInterval(() => {
+        replayIndexRef.current++;
+        if (replayIndexRef.current >= stateHistory.length) {
+          if (replayTimerRef.current) {
+            clearInterval(replayTimerRef.current);
+            replayTimerRef.current = null;
+          }
+          setIsReplaying(false);
+          addLog('🎬 Event replay complete.', 'SUCCESS');
+          return;
+        }
+        const frame = stateHistory[replayIndexRef.current];
+        if (frame) {
+          setRenderedState(frame);
+          setPlaybackTick(frame.tick);
+        }
+      }, Math.max(25, 100 / replaySpeed));
+    }
+  };
+
   const handleRunScenario = (scenarioId: string): void => {
     if (!liveState || !connected) {
       addLog('Cannot run scenario: Connect to cluster simulation first.', 'WARN');
@@ -475,22 +540,52 @@ export default function Page(): React.JSX.Element {
     if (scenarioId === 'leader-failover') {
       const ordersP0 = liveState.topics['orders']?.[0];
       const leaderId = ordersP0?.leaderBrokerId || '1';
-      addLog(`[Scenario: Failover] Step 1: Crashing leader Broker #${leaderId}...`, 'WARN');
+      addLog(`[Scenario: Failover] Step 1/3: Simulating crash on Partition Leader Broker #${leaderId}...`, 'WARN');
       handleCrashSpecificBroker(leaderId);
+
+      setTimeout(() => {
+        addLog('[Scenario: Failover] Step 2/3: KRaft Controller detected crash; promoted in-sync follower and shrank ISR.', 'INFO');
+      }, 2000);
+
+      setTimeout(() => {
+        addLog(`[Scenario: Failover] Step 3/3: Restoring Broker #${leaderId} to ALIVE; syncing as in-sync follower and producer reconnecting...`, 'SUCCESS');
+        handleRecoverSpecificBroker(leaderId);
+      }, 4500);
     } else if (scenarioId === 'cooperative-rebalance') {
-      addLog('[Scenario: Rebalance] Step 1: Joining Consumer-2 to group "order-processors"...', 'INFO');
-      const newId = `consumer-${String(consumers.length + 1)}`;
-      clientRef.current?.sendIntent('CONSUMER_JOIN', {
-        groupId: 'order-processors',
-        clientId: newId,
-        memberId: newId,
-        topics: ['orders'],
-      });
-      setConsumers((c) => [...c, { id: newId, topic: 'orders', groupId: 'order-processors', joined: true, memberId: newId }]);
+      addLog('[Scenario: Rebalance] Step 1/3: Active Consumer-1 bound to topic "orders" in group "order-processors"', 'INFO');
+      
+      if (!consumers[0]?.joined) {
+        handleConsumerJoinSpecific('consumer-1');
+      }
+
+      setTimeout(() => {
+        const newId = `consumer-${String(consumers.length + 1)}`;
+        addLog(`[Scenario: Rebalance] Step 2/3: Joining ${newId} to group "order-processors"...`, 'INFO');
+        clientRef.current?.sendIntent('CONSUMER_JOIN', {
+          groupId: 'order-processors',
+          clientId: newId,
+          memberId: newId,
+          topics: ['orders'],
+        });
+        setConsumers((c) => [...c, { id: newId, topic: 'orders', groupId: 'order-processors', joined: true, memberId: newId }]);
+      }, 1800);
+
+      setTimeout(() => {
+        addLog('[Scenario: Rebalance] Step 3/3: Coordinator completed cooperative sticky partition rebalancing without stop-the-world freeze.', 'SUCCESS');
+      }, 4000);
     } else if (scenarioId === 'kraft-controller-failover') {
       const ctrlId = liveState.kraft.activeControllerId || '1';
-      addLog(`[Scenario: KRaft Quorum] Step 1: Crashing active KRaft controller Broker #${ctrlId}...`, 'WARN');
+      addLog(`[Scenario: KRaft Quorum] Step 1/3: Crashing active KRaft metadata controller Broker #${ctrlId}...`, 'WARN');
       handleCrashSpecificBroker(ctrlId);
+
+      setTimeout(() => {
+        addLog('[Scenario: KRaft Quorum] Step 2/3: Metadata voter quorum held election, bumped epoch, and installed successor controller.', 'INFO');
+      }, 2000);
+
+      setTimeout(() => {
+        addLog(`[Scenario: KRaft Quorum] Step 3/3: Restoring Broker #${ctrlId} back to quorum voter pool.`, 'SUCCESS');
+        handleRecoverSpecificBroker(ctrlId);
+      }, 4500);
     }
   };
 
@@ -658,6 +753,14 @@ export default function Page(): React.JSX.Element {
           </div>
 
           <div className="header-actions">
+            <button
+              onClick={handleResetSimulation}
+              className="btn btn--rose"
+              title="Reset simulation cluster, cancel timers, and purge cached room state"
+            >
+              🔄 Reset
+            </button>
+
             <button onClick={() => setShowScenariosModal(true)} className="btn btn--indigo">
               🎓 Scenarios
             </button>
@@ -1033,16 +1136,48 @@ export default function Page(): React.JSX.Element {
             </form>
           </div>
 
-          {/* Playback Scrubber */}
+          {/* Playback Scrubber & Animated Replay */}
           <div className="card card--green card--scrubber-push">
-            <p className="card-title card-title--green">Playback Scrubber & Trace</p>
-            <div className="btn-row--single">
+            <p className="card-title card-title--green">Playback Scrubber & Animated Replay</p>
+            <div className="btn-row">
               <button
                 onClick={() => setIsPaused(!isPaused)}
                 className={`btn ${isPaused ? 'btn--emerald' : 'btn--ghost'}`}
               >
-                {isPaused ? '▶ Resume Stream' : '❚❚ Pause Stream'}
+                {isPaused ? '▶ Resume Live' : '❚❚ Pause Live'}
               </button>
+
+              <button
+                onClick={handleToggleReplay}
+                className={`btn ${isReplaying ? 'btn--emerald' : 'btn--indigo'}`}
+                title="Watch recorded timeline play back as animated event sequence"
+              >
+                {isReplaying ? '❚❚ Pause Replay' : '🎬 Replay'}
+              </button>
+            </div>
+
+            {/* Replay Speed Multiplier Pills */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#047857', fontWeight: 600 }}>Replay Speed:</span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {([1, 2, 4] as const).map((spd) => (
+                  <button
+                    key={spd}
+                    onClick={() => setReplaySpeed(spd)}
+                    className="btn btn--ghost"
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '10px',
+                      fontWeight: replaySpeed === spd ? 700 : 500,
+                      background: replaySpeed === spd ? '#10b981' : 'transparent',
+                      color: replaySpeed === spd ? '#ffffff' : '#047857',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    {spd}x
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
@@ -1075,7 +1210,7 @@ export default function Page(): React.JSX.Element {
                 <hr className="scrubber-divider" />
                 <div className="scrubber-range-row">
                   <span>Tick {String(stateHistory[0]?.tick ?? 0)}</span>
-                  <span>▶ {String(playbackTick)}</span>
+                  <span>▶ {String(playbackTick)} {isReplaying ? `(Replaying ${String(replaySpeed)}x)` : ''}</span>
                   <span>{String(stateHistory[stateHistory.length - 1]?.tick ?? 0)}</span>
                 </div>
                 <input
@@ -1098,6 +1233,7 @@ export default function Page(): React.JSX.Element {
             producers={producers}
             consumers={consumers}
             produceTrigger={produceTrigger}
+            resetTrigger={resetCounter}
             onHoverDetails={setHoverDetails}
             onSelectEntity={(entity) => setInspectEntity(entity)}
           />

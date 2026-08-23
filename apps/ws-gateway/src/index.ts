@@ -2,7 +2,9 @@ import './otel-init.js';
 
 import * as http from 'http';
 
-import { logger, register } from '@the-visualizer/logging';
+import { initGlobalExceptionHandling, logger, register } from '@the-visualizer/logging';
+
+initGlobalExceptionHandling('ws-gateway');
 
 import { config } from './config.js';
 import { roomManager } from './gateway/room-manager.js';

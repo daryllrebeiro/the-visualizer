@@ -1,10 +1,12 @@
 import './otel-init.js';
 
 import { serve } from '@hono/node-server';
-import { register } from '@the-visualizer/logging';
+import { captureException, initGlobalExceptionHandling, register } from '@the-visualizer/logging';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
+
+initGlobalExceptionHandling('api');
 
 import { config } from './config.js';
 import { pool } from './db/index.js';
@@ -17,6 +19,19 @@ import { orgRouter } from './routes/org.routes.js';
 import { topologyRouter } from './routes/topology.routes.js';
 
 const app = new Hono();
+
+// Centralized error handler
+app.onError((err, c) => {
+  const userId = c.get('userId' as never) as string | undefined;
+  captureException(err, { service: 'api', userId, extra: { path: c.req.path, method: c.req.method } });
+  return c.json({
+    success: false,
+    error: {
+      code: 'INTERNAL_SERVER_ERROR',
+      message: process.env.NODE_ENV === 'production' ? 'An internal error occurred' : err.message,
+    },
+  }, 500);
+});
 
 // 1. Global Middlewares
 app.use('*', secureHeaders());

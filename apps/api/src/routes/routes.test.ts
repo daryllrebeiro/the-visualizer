@@ -10,6 +10,7 @@ describe('Hono REST API Routing & Auth Integration Tests', () => {
   let mockKafkaState: KafkaClusterState;
 
   beforeAll(async () => {
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
     mockKafkaState = {
       clusterId: 'kafka-cluster-id',
       rngState: 54321,
@@ -46,27 +47,143 @@ describe('Hono REST API Routing & Auth Integration Tests', () => {
     );
   });
 
-  it('should support dev-login and set session cookie', async () => {
-    const res = await app.request('/auth/dev-login', {
+  it('should support user registration with hashed password and return tokens', async () => {
+    const res = await app.request('/auth/register', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'test@hono.com',
-        name: 'Hono User',
+        email: 'alice@example.com',
+        name: 'Alice Developer',
+        password: 'SuperSecretPassword123!',
       }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = (await res.json()) as any;
     expect(body.success).toBe(true);
-    expect(body.user.email).toBe('test@hono.com');
+    expect(body.user.email).toBe('alice@example.com');
     expect(body.token).toBeDefined();
+    expect(body.refreshToken).toBeDefined();
+    expect(res.headers.get('Set-Cookie')).toContain('session_token=');
+  });
 
-    // Verify Set-Cookie header contains session_token
-    const setCookie = res.headers.get('Set-Cookie');
-    expect(setCookie).toContain('session_token=');
+  it('should reject registration if email already exists', async () => {
+    await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'duplicate@example.com',
+        name: 'User 1',
+        password: 'Password123!',
+      }),
+    });
+
+    const res2 = await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'duplicate@example.com',
+        name: 'User 2',
+        password: 'Password123!',
+      }),
+    });
+
+    expect(res2.status).toBe(409);
+    const body = (await res2.json()) as any;
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('USER_EXISTS');
+  });
+
+  it('should support login with correct password', async () => {
+    await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'bob@example.com',
+        name: 'Bob',
+        password: 'CorrectHorseBatteryStaple123!',
+      }),
+    });
+
+    const loginRes = await app.request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'bob@example.com',
+        password: 'CorrectHorseBatteryStaple123!',
+      }),
+    });
+
+    expect(loginRes.status).toBe(200);
+    const body = (await loginRes.json()) as any;
+    expect(body.success).toBe(true);
+    expect(body.token).toBeDefined();
+  });
+
+  it('should reject login with wrong password (401)', async () => {
+    await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'charlie@example.com',
+        name: 'Charlie',
+        password: 'RealPassword123!',
+      }),
+    });
+
+    const loginRes = await app.request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'charlie@example.com',
+        password: 'WrongPassword!',
+      }),
+    });
+
+    expect(loginRes.status).toBe(401);
+    const body = (await loginRes.json()) as any;
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('INVALID_CREDENTIALS');
+    expect(body.token).toBeUndefined();
+  });
+
+  it('should reject login with non-existent email (401)', async () => {
+    const loginRes = await app.request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'nonexistent@example.com',
+        password: 'AnyPassword123!',
+      }),
+    });
+
+    expect(loginRes.status).toBe(401);
+    const body = (await loginRes.json()) as any;
+    expect(body.success).toBe(false);
+    expect(body.token).toBeUndefined();
+  });
+
+  it('should enforce dev-login gating in production mode', async () => {
+    const origEnv = process.env.NODE_ENV;
+    const origDevFlag = process.env.ENABLE_DEV_LOGIN;
+
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.ENABLE_DEV_LOGIN;
+
+      const res = await app.request('/auth/dev-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'hacker@example.com', name: 'Hacker' }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as any;
+      expect(body.error.code).toBe('FORBIDDEN');
+    } finally {
+      process.env.NODE_ENV = origEnv;
+      process.env.ENABLE_DEV_LOGIN = origDevFlag;
+    }
   });
 
   it('should reject unauthenticated request on protected endpoints', async () => {

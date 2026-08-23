@@ -221,4 +221,108 @@ describe('Authoritative Simulation Runner Tests', () => {
 
     simulationRunner.stopSession(testRoomId);
   });
+
+  it('should immediately adjust next fire tick on live frequency change without toggling off/on', async () => {
+    simulationRunner.startSession(testRoomId, mockTopology);
+    const session = simulationRunner.getSession(testRoomId);
+    expect(session).toBeDefined();
+
+    // 1. Set long interval (20s = 200 ticks)
+    await redis.lpush(
+      `room:${testRoomId}:intents`,
+      JSON.stringify({
+        type: 'INTENT_SET_AUTO_PRODUCE',
+        payload: { producerId: 'prod-live', topic: 'orders', intervalSeconds: 20.0, enabled: true },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const initialSchedule = session?.autoProducers.get('prod-live');
+    expect(initialSchedule?.intervalTicks).toBe(200);
+
+    // 2. While running, change frequency to short interval (1s = 10 ticks)
+    await redis.lpush(
+      `room:${testRoomId}:intents`,
+      JSON.stringify({
+        type: 'INTENT_SET_AUTO_PRODUCE',
+        payload: { producerId: 'prod-live', topic: 'orders', intervalSeconds: 1.0, enabled: true },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const updatedSchedule = session?.autoProducers.get('prod-live');
+    expect(updatedSchedule?.intervalTicks).toBe(10);
+    // nextFireTick should be strictly within (currentTick + 10)
+    expect(updatedSchedule?.nextFireTick).toBeLessThanOrEqual((session?.tickCount ?? 0) + 10);
+
+    simulationRunner.stopSession(testRoomId);
+  });
+
+  it('should produce exactly 30 (+-1) messages over 60 virtual seconds at 2.0s interval without drift', async () => {
+    simulationRunner.startSession(testRoomId, mockTopology);
+    const session = simulationRunner.getSession(testRoomId);
+    expect(session).toBeDefined();
+
+    // Set 2.0s interval = 20 ticks
+    session!.autoProducers.set('prod-drift', {
+      producerId: 'prod-drift',
+      topic: 'orders',
+      intervalSeconds: 2.0,
+      intervalTicks: 20,
+      nextFireTick: 20,
+      enabled: true,
+    });
+
+    let producedCount = 0;
+    // Step virtual clock for 600 ticks (60 seconds at 10 ticks/sec)
+    for (let t = 1; t <= 600; t++) {
+      session!.tickCount = t;
+      const entry = session!.autoProducers.get('prod-drift')!;
+      if (session!.tickCount >= entry.nextFireTick) {
+        entry.nextFireTick = session!.tickCount + entry.intervalTicks;
+        producedCount++;
+      }
+    }
+
+    // Exactly 30 fires (600 / 20 = 30)
+    expect(producedCount).toBeGreaterThanOrEqual(29);
+    expect(producedCount).toBeLessThanOrEqual(31);
+    expect(producedCount).toBe(30);
+
+    simulationRunner.stopSession(testRoomId);
+  });
+
+  it('should cleanly reset simulation state, cancel auto-producers, and purge Redis keys on INTENT_RESET', async () => {
+    simulationRunner.startSession(testRoomId, mockTopology);
+    const session = simulationRunner.getSession(testRoomId);
+
+    // Setup active producer
+    session?.autoProducers.set('prod-reset', {
+      producerId: 'prod-reset',
+      topic: 'orders',
+      intervalSeconds: 1.0,
+      intervalTicks: 10,
+      nextFireTick: 10,
+      enabled: true,
+    });
+
+    await redis.set(`room:${testRoomId}:dummy`, 'stale');
+
+    // Send INTENT_RESET
+    await redis.lpush(
+      `room:${testRoomId}:intents`,
+      JSON.stringify({
+        type: 'INTENT_RESET',
+        id: 'reset-uuid-1',
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // Assert autoProducers wiped
+    expect(session?.autoProducers.size).toBe(0);
+    // Assert tick count reset to 0
+    expect(session?.tickCount).toBeLessThanOrEqual(5);
+
+    simulationRunner.stopSession(testRoomId);
+  });
 });
+

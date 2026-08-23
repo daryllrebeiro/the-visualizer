@@ -5,6 +5,7 @@ import { Redis } from 'ioredis';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 import {
+  captureException,
   logger,
   simActiveSessions,
   simInvariantViolationsTotal,
@@ -17,13 +18,14 @@ import { SimulationEngine } from '@the-visualizer/simulation';
 
 import { config } from '../config.js';
 import { roomManager } from './room-manager.js';
+import { DEFAULT_TOPOLOGY } from './ws-server.js';
 
 export interface AutoProducerSchedule {
   producerId: string;
   topic: string;
   intervalSeconds: number;
   intervalTicks: number;
-  lastFiredTick: number;
+  nextFireTick: number;
   enabled: boolean;
 }
 
@@ -135,15 +137,17 @@ export class SimulationRunner {
       for (const raw of intentsRaw) {
         try {
           const intent = JSON.parse(raw) as Record<string, any>;
-          if (typeof intent.type === 'string' && intent.payload) {
+          if (typeof intent.type === 'string') {
             let normalizedType = intent.type;
             if (!normalizedType.startsWith('INTENT_')) {
               normalizedType = `INTENT_${normalizedType}`;
             }
 
+            const payload = intent.payload || {};
+
             // Map client intent to engine event type
             let engineEventType: string | null = null;
-            let engineEventPayload = intent.payload;
+            let engineEventPayload = payload;
 
             if (normalizedType === 'INTENT_PRODUCE') {
               engineEventType = 'RECORD_PRODUCED';
@@ -183,7 +187,7 @@ export class SimulationRunner {
                 status: 'ALIVE',
               };
             } else if (normalizedType === 'INTENT_SET_AUTO_PRODUCE') {
-              const { producerId, topic, intervalSeconds, enabled } = intent.payload;
+              const { producerId, topic, intervalSeconds, enabled } = payload;
               const isEnabled = Boolean(enabled);
               if (!isEnabled) {
                 session.autoProducers.delete(producerId);
@@ -191,13 +195,13 @@ export class SimulationRunner {
                 const clampedSec = Math.max(0.5, Math.min(30.0, Number(intervalSeconds) || 3.0));
                 const intervalTicks = Math.round(clampedSec * 10);
 
-                const existing = session.autoProducers.get(producerId);
+                // Priority 1.1: Recalculate next fire tick immediately from (currentTick + intervalTicks)
                 session.autoProducers.set(producerId, {
                   producerId,
                   topic: topic || 'orders',
                   intervalSeconds: clampedSec,
                   intervalTicks,
-                  lastFiredTick: existing?.lastFiredTick ?? (session.tickCount - intervalTicks),
+                  nextFireTick: session.tickCount + intervalTicks,
                   enabled: true,
                 });
               }
@@ -211,8 +215,51 @@ export class SimulationRunner {
               });
               continue;
             } else if (normalizedType === 'INTENT_REMOVE_AUTO_PRODUCE') {
-              const { producerId } = intent.payload;
+              const { producerId } = payload;
               session.autoProducers.delete(producerId);
+
+              await roomManager.publishRoomUpdate(roomId, {
+                type: 'INTENT_ACK',
+                payload: {
+                  intentId: intent.id || '',
+                  status: 'ACCEPTED',
+                },
+              });
+              continue;
+            } else if (normalizedType === 'INTENT_RESET') {
+              // Priority 2: Clear all auto-producers and rebuild clean simulation engine
+              session.autoProducers.clear();
+
+              const cleanTopology: KafkaClusterState = JSON.parse(JSON.stringify(DEFAULT_TOPOLOGY));
+              session.engine.initialize(cleanTopology);
+              session.tickCount = 0;
+              session.isHalted = false;
+              session.isPaused = false;
+
+              // Clear Redis cached room keys and replay history
+              if (this.redis.status === 'ready') {
+                await this.redis.del(`room:${roomId}:intents`);
+                await this.redis.del(`topology:${roomId}`);
+                await this.redis.del(`simulation:${roomId}:replays`);
+              }
+
+              // Broadcast fresh snapshot to all room clients
+              await roomManager.publishRoomUpdate(roomId, {
+                type: 'MSG_INIT_SNAPSHOT',
+                payload: {
+                  sessionId: cleanTopology.clusterId,
+                  serverTick: 0,
+                  limits: {
+                    maxTicks: 100_000,
+                    maxBrokers: 30,
+                    maxPartitions: 50,
+                    maxProducers: 100,
+                    maxConsumers: 100,
+                    maxMsgRatePerSec: 100,
+                  },
+                  topology: cleanTopology,
+                },
+              });
 
               await roomManager.publishRoomUpdate(roomId, {
                 type: 'INTENT_ACK',
@@ -258,8 +305,9 @@ export class SimulationRunner {
               });
             }
           }
-        } catch {
-          // Ignore bad intent parsing
+        } catch (err) {
+          logger.warn({ err, roomId, rawSnippet: raw.substring(0, 100) }, 'Failed to parse or execute client intent');
+          captureException(err, { service: 'ws-gateway', roomId });
         }
       }
 
@@ -307,9 +355,8 @@ export class SimulationRunner {
       if (engine.state) {
         for (const [, entry] of session.autoProducers) {
           if (!entry.enabled) continue;
-          const ticksElapsed = session.tickCount - entry.lastFiredTick;
-          if (ticksElapsed >= entry.intervalTicks) {
-            entry.lastFiredTick = session.tickCount;
+          if (session.tickCount >= entry.nextFireTick) {
+            entry.nextFireTick = session.tickCount + entry.intervalTicks;
 
             const partitions = engine.state.topics[entry.topic] ?? [];
             const activePartitions = partitions.filter(

@@ -94,6 +94,10 @@ export const IntentRemoveAutoProduceSchema = IntentBaseSchema.extend({
   producerId: z.string().min(1).max(64),
 });
 
+export const IntentResetSchema = IntentBaseSchema.extend({
+  type: z.literal('INTENT_RESET'),
+});
+
 /**
  * Discriminated union of all valid client intents.
  * Validated on the server before any simulation action is taken.
@@ -113,6 +117,7 @@ export const ClientIntentSchema = z.discriminatedUnion('type', [
   IntentCreateTopicSchema,
   IntentSetAutoProduceSchema,
   IntentRemoveAutoProduceSchema,
+  IntentResetSchema,
 ]);
 export type ClientIntent = z.infer<typeof ClientIntentSchema>;
 

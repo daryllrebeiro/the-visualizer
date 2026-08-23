@@ -41,6 +41,7 @@ interface VisualizerProps {
   producers: ProducerConfig[];
   consumers?: ConsumerConfig[] | undefined;
   produceTrigger?: ProduceTrigger | null | undefined;
+  resetTrigger?: number | undefined;
   onHoverDetails: (details: HoverDetails | null) => void;
   onSelectEntity?: ((entity: InspectableEntity) => void) | undefined;
 }
@@ -76,6 +77,7 @@ export function Visualizer({
   producers,
   consumers = [],
   produceTrigger,
+  resetTrigger,
   onHoverDetails,
   onSelectEntity,
 }: VisualizerProps): React.JSX.Element {
@@ -105,6 +107,8 @@ export function Visualizer({
   stateRef.current = state;
 
   const producerLastProduceTimes = useRef<Map<string, number>>(new Map());
+  const reconnectionPulsesRef = useRef<Map<string, { startTime: number; duration: number }>>(new Map());
+  const prevConnectedBrokersRef = useRef<Map<string, Set<string>>>(new Map());
 
   const producersRef = useRef<ProducerConfig[]>(producers);
   producersRef.current = producers;
@@ -228,6 +232,28 @@ export function Visualizer({
 
   const lastHwMap = useRef<Map<string, number>>(new Map());
   const recentManualTriggers = useRef<Map<string, number>>(new Map());
+
+  // Reset Trigger Handler (Priority 2: Clear state, drag positions, particles, and timer caches)
+  useEffect(() => {
+    if (resetTrigger === undefined) return;
+    customNodePositions.current.clear();
+    particles.current = [];
+    reconnectionPulsesRef.current.clear();
+    producerLastProduceTimes.current.clear();
+    prevConnectedBrokersRef.current.clear();
+    lastHwMap.current.clear();
+    recentManualTriggers.current.clear();
+    setHasCustomPositions(false);
+  }, [resetTrigger]);
+
+  // Synchronize Countdown Ring on Live Frequency / Enable Changes (Priority 1.2)
+  useEffect(() => {
+    producers.forEach((p) => {
+      if (p.autoProduceEnabled) {
+        producerLastProduceTimes.current.set(p.id, performance.now());
+      }
+    });
+  }, [producers]);
 
   // Immediate Trigger on UI Produce Action (Manual Click)
   useEffect(() => {
@@ -483,7 +509,7 @@ export function Visualizer({
       });
     }
 
-    // ── 3. Persistent Producer → Broker Connection Lines (one per distinct alive leader) ──
+    // ── 3. Persistent Producer → Broker Connection Lines (Priority 3: Reconnection Animation) ──
     const dashOffset = (timeNow / 35) % 16;
     activeProducers.forEach((prod) => {
       const prodPos = producerPositions.current.get(prod.id);
@@ -499,20 +525,69 @@ export function Visualizer({
       }
       prod.connectedBrokerIds = Array.from(leaderSet);
 
-      // Draw one dashed line per connected broker
+      const prevConnected = prevConnectedBrokersRef.current.get(prod.id) ?? new Set<string>();
+      for (const brokerId of leaderSet) {
+        const pulseKey = `${prod.id}-${brokerId}`;
+        // If broker became connected after previously being disconnected (recovery / failover reversal)
+        if (!prevConnected.has(brokerId) && prevConnected.size > 0) {
+          reconnectionPulsesRef.current.set(pulseKey, { startTime: timeNow, duration: 1600 });
+        }
+      }
+      prevConnectedBrokersRef.current.set(prod.id, new Set(leaderSet));
+
+      // Draw lines with distinct pulse animation on reconnection
       for (const brokerId of leaderSet) {
         const brokerPos = brokerPositions.current.get(brokerId);
         if (brokerPos) {
-          ctx.strokeStyle = '#93c5fd';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 8]);
-          ctx.lineDashOffset = -dashOffset;
-          ctx.beginPath();
-          ctx.moveTo(prodPos.x, prodPos.y);
-          ctx.lineTo(brokerPos.x, brokerPos.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.lineDashOffset = 0;
+          const pulse = reconnectionPulsesRef.current.get(`${prod.id}-${brokerId}`);
+          const isReconnecting = pulse && (timeNow - pulse.startTime < pulse.duration);
+
+          if (isReconnecting) {
+            const pProgress = (timeNow - pulse.startTime) / pulse.duration;
+            const pulseFactor = Math.sin(pProgress * Math.PI);
+
+            // Glowing vibrant line
+            ctx.strokeStyle = '#06b6d4'; // Electric Cyan
+            ctx.lineWidth = 3.5 + pulseFactor * 2.5;
+            ctx.shadowColor = '#0891b2';
+            ctx.shadowBlur = 16 * pulseFactor;
+            ctx.beginPath();
+            ctx.moveTo(prodPos.x, prodPos.y);
+            ctx.lineTo(brokerPos.x, brokerPos.y);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Traveling reconnection wave
+            const waveProgress = ((timeNow - pulse.startTime) / 400) % 1.0;
+            const waveX = prodPos.x + (brokerPos.x - prodPos.x) * waveProgress;
+            const waveY = prodPos.y + (brokerPos.y - prodPos.y) * waveProgress;
+            ctx.fillStyle = '#f59e0b'; // Amber pulse particle
+            ctx.shadowColor = '#f59e0b';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(waveX, waveY, 5.5, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Floating badge tag
+            const midX = (prodPos.x + brokerPos.x) / 2;
+            const midY = (prodPos.y + brokerPos.y) / 2 - 14;
+            ctx.fillStyle = '#0891b2';
+            ctx.font = '700 8.5px "Inter", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('⚡ RECONNECTED', midX, midY);
+          } else {
+            ctx.strokeStyle = '#93c5fd';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 8]);
+            ctx.lineDashOffset = -dashOffset;
+            ctx.beginPath();
+            ctx.moveTo(prodPos.x, prodPos.y);
+            ctx.lineTo(brokerPos.x, brokerPos.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.lineDashOffset = 0;
+          }
         }
       }
     });

@@ -67,4 +67,5 @@ export const logger = createLogger('the-visualizer');
 
 export * from './otel.js';
 export * from './metrics.js';
+export * from './error-tracker.js';
 

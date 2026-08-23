@@ -4,26 +4,35 @@ import { check } from 'k6';
 
 export const options = {
   vus: 10,
-  duration: '20s',
+  duration: '10s',
+  thresholds: {
+    'http_req_duration': ['p(95)<50'],   // 95% of auth requests must complete within 50ms
+    'http_req_failed': ['rate<0.01'],     // Error rate under 1%
+    'ws_connecting': ['p(95)<100'],       // 95% of WS handshakes under 100ms
+  },
 };
 
 const API_URL = __ENV.API_URL || 'http://localhost:3000';
 const WS_URL = __ENV.WS_URL || 'ws://localhost:3001';
 
 export default function () {
-  // 1. Authenticate with dev-login to obtain a valid JWT token
-  const loginRes = http.post(
-    `${API_URL}/auth/dev-login`,
-    JSON.stringify({
-      email: `load-test-${__VU}@visualizer.com`,
-      name: `Load Test User ${__VU}`,
-    }),
-    {
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
+  // 1. Authenticate with register/login to obtain a valid JWT token
+  const authPayload = JSON.stringify({
+    email: `load-test-${__VU}-${Date.now()}@visualizer.com`,
+    name: `Load Test User ${__VU}`,
+    password: 'Password123!',
+  });
 
-  const token = loginRes.json().token;
+  const registerRes = http.post(`${API_URL}/auth/register`, authPayload, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  const token = registerRes.json()?.token;
+  check(registerRes, {
+    'auth succeeded': (r) => r.status === 201 && Boolean(token),
+  });
+
+  if (!token) return;
 
   // 2. Establish WebSocket connection to the gateway using the token
   const url = `${WS_URL}/?token=${token}`;
@@ -39,14 +48,16 @@ export default function () {
     });
 
     socket.on('message', () => {
-      // The server replies with MessagePack binary payload (e.g. ROOM_JOINED or INIT_SNAPSHOT)
       // Sending a PRODUCE intent once communication is established
       socket.send(
         JSON.stringify({
           type: 'PRODUCE',
           payload: {
-            topic: 'load-test-topic',
+            topic: 'orders',
+            partition: 0,
+            key: `k-${__VU}`,
             value: 'hello-world-load-test',
+            acks: 1,
           },
         })
       );
@@ -59,12 +70,10 @@ export default function () {
       // Closed connection
     });
 
-    socket.on('error', () => {
-      // Connection error
+    socket.on('error', (e) => {
+      console.error('WebSocket Error: ', e);
     });
   });
 
-  check(response, {
-    'upgrade status is 101': (r) => r && r.status === 101,
-  });
+  check(response, { 'ws handshake successful': (r) => r && r.status === 101 });
 }

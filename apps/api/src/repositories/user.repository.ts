@@ -11,8 +11,8 @@ export interface UserOrgMembership {
 }
 
 export class UserRepository {
-  public async createUser(email: string, name?: string, avatarUrl?: string) {
-    const [user] = await db.insert(users).values({ email, name, avatarUrl }).returning();
+  public async createUser(email: string, name?: string, passwordHash?: string, avatarUrl?: string) {
+    const [user] = await db.insert(users).values({ email, name, passwordHash, avatarUrl }).returning();
     if (!user) throw new Error('Failed to create user');
     return user;
   }

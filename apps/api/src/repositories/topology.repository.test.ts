@@ -16,6 +16,7 @@ describe('TopologyRepository Multi-Tenant Integration Tests', () => {
   let mockKafkaState: KafkaClusterState;
 
   beforeAll(async () => {
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
     // Basic mock Kafka Cluster State
     mockKafkaState = {
       clusterId: 'kafka-cluster-id',
