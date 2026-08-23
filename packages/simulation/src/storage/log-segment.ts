@@ -1,40 +1,24 @@
-/**
- * Exact Apache Kafka Physical Disk Log Segment & Indexing Model.
- *
- * Implements:
- * 1. Monotonic offset log appending.
- * 2. Automatic segment rolling (`segment.bytes` threshold).
- * 3. Sparse offset indexing (.index).
- * 4. Background Log Compaction (key-deduplication retaining newest offset).
- * 5. Log Truncation for Unclean Leader Election recovery.
- */
-
-export interface PhysicalLogRecord {
+export interface LogRecord {
   offset: number;
+  key: string | null;
+  value: string | null;
   timestamp: number;
-  key: string;
-  value: string;
-  isControlMarker?: boolean | undefined;
-  markerType?: ('COMMIT' | 'ABORT') | undefined;
-  producerId?: number | undefined;
-  producerEpoch?: number | undefined;
+  leaderEpoch: number;
   sizeBytes: number;
 }
 
-export interface LogIndexEntry {
+export interface SegmentIndexEntry {
   offset: number;
   positionBytes: number;
 }
 
-export interface LogSegment {
+export interface PhysicalLogSegment {
   baseOffset: number;
   sizeBytes: number;
   maxSizeBytes: number;
-  records: PhysicalLogRecord[];
   isClosed: boolean;
-  createdTick: number;
-  lastModifiedTick: number;
-  indexEntries: LogIndexEntry[];
+  records: LogRecord[];
+  indexEntries: SegmentIndexEntry[];
 }
 
 export interface LogSegmentSummary {
@@ -42,97 +26,79 @@ export interface LogSegmentSummary {
   sizeBytes: number;
   recordCount: number;
   isClosed: boolean;
-  isActive: boolean;
-  firstOffset: number | null;
-  lastOffset: number | null;
 }
 
+export type PhysicalLogRecord = LogRecord;
+
+/**
+ * Manages low-level physical log segments, rolling, index building, and compaction.
+ */
 export class PartitionLogStorage {
-  public segments: LogSegment[] = [];
-  public nextOffset = 0;
-  public readonly maxSegmentBytes: number;
+  public segments: PhysicalLogSegment[] = [];
+  public maxSegmentBytes: number;
+  public nextOffset: number = 0;
 
-  constructor(maxSegmentBytes = 1024) {
+  constructor(maxSegmentBytes: number = 10 * 1024 * 1024) {
     this.maxSegmentBytes = maxSegmentBytes;
-    this.rollNewSegment(0, 0);
+    this.rollNewSegment(0);
   }
 
-  get activeSegment(): LogSegment {
-    const active = this.segments[this.segments.length - 1];
-    if (!active) {
-      return this.rollNewSegment(this.nextOffset, 0);
-    }
-    return active;
-  }
-
-  /**
-   * Rolls a new active segment and closes the previous active segment.
-   */
-  public rollNewSegment(baseOffset: number, tick: number): LogSegment {
+  private rollNewSegment(baseOffset: number): PhysicalLogSegment {
     if (this.segments.length > 0) {
-      const prev = this.segments[this.segments.length - 1]!;
-      prev.isClosed = true;
+      const last = this.segments[this.segments.length - 1];
+      if (last) {
+        last.isClosed = true;
+      }
     }
 
-    const newSegment: LogSegment = {
+    const newSeg: PhysicalLogSegment = {
       baseOffset,
       sizeBytes: 0,
       maxSizeBytes: this.maxSegmentBytes,
-      records: [],
       isClosed: false,
-      createdTick: tick,
-      lastModifiedTick: tick,
+      records: [],
       indexEntries: [],
     };
+    this.segments.push(newSeg);
+    return newSeg;
+  }
 
-    this.segments.push(newSegment);
-    return newSegment;
+  public get activeSegment(): PhysicalLogSegment {
+    return this.segments[this.segments.length - 1]!;
   }
 
   /**
-   * Appends a record to the active segment, creating an index entry and rolling if threshold is met.
+   * Appends record to the active physical segment, building a sparse index entry every 4 records.
    */
   public append(
-    recordData: {
-      key: string;
-      value: string;
-      timestamp: number;
-      isControlMarker?: boolean;
-      markerType?: 'COMMIT' | 'ABORT';
-      producerId?: number;
-      producerEpoch?: number;
-    },
-    tick: number,
-  ): { offset: number; rolled: boolean } {
-    const offset = this.nextOffset++;
-    // Approximate on-disk record byte size (key + val + headers + offset overhead)
-    const estimatedRecordBytes =
-      new TextEncoder().encode(recordData.key).length +
-      new TextEncoder().encode(recordData.value).length +
-      32;
+    record: { key?: string | null; value: string | null; timestamp?: number },
+    leaderEpoch: number = 0,
+  ): LogRecord {
+    const key = record.key ?? null;
+    const value = record.value;
+    const timestamp = record.timestamp ?? Date.now();
 
-    let active = this.activeSegment;
-    let rolled = false;
+    // Approximate Kafka wire record overhead: 14 bytes header + key length + value length
+    const recordBytes =
+      14 + (key ? Buffer.byteLength(key, 'utf8') : 0) + (value ? Buffer.byteLength(value, 'utf8') : 0);
 
-    // Check if appending would exceed max segment capacity (unless active segment is completely empty)
-    if (active.records.length > 0 && active.sizeBytes + estimatedRecordBytes > this.maxSegmentBytes) {
-      active = this.rollNewSegment(offset, tick);
-      rolled = true;
+    // Roll segment if active exceeds limit
+    if (this.activeSegment.records.length > 0 && this.activeSegment.sizeBytes + recordBytes > this.maxSegmentBytes) {
+      this.rollNewSegment(this.nextOffset);
     }
 
-    const physicalRecord: PhysicalLogRecord = {
+    const offset = this.nextOffset++;
+    const logRec: LogRecord = {
       offset,
-      timestamp: recordData.timestamp,
-      key: recordData.key,
-      value: recordData.value,
-      isControlMarker: recordData.isControlMarker,
-      markerType: recordData.markerType,
-      producerId: recordData.producerId,
-      producerEpoch: recordData.producerEpoch,
-      sizeBytes: estimatedRecordBytes,
+      key,
+      value,
+      timestamp,
+      leaderEpoch,
+      sizeBytes: recordBytes,
     };
 
-    // Sparse Index: add entry every 4th record or on first record of segment
+    const active = this.activeSegment;
+    // Sparse index: record an entry every 4th message
     if (active.records.length % 4 === 0) {
       active.indexEntries.push({
         offset,
@@ -140,46 +106,64 @@ export class PartitionLogStorage {
       });
     }
 
-    active.records.push(physicalRecord);
-    active.sizeBytes += estimatedRecordBytes;
-    active.lastModifiedTick = tick;
+    active.records.push(logRec);
+    active.sizeBytes += recordBytes;
 
-    return { offset, rolled };
+    return logRec;
   }
 
   /**
    * Executes Kafka log compaction across closed (immutable) segments.
-   * Retains only the latest record for each key.
+   * - Retains only the latest record for each key.
+   * - Tombstones (value === null or value === '') are preserved within delete.retention.ms window and permanently deleted once expired.
    */
-  public compact(): { removedCount: number; compactedSegments: number } {
+  public compact(
+    currentTimeMs: number = Date.now(),
+    tombstoneRetentionMs: number = 86400000, // Default 24 hours (Kafka delete.retention.ms)
+  ): { removedCount: number; compactedSegments: number; purgedTombstones: number } {
     if (this.segments.length <= 1) {
-      return { removedCount: 0, compactedSegments: 0 };
+      return { removedCount: 0, compactedSegments: 0, purgedTombstones: 0 };
     }
 
-    // Step 1: Scan from active backwards to find the latest offset per key
-    const latestOffsetPerKey = new Map<string, number>();
+    // Step 1: Scan from active backwards to find the latest record per key
+    const latestRecordPerKey = new Map<string, LogRecord>();
     for (let i = this.segments.length - 1; i >= 0; i--) {
       const seg = this.segments[i]!;
       for (const rec of seg.records) {
-        if (rec.key && !latestOffsetPerKey.has(rec.key)) {
-          latestOffsetPerKey.set(rec.key, rec.offset);
+        if (rec.key && !latestRecordPerKey.has(rec.key)) {
+          latestRecordPerKey.set(rec.key, rec);
         }
       }
     }
 
     let totalRemoved = 0;
     let compactedCount = 0;
+    let purgedTombstones = 0;
 
     // Step 2: Compact all closed segments
     for (let i = 0; i < this.segments.length - 1; i++) {
       const seg = this.segments[i]!;
       const originalCount = seg.records.length;
 
-      // Filter out superseded records
+      // Filter out superseded records and expired tombstones
       seg.records = seg.records.filter((rec) => {
         if (!rec.key) return true; // Keep keyless records
-        const latest = latestOffsetPerKey.get(rec.key);
-        return latest === rec.offset;
+        const latest = latestRecordPerKey.get(rec.key);
+        if (latest?.offset !== rec.offset) {
+          return false; // Superseded by a newer record
+        }
+
+        // If this latest record is a tombstone, check delete.retention.ms expiration
+        const isTombstone = rec.value === null || rec.value === '';
+        if (isTombstone) {
+          const ageMs = currentTimeMs - rec.timestamp;
+          if (ageMs >= tombstoneRetentionMs) {
+            purgedTombstones++;
+            return false; // Purge expired tombstone
+          }
+        }
+
+        return true;
       });
 
       const removed = originalCount - seg.records.length;
@@ -201,7 +185,7 @@ export class PartitionLogStorage {
       }
     }
 
-    return { removedCount: totalRemoved, compactedSegments: compactedCount };
+    return { removedCount: totalRemoved, compactedSegments: compactedCount, purgedTombstones };
   }
 
   /**
@@ -213,30 +197,29 @@ export class PartitionLogStorage {
     this.segments = this.segments.filter((seg) => seg.baseOffset <= targetOffset);
     if (this.segments.length === 0) {
       this.nextOffset = targetOffset;
-      this.rollNewSegment(targetOffset, 0);
+      this.rollNewSegment(targetOffset);
       return;
     }
 
-    const lastSeg = this.segments[this.segments.length - 1]!;
-    lastSeg.records = lastSeg.records.filter((r) => r.offset <= targetOffset);
-    lastSeg.isClosed = false;
-    lastSeg.sizeBytes = lastSeg.records.reduce((sum, r) => sum + r.sizeBytes, 0);
-    this.nextOffset = targetOffset + 1;
+    const active = this.activeSegment;
+    active.records = active.records.filter((r) => r.offset <= targetOffset);
+    active.sizeBytes = active.records.reduce((sum, r) => sum + r.sizeBytes, 0);
+    this.nextOffset = active.records.length > 0
+      ? (active.records[active.records.length - 1]?.offset ?? 0) + 1
+      : active.baseOffset;
   }
 
-  /**
-   * Produces a lightweight summary array of segments for UI inspector rendering.
-   */
-  public getSummaries(): LogSegmentSummary[] {
-    const active = this.activeSegment;
-    return this.segments.map((seg) => ({
-      baseOffset: seg.baseOffset,
-      sizeBytes: seg.sizeBytes,
-      recordCount: seg.records.length,
-      isClosed: seg.isClosed,
-      isActive: seg === active,
-      firstOffset: seg.records[0]?.offset ?? null,
-      lastOffset: seg.records[seg.records.length - 1]?.offset ?? null,
+  public getSummaries(): Array<{
+    baseOffset: number;
+    sizeBytes: number;
+    recordCount: number;
+    isClosed: boolean;
+  }> {
+    return this.segments.map((s) => ({
+      baseOffset: s.baseOffset,
+      sizeBytes: s.sizeBytes,
+      recordCount: s.records.length,
+      isClosed: s.isClosed,
     }));
   }
 }

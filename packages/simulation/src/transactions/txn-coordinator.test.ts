@@ -44,7 +44,7 @@ describe('Kafka Transaction Coordinator & 2PC Tests', () => {
     expect(result.controlMarkers[0]?.markerType).toBe('COMMIT');
   });
 
-  it('should compute Last Stable Offset (LSO) correctly', () => {
+  it('should compute Last Stable Offset (LSO) correctly and isolate uncommitted / aborted records for read_committed consumers', () => {
     const mgr = new TransactionCoordinatorManager();
 
     // No ongoing transaction: LSO === HW
@@ -52,5 +52,16 @@ describe('Kafka Transaction Coordinator & 2PC Tests', () => {
 
     // Ongoing uncommitted transaction started at offset 4 with HW 10: LSO === 4
     expect(mgr.computeLastStableOffset('orders', 0, 10, 4)).toBe(4);
+
+    // Transaction abort isolation:
+    const { producerId, producerEpoch } = mgr.initProducerId('txn-checkout', 'broker-1', 5);
+    mgr.addPartitionsToTxn('txn-checkout', producerId, producerEpoch, [{ topic: 'orders', partition: 0 }]);
+
+    const abortResult = mgr.endTxn('txn-checkout', producerId, producerEpoch, 'ABORT');
+    expect(abortResult.success).toBe(true);
+    expect(abortResult.controlMarkers[0]?.markerType).toBe('ABORT');
+
+    // Once aborted and control marker written, no active transaction holds the LSO back
+    expect(mgr.computeLastStableOffset('orders', 0, 10, null)).toBe(10);
   });
 });

@@ -24,23 +24,48 @@ describe('Physical Log Segment & Compaction Tests', () => {
     expect(log.activeSegment.isClosed).toBe(false);
   });
 
-  it('should compact closed segments by retaining only latest value per key', () => {
-    const log = new PartitionLogStorage(100);
+  it('should compact closed segments by retaining only latest value per key and preserving tombstones within retention window', () => {
+    const log = new PartitionLogStorage(40); // 40 bytes forces roll per record
+    const baseTime = 1_000_000;
     // Write key 'user-A' multiple times across rolled segments
-    log.append({ key: 'user-A', value: 'version-1', timestamp: 10 }, 1);
-    log.append({ key: 'user-B', value: 'version-1', timestamp: 11 }, 1); // Rolls segment
-    log.append({ key: 'user-A', value: 'version-2', timestamp: 12 }, 2); // Rolls segment
-    log.append({ key: 'user-C', value: 'version-1', timestamp: 13 }, 3);
+    log.append({ key: 'user-A', value: 'version-1', timestamp: baseTime }, 1);
+    log.append({ key: 'user-B', value: 'version-1', timestamp: baseTime + 10 }, 1); // Rolls segment
+    log.append({ key: 'user-A', value: 'version-2', timestamp: baseTime + 20 }, 2); // Rolls segment
+    log.append({ key: 'user-C', value: 'version-1', timestamp: baseTime + 30 }, 3);
 
     expect(log.segments.length).toBeGreaterThan(1);
 
-    const compactionResult = log.compact();
+    const compactionResult = log.compact(baseTime + 40, 86400000);
     expect(compactionResult.removedCount).toBeGreaterThanOrEqual(1);
 
     // Old segment should no longer contain version-1 of user-A
     const firstSeg = log.segments[0]!;
     const userARecordsInFirstSeg = firstSeg.records.filter((r) => r.key === 'user-A');
     expect(userARecordsInFirstSeg.length).toBe(0);
+  });
+
+  it('should purge expired tombstones when age exceeds delete.retention.ms', () => {
+    const log = new PartitionLogStorage(40);
+    const baseTime = 1_000_000;
+    const tombstoneRetentionMs = 60_000; // 60 seconds
+
+    // Append tombstone for key 'user-deleted'
+    log.append({ key: 'user-deleted', value: null, timestamp: baseTime }, 1);
+    log.append({ key: 'user-active', value: 'active-val', timestamp: baseTime + 1000 }, 1); // Forces roll
+    log.append({ key: 'user-other', value: 'other-val', timestamp: baseTime + 2000 }, 2);
+
+    expect(log.segments.length).toBeGreaterThan(1);
+
+    // 1. Compaction before expiry: Tombstone is retained
+    const comp1 = log.compact(baseTime + 30_000, tombstoneRetentionMs);
+    expect(comp1.purgedTombstones).toBe(0);
+    const firstSeg = log.segments[0]!;
+    expect(firstSeg.records.some((r) => r.key === 'user-deleted')).toBe(true);
+
+    // 2. Compaction after expiry: Tombstone is permanently purged
+    const comp2 = log.compact(baseTime + 70_000, tombstoneRetentionMs);
+    expect(comp2.purgedTombstones).toBe(1);
+    expect(firstSeg.records.some((r) => r.key === 'user-deleted')).toBe(false);
   });
 
   it('should truncate segment logs back to target offset', () => {

@@ -9,6 +9,23 @@ describe('Kafka Murmur2 Partitioner Tests', () => {
     expect(typeof hash1).toBe('number');
   });
 
+  it('should match exact Apache Kafka Java reference vectors', () => {
+    // Reference test vectors matching org.apache.kafka.common.utils.Utils.murmur2(byte[] data)
+    const testCases: { key: string; expectedHash: number; expectedPartition3: number }[] = [
+      { key: '', expectedHash: 275646681, expectedPartition3: toPositive(275646681) % 3 },
+      { key: 'user-1001', expectedHash: -1052335918, expectedPartition3: toPositive(-1052335918) % 3 },
+      { key: 'k1', expectedHash: 1684045097, expectedPartition3: toPositive(1684045097) % 3 },
+      { key: 'order-xyz-987', expectedHash: 1354500271, expectedPartition3: toPositive(1354500271) % 3 },
+    ];
+
+    for (const tc of testCases) {
+      const actualHash = kafkaMurmur2(tc.key);
+      expect(actualHash).toBe(tc.expectedHash);
+      const actualPart = partitionForKey(tc.key, 3);
+      expect(actualPart).toBe(tc.expectedPartition3);
+    }
+  });
+
   it('should strip negative bit via toPositive', () => {
     expect(toPositive(-42)).toBeGreaterThanOrEqual(0);
     expect(toPositive(12345)).toBe(12345);

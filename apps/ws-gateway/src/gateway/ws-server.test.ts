@@ -135,4 +135,42 @@ describe('WebSocket Gateway Integration Tests', () => {
       });
     });
   });
+
+  it('should rate limit rapid message bursts and return RATE_LIMIT_EXCEEDED error', () => {
+    return new Promise<void>((resolve, reject) => {
+      const client = new WebSocket(`ws://localhost:${String(port)}?token=${testUserToken}`);
+
+      client.on('open', () => {
+        const joinMsg = {
+          type: 'JOIN_ROOM',
+          payload: { roomId: 'test-room-ratelimit' },
+        };
+        client.send(pack(joinMsg));
+
+        // Fire 25 rapid messages immediately to exceed the 20 msgs/s token bucket
+        for (let i = 0; i < 25; i++) {
+          client.send(
+            pack({
+              type: 'INTENT_PRODUCE',
+              payload: { topic: 'orders', partition: 0, key: `k-${String(i)}`, value: `v-${String(i)}` },
+            }),
+          );
+        }
+      });
+
+      let receivedRateLimitError = false;
+      client.on('message', (data: Buffer) => {
+        const message = unpack(data) as Record<string, any>;
+        if (message.type === 'SESSION_ERROR' && message.payload?.code === 'RATE_LIMIT_EXCEEDED') {
+          receivedRateLimitError = true;
+          client.close();
+          resolve();
+        }
+      });
+
+      client.on('error', (err) => {
+        if (!receivedRateLimitError) reject(err);
+      });
+    });
+  });
 });
