@@ -1,0 +1,50 @@
+steps:
+  # 1. Build Docker Container Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/the-visualizer/app:$COMMIT_SHA'
+      - '-t'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/the-visualizer/app:latest'
+      - '.'
+
+  # 2. Push Image to Google Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/the-visualizer/app'
+
+  # 3. Deploy to Google Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '$_SERVICE_NAME'
+      - '--image'
+      - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/the-visualizer/app:$COMMIT_SHA'
+      - '--region'
+      - '$_DEPLOY_REGION'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+
+substitutions:
+  _AR_REGION: 'us-central1'
+  _DEPLOY_REGION: 'us-central1'
+  _SERVICE_NAME: 'the-visualizer'
+
+images:
+  - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/the-visualizer/app:$COMMIT_SHA'
+  - '$_AR_REGION-docker.pkg.dev/$PROJECT_ID/the-visualizer/app:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
