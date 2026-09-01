@@ -30,6 +30,7 @@ COPY . .
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV BUILD_STANDALONE=true
 
 RUN mkdir -p /app/apps/web/public
 RUN pnpm build
