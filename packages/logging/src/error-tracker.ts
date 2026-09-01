@@ -2,8 +2,8 @@ import client, { type Counter } from 'prom-client';
 import { logger } from './index.js';
 import { register } from './metrics.js';
 
-export const appUncaughtExceptionsTotal: Counter<string> =
-  (register.getSingleMetric('app_uncaught_exceptions_total') as Counter<string>) ||
+export const appUncaughtExceptionsTotal: Counter =
+  (register.getSingleMetric('app_uncaught_exceptions_total') as Counter) ??
   new client.Counter({
     name: 'app_uncaught_exceptions_total',
     help: 'Total count of uncaught exceptions and unhandled promise rejections',

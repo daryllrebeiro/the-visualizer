@@ -25,6 +25,8 @@ export interface OracleScenarioResult {
 function createBroker(id: string, status: 'ALIVE' | 'CRASHED' = 'ALIVE'): BrokerNode {
   return {
     id,
+    host: `broker-${id}.kafka.local`,
+    port: 9092,
     rack: 'rack-a',
     status,
     diskUsageBytes: 0,

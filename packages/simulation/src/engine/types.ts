@@ -13,6 +13,8 @@ export type BrokerStatus = 'ALIVE' | 'DEGRADED' | 'CRASHED' | 'RECOVERING';
 
 export interface BrokerNode {
   readonly id: NodeId;
+  readonly host: string;
+  readonly port: number;
   readonly rack?: string | undefined;
   status: BrokerStatus;
   diskUsageBytes: number;
@@ -149,4 +151,51 @@ export interface SimEvent {
   readonly tick: VirtualTimestamp;
   readonly type: SimEventType;
   readonly payload: Record<string, unknown>;
+}
+
+export interface SimEventLog {
+  id: string;
+  tick: number;
+  type: SimEventType;
+  payload: Record<string, unknown>;
+  timestamp?: number | undefined;
+  involvedEntities?: { type: string; id: string }[] | undefined;
+  source?: 'INTERNAL' | 'USER_INTENT' | 'CHAOS' | 'KRAFT_CONTROLLER' | undefined;
+}
+
+export interface SimTraceBundle {
+  version: string;
+  exportedAt: number;
+  clusterId: string;
+  name?: string | undefined;
+  description?: string | undefined;
+  initialState: KafkaClusterState;
+  events: SimEventLog[];
+  metadata?: {
+    totalTicks: number;
+    totalEvents: number;
+    generator?: string | undefined;
+    seed?: number | undefined;
+  } | undefined;
+}
+
+export interface ScenarioDefinition {
+  id: string;
+  title: string;
+  badge: string;
+  description: string;
+  steps: string[];
+  actionLabel: string;
+  initialState?: KafkaClusterState | undefined;
+  events?: SimEventLog[] | undefined;
+  tags?: string[] | undefined;
+}
+
+export interface InvariantViolationReport {
+  invariantName: string;
+  description: string;
+  stepIndex: number;
+  tick: number;
+  affectedEntities: string[];
+  details?: Record<string, unknown> | undefined;
 }
