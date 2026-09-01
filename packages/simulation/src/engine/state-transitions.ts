@@ -164,18 +164,35 @@ function triggerLeaderElectionForCrashedBroker(
     if (!partitions) continue;
 
     for (const partition of partitions) {
-      if (partition.leaderBrokerId === crashedBrokerId) {
-        // Elect new leader from ISR (excluding crashed broker)
-        const activeIsr = partition.isr.filter(
+      // Shrink ISR and update replica sync state for any crashed broker
+      if (partition.isr.includes(crashedBrokerId)) {
+        partition.isr = partition.isr.filter(
           (id) => id !== crashedBrokerId && state.brokers[id]?.status === 'ALIVE',
         );
+        const crashedReplica = partition.replicas.find((r) => r.brokerId === crashedBrokerId);
+        if (crashedReplica) {
+          crashedReplica.isInSync = false;
+        }
+        emittedEvents.push({
+          id: `isr-shrink-${topicName}-${String(partition.partition)}-${String(tick)}`,
+          tick,
+          type: 'ISR_CHANGED',
+          payload: {
+            topic: topicName,
+            partition: partition.partition,
+            isr: partition.isr,
+            reason: 'Follower broker crashed',
+          },
+        });
+      }
 
+      if (partition.leaderBrokerId === crashedBrokerId) {
+        // Elect new leader from remaining active ISR
+        const activeIsr = partition.isr;
         const newLeader = activeIsr[0];
         if (activeIsr.length > 0 && newLeader !== undefined) {
           partition.leaderBrokerId = newLeader;
           partition.leaderEpoch += 1;
-          // Shrink ISR to exclude crashed broker
-          partition.isr = activeIsr;
 
           emittedEvents.push({
             id: `elect-${topicName}-${String(partition.partition)}-${String(tick)}`,
