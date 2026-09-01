@@ -14,11 +14,13 @@ export interface ScenarioDefinition {
 
 interface ScenarioRunnerProps {
   onRunScenario: (scenarioId: string) => void;
+  onOpenTraceImport?: () => void;
   onClose: () => void;
 }
 
 export function ScenarioRunner({
   onRunScenario,
+  onOpenTraceImport,
   onClose,
 }: ScenarioRunnerProps): React.JSX.Element {
   const scenarios: {
@@ -78,9 +80,24 @@ export function ScenarioRunner({
             <span className="inspector-badge inspector-badge--primary">EDUCATIONAL PLAYBOOKS</span>
             <h2 className="scenario-modal__title">Interactive Kafka Scenarios</h2>
           </div>
-          <button onClick={onClose} className="inspector-close-btn" aria-label="Close modal">
-            ✕
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onOpenTraceImport && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenTraceImport();
+                }}
+                className="btn btn--secondary"
+                style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+              >
+                📥 Import Trace File
+              </button>
+            )}
+            <button onClick={onClose} className="inspector-close-btn" aria-label="Close modal">
+              ✕
+            </button>
+          </div>
         </header>
 
         <div className="scenario-grid">

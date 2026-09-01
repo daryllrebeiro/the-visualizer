@@ -14,6 +14,60 @@ import {
 import { type ConnectionStatus, type EntityRef, type EventLogItem, WebSocketClient } from './ws-client';
 import { EntityInspector, type InspectableEntity } from '../components/inspector/EntityInspector';
 import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
+import { TraceImportModal } from '../components/scenarios/TraceImportModal';
+import { RaftVisualizer } from '../components/raft/RaftVisualizer';
+import { HashRingVisualizer } from '../components/database/HashRingVisualizer';
+import { RedisClusterVisualizer } from '../components/redis/RedisClusterVisualizer';
+import { K8sClusterVisualizer } from '../components/kubernetes/K8sClusterVisualizer';
+import { RabbitMQVisualizer } from '../components/rabbitmq/RabbitMQVisualizer';
+import { StorageEngineVisualizer } from '../components/storage/StorageEngineVisualizer';
+import { NetworkingVisualizer } from '../components/networking/NetworkingVisualizer';
+import { DomainDirectoryModal } from '../components/domains/DomainDirectoryModal';
+import {
+  SimulationReconstitutor,
+  type ReconstitutedStepMetadata,
+  type ParsedTraceResult,
+  type InvariantViolationReport,
+  createDefaultRaftCluster,
+  pureRaftTransition,
+  RaftInvariantChecker,
+  type RaftClusterState,
+  type RaftSimEvent,
+  createDefaultDBCluster,
+  pureDBTransition,
+  DBInvariantChecker,
+  type DBClusterState,
+  type DBSimEvent,
+  type ConsistencyLevel,
+  createDefaultRedisCluster,
+  pureRedisTransition,
+  RedisInvariantChecker,
+  type RedisClusterState,
+  type RedisSimEvent,
+  type EvictionPolicy,
+  createDefaultK8sCluster,
+  pureK8sTransition,
+  K8sInvariantChecker,
+  type K8sClusterState,
+  type K8sSimEvent,
+  createDefaultRabbitCluster,
+  pureRabbitTransition,
+  RabbitInvariantChecker,
+  type RabbitClusterState,
+  type RabbitSimEvent,
+  createDefaultStorageCluster,
+  pureStorageTransition,
+  StorageInvariantChecker,
+  type StorageEngineClusterState,
+  type StorageSimEvent,
+  type StorageEngineType,
+  createDefaultNetworkingCluster,
+  pureNetworkingTransition,
+  NetworkInvariantChecker,
+  type NetworkingClusterState,
+  type NetworkSimEvent,
+  DeterministicRNG,
+} from '@the-visualizer/simulation';
 
 /* ─── helpers ─── */
 function statusDotClass(s: ConnectionStatus): string {
@@ -97,10 +151,134 @@ export default function Page(): React.JSX.Element {
 
   const [inspectEntity, setInspectEntity] = useState<InspectableEntity | null>(null);
   const [showScenariosModal, setShowScenariosModal] = useState(false);
+  const [showTraceImportModal, setShowTraceImportModal] = useState(false);
+  const [showDomainDirectoryModal, setShowDomainDirectoryModal] = useState(false);
+
+  // Multi-Domain State
+  const [selectedDomain, setSelectedDomain] = useState<'kafka' | 'raft' | 'database' | 'redis' | 'kubernetes' | 'rabbitmq' | 'storage' | 'networking'>('kafka');
+  const [raftState, setRaftState] = useState<RaftClusterState>(() => createDefaultRaftCluster('raft-1', 5, 42));
+  const raftRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const raftInvariantCheckerRef = useRef<RaftInvariantChecker>(new RaftInvariantChecker());
+
+  const [dbState, setDbState] = useState<DBClusterState>(() => createDefaultDBCluster('db-1', 4, 3));
+  const dbRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const dbInvariantCheckerRef = useRef<DBInvariantChecker>(new DBInvariantChecker());
+
+  const [redisState, setRedisState] = useState<RedisClusterState>(() => createDefaultRedisCluster());
+  const redisRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const redisInvariantCheckerRef = useRef<RedisInvariantChecker>(new RedisInvariantChecker());
+
+  const [k8sState, setK8sState] = useState<K8sClusterState>(() => createDefaultK8sCluster());
+  const k8sRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const k8sInvariantCheckerRef = useRef<K8sInvariantChecker>(new K8sInvariantChecker());
+
+  const [rabbitState, setRabbitState] = useState<RabbitClusterState>(() => createDefaultRabbitCluster());
+  const rabbitRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const rabbitInvariantCheckerRef = useRef<RabbitInvariantChecker>(new RabbitInvariantChecker());
+
+  const [storageState, setStorageState] = useState<StorageEngineClusterState>(() => createDefaultStorageCluster());
+  const storageRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const storageInvariantCheckerRef = useRef<StorageInvariantChecker>(new StorageInvariantChecker());
+
+  const [networkingState, setNetworkingState] = useState<NetworkingClusterState>(() => createDefaultNetworkingCluster());
+  const networkingRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const networkingInvariantCheckerRef = useRef<NetworkInvariantChecker>(new NetworkInvariantChecker());
+
+  // Offline Reconstitution State
+  const [isOfflineReconstituted, setIsOfflineReconstituted] = useState(false);
+  const [reconstitutedTimeline, setReconstitutedTimeline] = useState<readonly ReconstitutedStepMetadata[]>([]);
+  const [reconstitutedViolations, setReconstitutedViolations] = useState<readonly InvariantViolationReport[]>([]);
+  const [currentReconstitutedStep, setCurrentReconstitutedStep] = useState(0);
+  const reconstitutorRef = useRef<SimulationReconstitutor | null>(null);
 
   const clientRef = useRef<WebSocketClient | null>(null);
 
   useEffect(() => { void handleSandboxLogin(); }, []);
+
+  // Raft Consensus Simulation Loop
+  useEffect(() => {
+    if (selectedDomain !== 'raft' || isPaused) return;
+    const interval = setInterval(() => {
+      setRaftState((prev) => {
+        const ev: RaftSimEvent = {
+          id: `tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'RAFT_TICK',
+          payload: {},
+        };
+        let res = pureRaftTransition(prev, ev, raftRngRef.current);
+        const pending = [...res.emittedEvents];
+        while (pending.length > 0) {
+          const nextEv = pending.shift();
+          if (!nextEv) break;
+          const subRes = pureRaftTransition(res.nextState, nextEv, raftRngRef.current);
+          res = { nextState: subRes.nextState, emittedEvents: [] };
+          pending.push(...subRes.emittedEvents);
+        }
+        const violation = raftInvariantCheckerRef.current.check(res.nextState);
+        if (violation) {
+          setIsHalted(true);
+          setHaltError(`[Raft ${violation.ruleId}] ${violation.description}`);
+        }
+        return res.nextState;
+      });
+    }, 150);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // Redis Simulation Loop (TTL Expirations)
+  useEffect(() => {
+    if (selectedDomain !== 'redis' || isPaused) return;
+    const interval = setInterval(() => {
+      setRedisState((prev) => {
+        const ev: RedisSimEvent = {
+          id: `redis-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'REDIS_TICK',
+          payload: {},
+        };
+        const res = pureRedisTransition(prev, ev, redisRngRef.current);
+        return res.nextState;
+      });
+    }, 500);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // RabbitMQ Simulation Loop (Message TTL Expirations)
+  useEffect(() => {
+    if (selectedDomain !== 'rabbitmq' || isPaused) return;
+    const interval = setInterval(() => {
+      setRabbitState((prev) => {
+        const ev: RabbitSimEvent = {
+          id: `rabbit-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'RABBIT_TICK',
+          payload: {},
+        };
+        const res = pureRabbitTransition(prev, ev, rabbitRngRef.current);
+        return res.nextState;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // Networking Simulation Loop (TCP Packet Wire Propagation)
+  useEffect(() => {
+    if (selectedDomain !== 'networking' || isPaused) return;
+    const interval = setInterval(() => {
+      setNetworkingState((prev) => {
+        const ev: NetworkSimEvent = {
+          id: `net-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'TCP_TICK',
+          payload: {},
+        };
+        const res = pureNetworkingTransition(prev, ev, networkingRngRef.current);
+        return res.nextState;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
 
   useEffect(() => {
     if (!liveState) return;
@@ -709,18 +887,40 @@ export default function Page(): React.JSX.Element {
   };
 
   const handleExportTrace = (): void => {
+    if (isOfflineReconstituted && reconstitutorRef.current) {
+      const bundle = reconstitutorRef.current.exportBundle();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kafka-reconstituted-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addLog(`Exported reconstituted trace bundle (${String(bundle.events.length)} events)`, 'INFO');
+      return;
+    }
+
     if (stateHistory.length === 0) {
       addLog('No state history captured yet to export.', 'WARN');
       return;
     }
     const traceBundle = {
       version: '1.0',
-      exportedAt: new Date().toISOString(),
-      clusterId: liveState?.clusterId ?? 'cluster-1',
-      stateHistory,
-      eventLogs,
-      producers,
-      consumers,
+      exportedAt: Date.now(),
+      clusterId: liveState?.clusterId ?? '00000000-0000-0000-0000-000000000001',
+      name: 'Session Live Trace',
+      description: `Live cluster execution captured across ${String(stateHistory.length)} snapshots`,
+      initialState: stateHistory[0],
+      events: eventLogs.map((e, idx) => ({
+        id: e.id,
+        tick: e.tick ?? idx,
+        type: e.type as any,
+        payload: { message: e.message },
+      })),
+      metadata: {
+        totalTicks: stateHistory[stateHistory.length - 1]?.tick ?? 0,
+        totalEvents: eventLogs.length,
+      },
     };
     const blob = new Blob([JSON.stringify(traceBundle, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -729,7 +929,690 @@ export default function Page(): React.JSX.Element {
     a.download = `kafka-visualizer-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    addLog(`Exported deterministic cluster timeline trace (${String(stateHistory.length)} snapshots)`, 'INFO');
+    addLog(`Exported deterministic cluster trace bundle (${String(stateHistory.length)} snapshots)`, 'INFO');
+  };
+
+  const handleLoadReconstitutedTrace = (parsed: ParsedTraceResult, rawJson: string): void => {
+    try {
+      const reconstitutor = new SimulationReconstitutor();
+      reconstitutor.loadTrace(rawJson || parsed);
+      reconstitutorRef.current = reconstitutor;
+
+      setIsOfflineReconstituted(true);
+      setIsPaused(true);
+      setCurrentReconstitutedStep(0);
+      setReconstitutedTimeline(reconstitutor.getTimelineSteps());
+      setReconstitutedViolations(reconstitutor.getViolations());
+
+      const init = reconstitutor.currentState;
+      setRenderedState((init as unknown) as KafkaClusterState);
+      setLiveState((init as unknown) as KafkaClusterState);
+      setPlaybackTick(reconstitutor.currentTick);
+
+      const logs: EventLogItem[] = reconstitutor.getTimelineSteps().map((s) => ({
+        id: `rec-${s.stepIndex}`,
+        tick: s.tick,
+        type: s.eventType as any,
+        message: s.summary,
+        timestamp: Date.now() - (reconstitutor.totalSteps - s.stepIndex) * 1000,
+        source: 'SYSTEM' as const,
+      }));
+      setEventLogs(logs.reverse());
+      addLog(
+        `Loaded Reconstituted Trace: ${String(reconstitutor.totalSteps)} events, ${String(reconstitutor.getViolations().length)} invariant violations`,
+        'SUCCESS',
+      );
+    } catch (err) {
+      addLog(`Failed to reconstitute trace: ${(err as Error).message}`, 'ERROR');
+    }
+  };
+
+  const handleReconstitutionStepForward = (): void => {
+    if (!reconstitutorRef.current) return;
+    const res = reconstitutorRef.current.stepForward();
+    if (res) {
+      setCurrentReconstitutedStep(res.stepIndex);
+      setRenderedState((res.state as unknown) as KafkaClusterState);
+      setLiveState((res.state as unknown) as KafkaClusterState);
+      setPlaybackTick(res.tick);
+      if (res.violation) {
+        setIsHalted(true);
+        setHaltError(`[Reconstitution Step ${res.stepIndex}] ${res.violation.invariantName}: ${res.violation.description}`);
+      }
+    }
+  };
+
+  const handleReconstitutionStepBackward = (): void => {
+    if (!reconstitutorRef.current) return;
+    const res = reconstitutorRef.current.stepBackward();
+    if (res) {
+      setCurrentReconstitutedStep(res.stepIndex);
+      setRenderedState((res.state as unknown) as KafkaClusterState);
+      setLiveState((res.state as unknown) as KafkaClusterState);
+      setPlaybackTick(res.tick);
+      setIsHalted(false);
+      setHaltError(null);
+    }
+  };
+
+  const handleReconstitutionSeek = (stepIndex: number): void => {
+    if (!reconstitutorRef.current) return;
+    const state = reconstitutorRef.current.seekToStep(stepIndex);
+    setCurrentReconstitutedStep(stepIndex);
+    setRenderedState((state as unknown) as KafkaClusterState);
+    setLiveState((state as unknown) as KafkaClusterState);
+    setPlaybackTick(reconstitutorRef.current.currentTick);
+    const meta = reconstitutorRef.current.getTimelineSteps()[stepIndex];
+    if (meta?.violation) {
+      setIsHalted(true);
+      setHaltError(`[Step ${stepIndex}] ${meta.violation.invariantName}: ${meta.violation.description}`);
+    } else {
+      setIsHalted(false);
+      setHaltError(null);
+    }
+  };
+
+  const handleExitOfflineReplay = (): void => {
+    setIsOfflineReconstituted(false);
+    reconstitutorRef.current = null;
+    setReconstitutedTimeline([]);
+    setReconstitutedViolations([]);
+    setCurrentReconstitutedStep(0);
+    setIsHalted(false);
+    setHaltError(null);
+    addLog('Exited offline reconstitution replay mode.', 'INFO');
+  };
+
+  /* ── Raft Domain Handlers ── */
+  const handleRaftProposeCommand = (command: string): void => {
+    setRaftState((prev) => {
+      const ev: RaftSimEvent = {
+        id: `prop-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RAFT_CLIENT_PROPOSE',
+        payload: { command },
+      };
+      const res = pureRaftTransition(prev, ev, raftRngRef.current);
+      addLog(`[Raft] Propose Write: ${command} to Leader #${prev.activeLeaderId ?? 'None'}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleRaftCrashNode = (nodeId: string): void => {
+    setRaftState((prev) => {
+      const ev: RaftSimEvent = {
+        id: `crash-${nodeId}-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RAFT_NODE_CRASH',
+        payload: { nodeId },
+      };
+      const res = pureRaftTransition(prev, ev, raftRngRef.current);
+      addLog(`[Raft] Chaos: Node #${nodeId} CRASHED`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleRaftRecoverNode = (nodeId: string): void => {
+    setRaftState((prev) => {
+      const ev: RaftSimEvent = {
+        id: `rec-${nodeId}-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RAFT_NODE_RECOVER',
+        payload: { nodeId },
+      };
+      const res = pureRaftTransition(prev, ev, raftRngRef.current);
+      addLog(`[Raft] Recover: Node #${nodeId} restored as Follower`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleRaftTogglePartition = (nodeId: string): void => {
+    setRaftState((prev) => {
+      const isIso = prev.isolatedNodeIds.includes(nodeId);
+      const newIsolated = isIso
+        ? prev.isolatedNodeIds.filter((id) => id !== nodeId)
+        : [...prev.isolatedNodeIds, nodeId];
+      const ev: RaftSimEvent = {
+        id: `part-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RAFT_NETWORK_PARTITION',
+        payload: { isolatedNodeIds: newIsolated },
+      };
+      const res = pureRaftTransition(prev, ev, raftRngRef.current);
+      addLog(`[Raft] Network Partition: Nodes [${newIsolated.join(', ')}] isolated`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  /* ── Database Domain Handlers ── */
+  const handleDBWriteKey = (key: string, value: string, consistency: ConsistencyLevel): void => {
+    setDbState((prev) => {
+      const ev: DBSimEvent = {
+        id: `db-w-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'DB_WRITE_REQUEST',
+        payload: { key, value, consistencyLevel: consistency },
+      };
+      const res = pureDBTransition(prev, ev, dbRngRef.current);
+      const violation = dbInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[DB ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[DB] Write "${key}" = "${value}" (W=${consistency})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleDBReadKey = (key: string, consistency: ConsistencyLevel): void => {
+    setDbState((prev) => {
+      const ev: DBSimEvent = {
+        id: `db-r-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'DB_READ_REQUEST',
+        payload: { key, consistencyLevel: consistency },
+      };
+      let res = pureDBTransition(prev, ev, dbRngRef.current);
+      for (const emitted of res.emittedEvents) {
+        if (emitted.type === 'DB_READ_REPAIR') {
+          res = pureDBTransition(res.nextState, emitted, dbRngRef.current);
+          addLog(`[DB Read-Repair] Reconciled stale replicas for "${key}"`, 'SUCCESS');
+        }
+      }
+      const violation = dbInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[DB ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[DB] Read "${key}" (R=${consistency})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleDBAddNode = (): void => {
+    setDbState((prev) => {
+      const nextId = String(Object.keys(prev.nodes).length + 1);
+      const ev: DBSimEvent = {
+        id: `db-join-${nextId}`,
+        tick: prev.tick + 1,
+        type: 'DB_NODE_JOIN',
+        payload: { nodeId: nextId },
+      };
+      const res = pureDBTransition(prev, ev, dbRngRef.current);
+      const violation = dbInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[DB ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[DB Scale-Out] Added Node #${nextId} (3 vnodes allocated)`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleDBCrashNode = (nodeId: string): void => {
+    setDbState((prev) => {
+      const ev: DBSimEvent = {
+        id: `db-crash-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'DB_NODE_CRASH',
+        payload: { nodeId },
+      };
+      const res = pureDBTransition(prev, ev, dbRngRef.current);
+      const violation = dbInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[DB ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[DB Chaos] Node #${nodeId} is DOWN`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleDBRecoverNode = (nodeId: string): void => {
+    setDbState((prev) => {
+      const ev: DBSimEvent = {
+        id: `db-rec-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'DB_NODE_RECOVER',
+        payload: { nodeId },
+      };
+      let res = pureDBTransition(prev, ev, dbRngRef.current);
+      for (const emitted of res.emittedEvents) {
+        if (emitted.type === 'DB_HINT_DELIVER') {
+          res = pureDBTransition(res.nextState, emitted, dbRngRef.current);
+          addLog(`[DB Hint Delivery] Flushed pending hinted handoffs to Node #${nodeId}`, 'SUCCESS');
+        }
+      }
+      const violation = dbInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[DB ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[DB Recovery] Node #${nodeId} restored to ALIVE`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleDBUpdateConsistency = (read: ConsistencyLevel, write: ConsistencyLevel): void => {
+    setDbState((prev) => {
+      const ev: DBSimEvent = {
+        id: `db-upd-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'DB_UPDATE_CONSISTENCY',
+        payload: { readConsistency: read, writeConsistency: write },
+      };
+      const res = pureDBTransition(prev, ev, dbRngRef.current);
+      addLog(`[DB Config] Updated Consistency -> Read: ${read}, Write: ${write}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  /* ── Redis Domain Handlers ── */
+  const handleRedisSetKey = (key: string, value: string, ttl: number | null, targetNodeId?: string): void => {
+    setRedisState((prev) => {
+      const ev: RedisSimEvent = {
+        id: `redis-set-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'REDIS_SET',
+        payload: { key, value, ttl, clientTargetNodeId: targetNodeId },
+      };
+      const res = pureRedisTransition(prev, ev, redisRngRef.current);
+      for (const emitted of res.emittedEvents) {
+        if (emitted.type === 'REDIS_MOVED_REDIRECT') {
+          addLog(`[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Redirect to Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+        } else if (emitted.type === 'REDIS_ASK_REDIRECT') {
+          addLog(`[Redis -ASK] Slot ${String(emitted.payload['slot'])} (Migrating) -> Query Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+        }
+      }
+      const violation = redisInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[Redis ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[Redis] SET "${key}" = "${value}"`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleRedisGetKey = (key: string, targetNodeId?: string): void => {
+    setRedisState((prev) => {
+      const ev: RedisSimEvent = {
+        id: `redis-get-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'REDIS_GET',
+        payload: { key, clientTargetNodeId: targetNodeId },
+      };
+      const res = pureRedisTransition(prev, ev, redisRngRef.current);
+      for (const emitted of res.emittedEvents) {
+        if (emitted.type === 'REDIS_MOVED_REDIRECT') {
+          addLog(`[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Redirect to Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+        }
+      }
+      addLog(`[Redis] GET "${key}"`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleRedisDelKey = (key: string): void => {
+    setRedisState((prev) => {
+      const ev: RedisSimEvent = {
+        id: `redis-del-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'REDIS_DEL',
+        payload: { key },
+      };
+      const res = pureRedisTransition(prev, ev, redisRngRef.current);
+      addLog(`[Redis] DEL "${key}"`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleRedisReshard = (sourceMasterId: string, targetMasterId: string, startSlot: number, endSlot: number): void => {
+    setRedisState((prev) => {
+      const ev: RedisSimEvent = {
+        id: `redis-reshard-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'REDIS_RESHARD',
+        payload: { sourceMasterId, targetMasterId, startSlot, endSlot },
+      };
+      const res = pureRedisTransition(prev, ev, redisRngRef.current);
+      addLog(`[Redis Reshard] Moved Slots ${startSlot}-${endSlot} from Node #${sourceMasterId} to Node #${targetMasterId}`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleRedisCrashNode = (nodeId: string): void => {
+    setRedisState((prev) => {
+      const ev: RedisSimEvent = {
+        id: `redis-crash-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'REDIS_NODE_CRASH',
+        payload: { nodeId },
+      };
+      let res = pureRedisTransition(prev, ev, redisRngRef.current);
+      for (const emitted of res.emittedEvents) {
+        if (emitted.type === 'REDIS_FAILOVER') {
+          res = pureRedisTransition(res.nextState, emitted, redisRngRef.current);
+          addLog(`[Redis Failover] Replica promoted to Master for crashed Node #${nodeId}`, 'SUCCESS');
+        }
+      }
+      addLog(`[Redis Chaos] Node #${nodeId} crashed`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleRedisRecoverNode = (nodeId: string): void => {
+    setRedisState((prev) => {
+      const ev: RedisSimEvent = {
+        id: `redis-rec-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'REDIS_NODE_RECOVER',
+        payload: { nodeId },
+      };
+      const res = pureRedisTransition(prev, ev, redisRngRef.current);
+      addLog(`[Redis Recovery] Node #${nodeId} recovered`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleRedisSetEvictionPolicy = (policy: EvictionPolicy): void => {
+    setRedisState((prev) => {
+      const ev: RedisSimEvent = {
+        id: `redis-policy-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'REDIS_SET_EVICTION_POLICY',
+        payload: { policy },
+      };
+      const res = pureRedisTransition(prev, ev, redisRngRef.current);
+      addLog(`[Redis Config] Eviction Policy set to "${policy}"`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  /* ── Kubernetes Domain Handlers ── */
+  const handleK8sScaleDeployment = (deploymentId: string, replicas: number): void => {
+    setK8sState((prev) => {
+      const ev: K8sSimEvent = {
+        id: `k8s-scale-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'K8S_SCALE_DEPLOYMENT',
+        payload: { deploymentId, replicas },
+      };
+      const res = pureK8sTransition(prev, ev, k8sRngRef.current);
+      const violation = k8sInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[K8s ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[K8s Scale] Deployment "${deploymentId}" -> ${replicas} replicas`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleK8sUpdateImage = (deploymentId: string, newImage: string): void => {
+    setK8sState((prev) => {
+      const ev: K8sSimEvent = {
+        id: `k8s-img-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'K8S_UPDATE_IMAGE',
+        payload: { deploymentId, newImage },
+      };
+      const res = pureK8sTransition(prev, ev, k8sRngRef.current);
+      const violation = k8sInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[K8s ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[K8s Rollout] Initiated rolling update for "${deploymentId}" to "${newImage}"`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleK8sNodeCordon = (nodeId: string): void => {
+    setK8sState((prev) => {
+      const ev: K8sSimEvent = {
+        id: `k8s-cordon-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'K8S_NODE_CORDON',
+        payload: { nodeId },
+      };
+      const res = pureK8sTransition(prev, ev, k8sRngRef.current);
+      addLog(`[K8s Admin] Node #${nodeId} scheduling toggled`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleK8sNodeDrain = (nodeId: string): void => {
+    setK8sState((prev) => {
+      const ev: K8sSimEvent = {
+        id: `k8s-drain-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'K8S_NODE_DRAIN',
+        payload: { nodeId },
+      };
+      const res = pureK8sTransition(prev, ev, k8sRngRef.current);
+      addLog(`[K8s Drain] Evicted active workloads from Node #${nodeId}`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleK8sNodeCrash = (nodeId: string): void => {
+    setK8sState((prev) => {
+      const ev: K8sSimEvent = {
+        id: `k8s-crash-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'K8S_NODE_CRASH',
+        payload: { nodeId },
+      };
+      const res = pureK8sTransition(prev, ev, k8sRngRef.current);
+      addLog(`[K8s Chaos] Node #${nodeId} is NotReady`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleK8sNodeRecover = (nodeId: string): void => {
+    setK8sState((prev) => {
+      const ev: K8sSimEvent = {
+        id: `k8s-rec-${nodeId}`,
+        tick: prev.tick + 1,
+        type: 'K8S_NODE_RECOVER',
+        payload: { nodeId },
+      };
+      const res = pureK8sTransition(prev, ev, k8sRngRef.current);
+      addLog(`[K8s Recovery] Node #${nodeId} is Ready`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  /* ── RabbitMQ Domain Handlers ── */
+  const handleRabbitPublish = (exchangeName: string, routingKey: string, payload: string, ttl: number | null): void => {
+    setRabbitState((prev) => {
+      const ev: RabbitSimEvent = {
+        id: `rabbit-pub-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RABBIT_PUBLISH',
+        payload: { exchangeName, routingKey, payload, ttl },
+      };
+      const res = pureRabbitTransition(prev, ev, rabbitRngRef.current);
+      const violation = rabbitInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[RabbitMQ ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[RabbitMQ Publish] "${routingKey}" via ${exchangeName}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleRabbitAck = (messageId: string, consumerId: string): void => {
+    setRabbitState((prev) => {
+      const ev: RabbitSimEvent = {
+        id: `rabbit-ack-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RABBIT_ACK',
+        payload: { messageId, consumerId },
+      };
+      const res = pureRabbitTransition(prev, ev, rabbitRngRef.current);
+      addLog(`[RabbitMQ Ack] Message ${messageId} acknowledged by ${consumerId}`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleRabbitNack = (messageId: string, consumerId: string, requeue: boolean): void => {
+    setRabbitState((prev) => {
+      const ev: RabbitSimEvent = {
+        id: `rabbit-nack-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RABBIT_NACK',
+        payload: { messageId, consumerId, requeue },
+      };
+      const res = pureRabbitTransition(prev, ev, rabbitRngRef.current);
+      addLog(`[RabbitMQ Nack] Message ${messageId} (requeue=${String(requeue)})`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleRabbitReject = (messageId: string, consumerId: string): void => {
+    setRabbitState((prev) => {
+      const ev: RabbitSimEvent = {
+        id: `rabbit-rej-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RABBIT_REJECT',
+        payload: { messageId, consumerId, requeue: false },
+      };
+      const res = pureRabbitTransition(prev, ev, rabbitRngRef.current);
+      for (const emitted of res.emittedEvents) {
+        if (emitted.type === 'RABBIT_MESSAGE_DEAD_LETTERED') {
+          addLog(`[RabbitMQ DLX] Poison message routed to Dead-Letter Queue`, 'WARN');
+        }
+      }
+      addLog(`[RabbitMQ Reject] Message ${messageId} rejected to DLX`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  /* ── Storage Engine Domain Handlers ── */
+  const handleStorageWrite = (key: number, value: string): void => {
+    setStorageState((prev) => {
+      const ev: StorageSimEvent = {
+        id: `storage-w-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'STORAGE_WRITE',
+        payload: { key, value },
+      };
+      const res = pureStorageTransition(prev, ev, storageRngRef.current);
+      const violation = storageInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[Storage ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[Storage Write] Key #${key} -> "${value}" (${res.nextState.activeEngine})`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleStorageRead = (key: number): void => {
+    setStorageState((prev) => {
+      const ev: StorageSimEvent = {
+        id: `storage-r-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'STORAGE_READ',
+        payload: { key },
+      };
+      const res = pureStorageTransition(prev, ev, storageRngRef.current);
+      addLog(`[Storage Read] Lookup key #${key} (${res.nextState.activeEngine})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleStorageSwitchEngine = (engine: StorageEngineType): void => {
+    setStorageState((prev) => {
+      const ev: StorageSimEvent = {
+        id: `storage-sw-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'STORAGE_SWITCH_ENGINE',
+        payload: { engine },
+      };
+      const res = pureStorageTransition(prev, ev, storageRngRef.current);
+      addLog(`[Storage Switch] Active engine switched to ${engine}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleStorageTriggerFlush = (): void => {
+    setStorageState((prev) => {
+      const ev: StorageSimEvent = {
+        id: `storage-flush-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'STORAGE_TRIGGER_FLUSH',
+        payload: {},
+      };
+      const res = pureStorageTransition(prev, ev, storageRngRef.current);
+      addLog(`[Storage LSM] Flushed MemTable to Level 0 SSTable`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleStorageTriggerCompaction = (level: number): void => {
+    setStorageState((prev) => {
+      const ev: StorageSimEvent = {
+        id: `storage-compact-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'STORAGE_TRIGGER_COMPACTION',
+        payload: { level },
+      };
+      const res = pureStorageTransition(prev, ev, storageRngRef.current);
+      addLog(`[Storage LSM] Merged Level ${level} SSTables into Level ${level + 1}`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  /* ── Networking Domain Handlers ── */
+  const handleNetworkingStartHandshake = (): void => {
+    setNetworkingState((prev) => {
+      const ev: NetworkSimEvent = {
+        id: `net-syn-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TCP_START_HANDSHAKE',
+        payload: {},
+      };
+      const res = pureNetworkingTransition(prev, ev, networkingRngRef.current);
+      const violation = networkingInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[Networking ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[TCP Handshake] Client sent SYN packet (seq=${res.nextState.clientSeqNumber})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleNetworkingSendData = (): void => {
+    setNetworkingState((prev) => {
+      const ev: NetworkSimEvent = {
+        id: `net-data-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TCP_SEND_DATA',
+        payload: {},
+      };
+      const res = pureNetworkingTransition(prev, ev, networkingRngRef.current);
+      addLog(`[TCP Data] Transmitted payload packet across wire`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleNetworkingDropPacket = (): void => {
+    setNetworkingState((prev) => {
+      const ev: NetworkSimEvent = {
+        id: `net-drop-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TCP_DROP_PACKET',
+        payload: {},
+      };
+      const res = pureNetworkingTransition(prev, ev, networkingRngRef.current);
+      addLog(`[TCP Packet Loss] In-flight packet dropped! AIMD cwnd reset to 1`, 'WARN');
+      return res.nextState;
+    });
   };
 
   const handleImportTrace = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -811,6 +1694,126 @@ export default function Page(): React.JSX.Element {
           <span className={statusDotClass(status)} />
           <h1 className="header-brand-title">TheVisualizer</h1>
           <span className={statusBadgeClass(status)}>{status}</span>
+
+          {/* Multi-Domain Switcher */}
+          <div style={{ display: 'flex', gap: '4px', backgroundColor: '#1e293b', padding: '3px', borderRadius: '6px', marginLeft: '12px' }}>
+            <button
+              onClick={() => setSelectedDomain('kafka')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'kafka' ? '#6366f1' : 'transparent',
+                color: selectedDomain === 'kafka' ? '#ffffff' : '#94a3b8',
+                fontWeight: selectedDomain === 'kafka' ? 700 : 500,
+              }}
+            >
+              ⚡ Apache Kafka
+            </button>
+            <button
+              onClick={() => setSelectedDomain('raft')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'raft' ? '#eab308' : 'transparent',
+                color: selectedDomain === 'raft' ? '#000000' : '#94a3b8',
+                fontWeight: selectedDomain === 'raft' ? 700 : 500,
+              }}
+            >
+              🛡️ Raft Consensus
+            </button>
+            <button
+              onClick={() => setSelectedDomain('database')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'database' ? '#10b981' : 'transparent',
+                color: selectedDomain === 'database' ? '#ffffff' : '#94a3b8',
+                fontWeight: selectedDomain === 'database' ? 700 : 500,
+              }}
+            >
+              🗄️ Distributed DB
+            </button>
+            <button
+              onClick={() => setSelectedDomain('redis')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'redis' ? '#ef4444' : 'transparent',
+                color: selectedDomain === 'redis' ? '#ffffff' : '#94a3b8',
+                fontWeight: selectedDomain === 'redis' ? 700 : 500,
+              }}
+            >
+              ⚡ Redis Cluster
+            </button>
+            <button
+              onClick={() => setSelectedDomain('kubernetes')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'kubernetes' ? '#3b82f6' : 'transparent',
+                color: selectedDomain === 'kubernetes' ? '#ffffff' : '#94a3b8',
+                fontWeight: selectedDomain === 'kubernetes' ? 700 : 500,
+              }}
+            >
+              ☸️ Kubernetes
+            </button>
+            <button
+              onClick={() => setSelectedDomain('rabbitmq')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'rabbitmq' ? '#f97316' : 'transparent',
+                color: selectedDomain === 'rabbitmq' ? '#ffffff' : '#94a3b8',
+                fontWeight: selectedDomain === 'rabbitmq' ? 700 : 500,
+              }}
+            >
+              🐇 RabbitMQ
+            </button>
+            <button
+              onClick={() => setSelectedDomain('storage')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'storage' ? '#14b8a6' : 'transparent',
+                color: selectedDomain === 'storage' ? '#ffffff' : '#94a3b8',
+                fontWeight: selectedDomain === 'storage' ? 700 : 500,
+              }}
+            >
+              💾 Storage Engine
+            </button>
+            <button
+              onClick={() => setSelectedDomain('networking')}
+              className="btn btn--ghost"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                backgroundColor: selectedDomain === 'networking' ? '#06b6d4' : 'transparent',
+                color: selectedDomain === 'networking' ? '#ffffff' : '#94a3b8',
+                fontWeight: selectedDomain === 'networking' ? 700 : 500,
+              }}
+            >
+              🌐 TCP Networking
+            </button>
+            <button
+              onClick={() => setShowDomainDirectoryModal(true)}
+              className="btn btn--indigo"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                marginLeft: '4px',
+              }}
+            >
+              🌐 Explore Domains
+            </button>
+          </div>
         </div>
 
         <div className="header-right">
@@ -860,6 +1863,14 @@ export default function Page(): React.JSX.Element {
 
             <button onClick={() => setShowScenariosModal(true)} className="btn btn--indigo">
               🎓 Scenarios
+            </button>
+
+            <button
+              onClick={() => setShowTraceImportModal(true)}
+              className="btn btn--secondary"
+              title="Ingest serialized JSON event log for offline deterministic replay"
+            >
+              📥 Ingest Trace
             </button>
 
             <button onClick={() => { void handleSandboxLogin(); }} className="btn btn--ghost">
@@ -1302,7 +2313,118 @@ export default function Page(): React.JSX.Element {
               </label>
             </div>
 
-            {isPaused && stateHistory.length > 1 && (
+            {isOfflineReconstituted && (
+              <div
+                style={{
+                  marginTop: '12px',
+                  padding: '10px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#818cf8' }}>
+                    📼 RECONSTITUTION CONTROLLER
+                  </span>
+                  <button
+                    onClick={handleExitOfflineReplay}
+                    className="btn btn--ghost"
+                    style={{ fontSize: '10px', padding: '2px 6px', color: '#f43f5e' }}
+                  >
+                    Exit Replay
+                  </button>
+                </div>
+
+                <div style={{ fontSize: '11px', color: '#cbd5e1' }}>
+                  Step <strong>{currentReconstitutedStep}</strong> / {reconstitutedTimeline.length - 1} · Tick {playbackTick}
+                </div>
+
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    onClick={() => handleReconstitutionSeek(0)}
+                    className="btn btn--ghost"
+                    style={{ flex: 1, padding: '4px', fontSize: '11px' }}
+                    title="Jump to beginning"
+                  >
+                    ⇤ Start
+                  </button>
+                  <button
+                    onClick={handleReconstitutionStepBackward}
+                    disabled={currentReconstitutedStep <= 0}
+                    className="btn btn--secondary"
+                    style={{ flex: 1, padding: '4px', fontSize: '11px' }}
+                    title="Step backward one event"
+                  >
+                    ◀ Step
+                  </button>
+                  <button
+                    onClick={handleReconstitutionStepForward}
+                    disabled={currentReconstitutedStep >= (reconstitutorRef.current?.totalSteps ?? 0)}
+                    className="btn btn--primary"
+                    style={{ flex: 1, padding: '4px', fontSize: '11px' }}
+                    title="Step forward one event"
+                  >
+                    Step ▶
+                  </button>
+                  <button
+                    onClick={() => handleReconstitutionSeek((reconstitutorRef.current?.totalSteps ?? 1))}
+                    className="btn btn--ghost"
+                    style={{ flex: 1, padding: '4px', fontSize: '11px' }}
+                    title="Jump to end"
+                  >
+                    End ⇥
+                  </button>
+                </div>
+
+                {reconstitutedViolations.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (reconstitutorRef.current) {
+                        const target = reconstitutorRef.current.jumpToViolation(0);
+                        if (target) {
+                          const v = reconstitutorRef.current.getViolations()[0];
+                          if (v) handleReconstitutionSeek(v.stepIndex);
+                        }
+                      }
+                    }}
+                    className="btn btn--rose"
+                    style={{ fontSize: '10px', padding: '4px' }}
+                  >
+                    ⚠️ Jump to Invariant Violation ({reconstitutedViolations.length})
+                  </button>
+                )}
+
+                <input
+                  type="range"
+                  className="scrubber-input"
+                  min={0}
+                  max={Math.max(1, (reconstitutorRef.current?.totalSteps ?? 1))}
+                  value={currentReconstitutedStep}
+                  onChange={(e) => handleReconstitutionSeek(parseInt(e.target.value, 10))}
+                />
+
+                {reconstitutedTimeline[currentReconstitutedStep] && (
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: '#94a3b8',
+                      backgroundColor: '#0f172a',
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      borderLeft: '3px solid #6366f1',
+                    }}
+                  >
+                    {reconstitutedTimeline[currentReconstitutedStep].summary}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isOfflineReconstituted && isPaused && stateHistory.length > 1 && (
               <div className="scrubber-body">
                 <hr className="scrubber-divider" />
                 <div className="scrubber-range-row">
@@ -1325,16 +2447,81 @@ export default function Page(): React.JSX.Element {
 
         {/* ── Center Canvas ── */}
         <main className="canvas-panel">
-          <Visualizer
-            state={renderedState}
-            producers={producers}
-            consumers={consumers}
-            produceTrigger={produceTrigger}
-            resetTrigger={resetCounter}
-            onHoverDetails={setHoverDetails}
-            onSelectEntity={(entity) => setInspectEntity(entity)}
-          />
-          {hoverDetails && (
+          {selectedDomain === 'kafka' ? (
+            <Visualizer
+              state={renderedState}
+              producers={producers}
+              consumers={consumers}
+              produceTrigger={produceTrigger}
+              resetTrigger={resetCounter}
+              onHoverDetails={setHoverDetails}
+              onSelectEntity={(entity) => setInspectEntity(entity)}
+            />
+          ) : selectedDomain === 'raft' ? (
+            <RaftVisualizer
+              state={raftState}
+              onProposeCommand={handleRaftProposeCommand}
+              onCrashNode={handleRaftCrashNode}
+              onRecoverNode={handleRaftRecoverNode}
+              onTogglePartition={handleRaftTogglePartition}
+            />
+          ) : selectedDomain === 'database' ? (
+            <HashRingVisualizer
+              state={dbState}
+              onWriteKey={handleDBWriteKey}
+              onReadKey={handleDBReadKey}
+              onAddNode={handleDBAddNode}
+              onCrashNode={handleDBCrashNode}
+              onRecoverNode={handleDBRecoverNode}
+              onUpdateConsistency={handleDBUpdateConsistency}
+            />
+          ) : selectedDomain === 'redis' ? (
+            <RedisClusterVisualizer
+              state={redisState}
+              onSetKey={handleRedisSetKey}
+              onGetKey={handleRedisGetKey}
+              onDelKey={handleRedisDelKey}
+              onReshard={handleRedisReshard}
+              onCrashNode={handleRedisCrashNode}
+              onRecoverNode={handleRedisRecoverNode}
+              onSetEvictionPolicy={handleRedisSetEvictionPolicy}
+            />
+          ) : selectedDomain === 'kubernetes' ? (
+            <K8sClusterVisualizer
+              state={k8sState}
+              onScaleDeployment={handleK8sScaleDeployment}
+              onUpdateImage={handleK8sUpdateImage}
+              onNodeCordon={handleK8sNodeCordon}
+              onNodeDrain={handleK8sNodeDrain}
+              onNodeCrash={handleK8sNodeCrash}
+              onNodeRecover={handleK8sNodeRecover}
+            />
+          ) : selectedDomain === 'rabbitmq' ? (
+            <RabbitMQVisualizer
+              state={rabbitState}
+              onPublish={handleRabbitPublish}
+              onAck={handleRabbitAck}
+              onNack={handleRabbitNack}
+              onReject={handleRabbitReject}
+            />
+          ) : selectedDomain === 'storage' ? (
+            <StorageEngineVisualizer
+              state={storageState}
+              onWrite={handleStorageWrite}
+              onRead={handleStorageRead}
+              onSwitchEngine={handleStorageSwitchEngine}
+              onTriggerFlush={handleStorageTriggerFlush}
+              onTriggerCompaction={handleStorageTriggerCompaction}
+            />
+          ) : (
+            <NetworkingVisualizer
+              state={networkingState}
+              onStartHandshake={handleNetworkingStartHandshake}
+              onSendData={handleNetworkingSendData}
+              onDropPacket={handleNetworkingDropPacket}
+            />
+          )}
+          {hoverDetails && selectedDomain === 'kafka' && (
             <div className="hover-tooltip">
               <p className="hover-tooltip__title">{hoverDetails.title}</p>
               {hoverDetails.subtitle && <p className="hover-tooltip__subtitle">{hoverDetails.subtitle}</p>}
@@ -1390,9 +2577,26 @@ export default function Page(): React.JSX.Element {
       {showScenariosModal && (
         <ScenarioRunner
           onRunScenario={handleRunScenario}
+          onOpenTraceImport={() => setShowTraceImportModal(true)}
           onClose={() => setShowScenariosModal(false)}
         />
       )}
+
+      {/* ── Trace Reconstitution Import Modal ── */}
+      {showTraceImportModal && (
+        <TraceImportModal
+          onLoadTrace={handleLoadReconstitutedTrace}
+          onClose={() => setShowTraceImportModal(false)}
+        />
+      )}
+
+      {/* ── Domain Directory Modal ── */}
+      <DomainDirectoryModal
+        isOpen={showDomainDirectoryModal}
+        activeDomain={selectedDomain}
+        onSelectDomain={(dom) => setSelectedDomain(dom)}
+        onClose={() => setShowDomainDirectoryModal(false)}
+      />
 
       {/* ── Halt Banner ── */}
       {isHalted && (

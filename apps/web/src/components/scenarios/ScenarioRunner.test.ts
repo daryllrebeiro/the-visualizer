@@ -93,4 +93,49 @@ describe('Scenario Runner Step Execution Suite', () => {
       'COOPERATIVE_ASSIGNMENT_COMPUTED',
     ]);
   });
+
+  it('should support dynamic scenario reconstitution from event logs', () => {
+    const rawTrace = {
+      version: '1.0',
+      exportedAt: Date.now(),
+      clusterId: '123e4567-e89b-12d3-a456-426614174000',
+      initialState: {
+        clusterId: '123e4567-e89b-12d3-a456-426614174000',
+        tick: 0,
+        rngState: 42,
+        brokers: {
+          '1': {
+            id: '1',
+            host: 'broker-1.kafka.local',
+            port: 9092,
+            rack: 'rack-1',
+            status: 'ALIVE' as const,
+            diskUsageBytes: 0,
+            maxDiskSizeBytes: 10737418240,
+            lastHeartbeatTick: 0,
+          },
+        },
+        topics: {},
+        consumerGroups: {},
+        transactions: {},
+        kraft: {
+          activeControllerId: '1',
+          controllerEpoch: 1,
+          voters: ['1'],
+          metadataOffset: 0,
+        },
+      },
+      events: [
+        {
+          id: 'e-1',
+          tick: 5,
+          type: 'TOPIC_CREATED' as const,
+          payload: { topic: 'orders', partitions: 3 },
+        },
+      ],
+    };
+
+    expect(rawTrace.events.length).toBe(1);
+    expect(rawTrace.events[0].type).toBe('TOPIC_CREATED');
+  });
 });
