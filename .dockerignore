@@ -1,0 +1,15 @@
+.git
+.github
+.agents
+.gemini
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+.turbo
+.env*.local
+*.log
+.DS_Store
+deploy-history
