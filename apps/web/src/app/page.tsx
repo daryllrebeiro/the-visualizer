@@ -51,6 +51,9 @@ import {
   type K8sClusterState,
   type K8sSimEvent,
   createDefaultBaselineState,
+  pureStateTransition,
+  InvariantChecker,
+  type SimEvent,
   createDefaultRabbitCluster,
   pureRabbitTransition,
   RabbitInvariantChecker,
@@ -99,13 +102,35 @@ const STAT_TILES = [
   { key: 'crashed', label: 'Crashed Nodes', tile: 'stat-tile stat-tile--rose', value: 'stat-tile__value stat-tile__value--rose' },
 ] as const;
 
-export default function Page(): React.JSX.Element {
+/* ─── Domain configuration ─── */
+export type DomainKey = 'kafka' | 'raft' | 'database' | 'redis' | 'kubernetes' | 'rabbitmq' | 'storage' | 'networking';
+
+export const DOMAIN_OPTIONS: ReadonlyArray<{
+  id: DomainKey;
+  name: string;
+  icon: string;
+  category: string;
+  path: string;
+  color: string;
+}> = [
+  { id: 'kafka', name: 'Apache Kafka', icon: '⚡', category: 'Streaming & KRaft', path: '/kafka', color: '#6366f1' },
+  { id: 'raft', name: 'Raft Consensus', icon: '🛡️', category: 'Leader Election & Quorum', path: '/raft', color: '#eab308' },
+  { id: 'database', name: 'Distributed DB', icon: '🗄️', category: 'Consistent Hashing & Dynamo', path: '/database', color: '#10b981' },
+  { id: 'redis', name: 'Redis Cluster', icon: '⚡', category: 'CRC16 Slots & Evictions', path: '/redis', color: '#ef4444' },
+  { id: 'kubernetes', name: 'Kubernetes', icon: '☸️', category: 'Reconciliation & Scheduling', path: '/kubernetes', color: '#3b82f6' },
+  { id: 'rabbitmq', name: 'RabbitMQ', icon: '🐇', category: 'AMQP & Dead Letter Queues', path: '/rabbitmq', color: '#f97316' },
+  { id: 'storage', name: 'Storage Engine', icon: '💾', category: 'B+ Tree vs LSM Compaction', path: '/storage', color: '#14b8a6' },
+  { id: 'networking', name: 'TCP Networking', icon: '🌐', category: '3-Way Handshake & AIMD', path: '/networking', color: '#06b6d4' },
+] as const;
+
+export default function Page({ initialDomain = 'kafka' }: { initialDomain?: DomainKey }): React.JSX.Element {
   const [restUrl, setRestUrl] = useState('http://localhost:3000');
   const [wsUrl, setWsUrl] = useState('ws://localhost:3001');
   const [roomId, setRoomId] = useState('room-1');
   const [token, setToken] = useState('');
 
   const [status, setStatus] = useState<ConnectionStatus>('DISCONNECTED');
+  const connected = status === 'CONNECTED';
   const [liveState, setLiveState] = useState<KafkaClusterState | null>(() => createDefaultBaselineState() as unknown as KafkaClusterState);
   const [renderedState, setRenderedState] = useState<KafkaClusterState | null>(() => createDefaultBaselineState() as unknown as KafkaClusterState);
   const [eventLogs, setEventLogs] = useState<EventLogItem[]>([]);
@@ -156,7 +181,11 @@ export default function Page(): React.JSX.Element {
   const [showDomainDirectoryModal, setShowDomainDirectoryModal] = useState(false);
 
   // Multi-Domain State
-  const [selectedDomain, setSelectedDomain] = useState<'kafka' | 'raft' | 'database' | 'redis' | 'kubernetes' | 'rabbitmq' | 'storage' | 'networking'>('kafka');
+  const [selectedDomain, setSelectedDomain] = useState<DomainKey>(initialDomain);
+  const [showDomainDropdown, setShowDomainDropdown] = useState(false);
+  const kafkaRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const kafkaInvariantCheckerRef = useRef<InvariantChecker>(new InvariantChecker());
+
   const [raftState, setRaftState] = useState<RaftClusterState>(() => createDefaultRaftCluster('raft-1', 5, 42));
   const raftRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const raftInvariantCheckerRef = useRef<RaftInvariantChecker>(new RaftInvariantChecker());
@@ -294,6 +323,24 @@ export default function Page(): React.JSX.Element {
     }
   }, [liveState, isPaused]);
 
+  // In-Browser Auto-Produce Loop when disconnected
+  useEffect(() => {
+    if (connected || isPaused || selectedDomain !== 'kafka' || !liveState) return;
+    const activeProducers = producers.filter((p) => p.autoProduceEnabled);
+    if (activeProducers.length === 0) return;
+
+    const intervals = activeProducers.map((prod) => {
+      const delayMs = Math.max(500, (prod.autoProduceInterval ?? 3.0) * 1000);
+      return setInterval(() => {
+        handleProduceIntent(prod.id);
+      }, delayMs);
+    });
+
+    return () => {
+      intervals.forEach((i) => clearInterval(i));
+    };
+  }, [connected, isPaused, selectedDomain, producers, liveState]);
+
   /* ── connection ── */
   const handleConnect = (): void => {
     if (clientRef.current) clientRef.current.disconnect();
@@ -415,27 +462,55 @@ export default function Page(): React.JSX.Element {
     const key = `key-${Math.random().toString(36).substring(7)}`;
     const value = `val-${Math.random().toString(36).substring(7)}`;
 
-    clientRef.current?.sendIntent('PRODUCE', {
-      topic: finalTopic,
-      partition,
-      key,
-      value,
-      acks: 1,
-    });
-    addLog(
-      `[${targetProd.id}] Dispatched: PRODUCE → ${finalTopic}/p-${String(partition)} (Broker ${leaderId})`,
-      'INFO',
-      {
-        eventType: 'RECORD_PRODUCED',
-        involvedEntities: [
-          { type: 'producer', id: targetProd.id },
-          { type: 'broker', id: leaderId },
-          { type: 'partition', id: `${finalTopic}-${String(partition)}` },
-          { type: 'topic', id: finalTopic },
-        ],
-        payload: { topic: finalTopic, partition, key, acks: 1, leaderBrokerId: leaderId },
-      },
-    );
+    if (connected && clientRef.current) {
+      clientRef.current.sendIntent('PRODUCE', {
+        topic: finalTopic,
+        partition,
+        key,
+        value,
+        acks: 1,
+      });
+      addLog(
+        `[${targetProd.id}] Dispatched: PRODUCE → ${finalTopic}/p-${String(partition)} (Broker ${leaderId})`,
+        'INFO',
+        {
+          eventType: 'RECORD_PRODUCED',
+          involvedEntities: [
+            { type: 'producer', id: targetProd.id },
+            { type: 'broker', id: leaderId },
+            { type: 'partition', id: `${finalTopic}-${String(partition)}` },
+            { type: 'topic', id: finalTopic },
+          ],
+          payload: { topic: finalTopic, partition, key, acks: 1, leaderBrokerId: leaderId },
+        },
+      );
+    } else if (liveState) {
+      const currentPartition = partitions.find((p) => p.partition === partition);
+      const nextOffset = currentPartition?.highWatermark ?? 0;
+      const ev: SimEvent = {
+        id: `prod-${Date.now()}`,
+        tick: liveState.tick + 1,
+        type: 'RECORD_PRODUCED',
+        payload: {
+          topic: finalTopic,
+          partition,
+          offset: nextOffset,
+          key,
+          value,
+          timestamp: Date.now(),
+          producerId: targetProd.id,
+        },
+      };
+      const res = pureStateTransition(liveState, ev, kafkaRngRef.current);
+      const violation = kafkaInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[Kafka ${violation.invariantName}] ${violation.description}`);
+      }
+      setLiveState(res.nextState as unknown as KafkaClusterState);
+      setRenderedState(res.nextState as unknown as KafkaClusterState);
+      addLog(`[${targetProd.id}] Produced record to ${finalTopic}/p-${String(partition)} (Offset #${nextOffset})`, 'SUCCESS');
+    }
   };
 
   const handleProduceAll = (): void => {
@@ -870,10 +945,21 @@ export default function Page(): React.JSX.Element {
     if (!liveState) return;
     const alive = Object.keys(liveState.brokers).filter((id) => liveState.brokers[id]?.status === 'ALIVE');
     if (!alive.length) return;
-    const id = alive[Math.floor(Math.random() * alive.length)];
-    if (clientRef.current && id) {
+    const id = alive[Math.floor(Math.random() * alive.length)]!;
+    if (connected && clientRef.current) {
       clientRef.current.sendIntent('CHAOS_KILL_BROKER', { brokerId: id });
       addLog(`Dispatched: CRASH broker ${id}`, 'WARN');
+    } else {
+      const ev: SimEvent = {
+        id: `broker-crash-${Date.now()}`,
+        tick: liveState.tick + 1,
+        type: 'BROKER_STATUS_CHANGED',
+        payload: { brokerId: id, newStatus: 'CRASHED' },
+      };
+      const res = pureStateTransition(liveState, ev, kafkaRngRef.current);
+      setLiveState(res.nextState as unknown as KafkaClusterState);
+      setRenderedState(res.nextState as unknown as KafkaClusterState);
+      addLog(`[Chaos Injected] Broker #${id} marked CRASHED`, 'WARN');
     }
   };
 
@@ -881,10 +967,21 @@ export default function Page(): React.JSX.Element {
     if (!liveState) return;
     const crashed = Object.keys(liveState.brokers).filter((id) => liveState.brokers[id]?.status === 'CRASHED');
     if (!crashed.length) { addLog('All brokers ALIVE.', 'INFO'); return; }
-    const id = crashed[Math.floor(Math.random() * crashed.length)];
-    if (clientRef.current && id) {
+    const id = crashed[Math.floor(Math.random() * crashed.length)]!;
+    if (connected && clientRef.current) {
       clientRef.current.sendIntent('CHAOS_RECOVER_BROKER', { brokerId: id });
       addLog(`Dispatched: RECOVER broker ${id}`, 'INFO');
+    } else {
+      const ev: SimEvent = {
+        id: `broker-recover-${Date.now()}`,
+        tick: liveState.tick + 1,
+        type: 'BROKER_STATUS_CHANGED',
+        payload: { brokerId: id, newStatus: 'ALIVE' },
+      };
+      const res = pureStateTransition(liveState, ev, kafkaRngRef.current);
+      setLiveState(res.nextState as unknown as KafkaClusterState);
+      setRenderedState(res.nextState as unknown as KafkaClusterState);
+      addLog(`[Cluster Recovery] Broker #${id} restored to ALIVE`, 'SUCCESS');
     }
   };
 
@@ -1648,22 +1745,63 @@ export default function Page(): React.JSX.Element {
     if (!liveState) return;
     const currentCount = Object.keys(liveState.brokers).length;
     const newBrokerId = String(currentCount + 1);
-    clientRef.current?.sendIntent('ADD_BROKER', {
-      brokerId: newBrokerId,
-      rack: `rack-${String.fromCharCode(97 + (currentCount % 3))}`,
-    });
-    addLog(`Dispatched: ADD_BROKER id "${newBrokerId}"`, 'INFO');
+    if (connected && clientRef.current) {
+      clientRef.current.sendIntent('ADD_BROKER', {
+        brokerId: newBrokerId,
+        rack: `rack-${String.fromCharCode(97 + (currentCount % 3))}`,
+      });
+      addLog(`Dispatched: ADD_BROKER id "${newBrokerId}"`, 'INFO');
+    } else {
+      const ev: SimEvent = {
+        id: `broker-add-${Date.now()}`,
+        tick: liveState.tick + 1,
+        type: 'BROKER_ADDED',
+        payload: {
+          broker: {
+            id: newBrokerId as any,
+            host: `broker-${newBrokerId}.cluster.local`,
+            port: 9092 + currentCount,
+            status: 'ALIVE',
+            diskUsageBytes: 0,
+            maxDiskSizeBytes: 10 * 1024 * 1024 * 1024,
+            lastHeartbeatTick: liveState.tick,
+            rack: `rack-${String.fromCharCode(97 + (currentCount % 3))}`,
+          },
+        },
+      };
+      const res = pureStateTransition(liveState, ev, kafkaRngRef.current);
+      setLiveState(res.nextState as unknown as KafkaClusterState);
+      setRenderedState(res.nextState as unknown as KafkaClusterState);
+      addLog(`[Cluster Updated] Added Broker Node #${newBrokerId}`, 'INFO');
+    }
   };
 
   const handleCreateTopic = (e: React.SyntheticEvent): void => {
     e.preventDefault();
     if (!newTopicName.trim()) return;
     const topic = newTopicName.trim().toLowerCase();
-    clientRef.current?.sendIntent('CREATE_TOPIC', {
-      topic,
-      partitions: newPartitions,
-    });
-    addLog(`Dispatched: CREATE_TOPIC "${topic}" (${String(newPartitions)} partitions)`, 'INFO');
+    if (connected && clientRef.current) {
+      clientRef.current.sendIntent('CREATE_TOPIC', {
+        topic,
+        partitions: newPartitions,
+      });
+      addLog(`Dispatched: CREATE_TOPIC "${topic}" (${String(newPartitions)} partitions)`, 'INFO');
+    } else if (liveState) {
+      const ev: SimEvent = {
+        id: `topic-create-${Date.now()}`,
+        tick: liveState.tick + 1,
+        type: 'TOPIC_CREATED',
+        payload: {
+          topic,
+          partitions: newPartitions,
+          replicationFactor: Math.min(3, Object.keys(liveState.brokers).length),
+        },
+      };
+      const res = pureStateTransition(liveState, ev, kafkaRngRef.current);
+      setLiveState(res.nextState as unknown as KafkaClusterState);
+      setRenderedState(res.nextState as unknown as KafkaClusterState);
+      addLog(`[Cluster Updated] Created Topic "${topic}" (${String(newPartitions)} partitions)`, 'INFO');
+    }
   };
 
   const handleScrubChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
@@ -1676,7 +1814,6 @@ export default function Page(): React.JSX.Element {
   /* ── derived ── */
   const aliveBrokers = Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'ALIVE').length;
   const crashedBrokers = Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'CRASHED').length;
-  const connected = status === 'CONNECTED';
 
   const statValues: Record<string, string> = {
     tick: String(liveState?.tick ?? 0),
@@ -1697,125 +1834,119 @@ export default function Page(): React.JSX.Element {
           <h1 className="header-brand-title">TheVisualizer</h1>
           <span className={statusBadgeClass(status)}>{status}</span>
 
-          {/* Multi-Domain Switcher */}
-          <div style={{ display: 'flex', gap: '4px', backgroundColor: '#1e293b', padding: '3px', borderRadius: '6px', marginLeft: '12px' }}>
-            <button
-              onClick={() => setSelectedDomain('kafka')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'kafka' ? '#6366f1' : 'transparent',
-                color: selectedDomain === 'kafka' ? '#ffffff' : '#94a3b8',
-                fontWeight: selectedDomain === 'kafka' ? 700 : 500,
-              }}
-            >
-              ⚡ Apache Kafka
-            </button>
-            <button
-              onClick={() => setSelectedDomain('raft')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'raft' ? '#eab308' : 'transparent',
-                color: selectedDomain === 'raft' ? '#000000' : '#94a3b8',
-                fontWeight: selectedDomain === 'raft' ? 700 : 500,
-              }}
-            >
-              🛡️ Raft Consensus
-            </button>
-            <button
-              onClick={() => setSelectedDomain('database')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'database' ? '#10b981' : 'transparent',
-                color: selectedDomain === 'database' ? '#ffffff' : '#94a3b8',
-                fontWeight: selectedDomain === 'database' ? 700 : 500,
-              }}
-            >
-              🗄️ Distributed DB
-            </button>
-            <button
-              onClick={() => setSelectedDomain('redis')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'redis' ? '#ef4444' : 'transparent',
-                color: selectedDomain === 'redis' ? '#ffffff' : '#94a3b8',
-                fontWeight: selectedDomain === 'redis' ? 700 : 500,
-              }}
-            >
-              ⚡ Redis Cluster
-            </button>
-            <button
-              onClick={() => setSelectedDomain('kubernetes')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'kubernetes' ? '#3b82f6' : 'transparent',
-                color: selectedDomain === 'kubernetes' ? '#ffffff' : '#94a3b8',
-                fontWeight: selectedDomain === 'kubernetes' ? 700 : 500,
-              }}
-            >
-              ☸️ Kubernetes
-            </button>
-            <button
-              onClick={() => setSelectedDomain('rabbitmq')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'rabbitmq' ? '#f97316' : 'transparent',
-                color: selectedDomain === 'rabbitmq' ? '#ffffff' : '#94a3b8',
-                fontWeight: selectedDomain === 'rabbitmq' ? 700 : 500,
-              }}
-            >
-              🐇 RabbitMQ
-            </button>
-            <button
-              onClick={() => setSelectedDomain('storage')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'storage' ? '#14b8a6' : 'transparent',
-                color: selectedDomain === 'storage' ? '#ffffff' : '#94a3b8',
-                fontWeight: selectedDomain === 'storage' ? 700 : 500,
-              }}
-            >
-              💾 Storage Engine
-            </button>
-            <button
-              onClick={() => setSelectedDomain('networking')}
-              className="btn btn--ghost"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                backgroundColor: selectedDomain === 'networking' ? '#06b6d4' : 'transparent',
-                color: selectedDomain === 'networking' ? '#ffffff' : '#94a3b8',
-                fontWeight: selectedDomain === 'networking' ? 700 : 500,
-              }}
-            >
-              🌐 TCP Networking
-            </button>
-            <button
-              onClick={() => setShowDomainDirectoryModal(true)}
-              className="btn btn--indigo"
-              style={{
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                marginLeft: '4px',
-              }}
-            >
-              🌐 Explore Domains
-            </button>
-          </div>
+          {/* Multi-Domain Dropdown Switcher */}
+          {(() => {
+            const currentDomainObj = DOMAIN_OPTIONS.find((d) => d.id === selectedDomain) ?? DOMAIN_OPTIONS[0]!;
+            return (
+              <div style={{ position: 'relative', marginLeft: '12px' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShowDomainDropdown(!showDomainDropdown)}
+                    className="btn btn--ghost"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '5px 12px',
+                      backgroundColor: '#1e293b',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      color: '#f8fafc',
+                      fontWeight: 600,
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ fontSize: '1rem' }}>{currentDomainObj.icon}</span>
+                    <span>{currentDomainObj.name}</span>
+                    <span
+                      style={{
+                        fontSize: '0.65rem',
+                        backgroundColor: currentDomainObj.color + '25',
+                        color: currentDomainObj.color,
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: `1px solid ${currentDomainObj.color}55`,
+                      }}
+                    >
+                      {currentDomainObj.category}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginLeft: '2px' }}>▼</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowDomainDirectoryModal(true)}
+                    className="btn btn--indigo"
+                    style={{
+                      padding: '5px 10px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                    }}
+                    title="View full platform domain catalog and specifications"
+                  >
+                    🌐 Explore Catalog
+                  </button>
+                </div>
+
+                {showDomainDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: '6px',
+                      width: '320px',
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '10px',
+                      padding: '6px',
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.7)',
+                      zIndex: 100,
+                    }}
+                  >
+                    <div style={{ padding: '6px 10px', fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Distributed System Visualizers
+                    </div>
+                    {DOMAIN_OPTIONS.map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => {
+                          setSelectedDomain(d.id);
+                          setShowDomainDropdown(false);
+                          if (typeof window !== 'undefined') {
+                            window.history.pushState({}, '', d.path);
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: selectedDomain === d.id ? '#1e293b' : 'transparent',
+                          border: selectedDomain === d.id ? `1px solid ${d.color}44` : '1px solid transparent',
+                          color: selectedDomain === d.id ? '#ffffff' : '#94a3b8',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          marginBottom: '2px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '1.1rem' }}>{d.icon}</span>
+                          <div>
+                            <div style={{ fontWeight: selectedDomain === d.id ? 700 : 500, fontSize: '0.8rem', color: selectedDomain === d.id ? '#f8fafc' : '#cbd5e1' }}>{d.name}</div>
+                            <div style={{ fontSize: '0.65rem', color: '#64748b' }}>{d.category}</div>
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '0.65rem', color: '#475569', fontFamily: 'monospace' }}>{d.path}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="header-right">
@@ -1922,14 +2053,14 @@ export default function Page(): React.JSX.Element {
             <div className="btn-row">
               <button
                 onClick={() => setShowAddProducerModal(true)}
-                disabled={!connected || isHalted}
+                disabled={isHalted}
                 className="btn btn--primary"
               >
                 ➕ Add Producer
               </button>
               <button
                 onClick={handleRemoveProducer}
-                disabled={!connected || isHalted || producers.length <= 1}
+                disabled={isHalted || producers.length <= 1}
                 className="btn btn--ghost"
               >
                 ➖ Remove Producer
@@ -2002,7 +2133,7 @@ export default function Page(): React.JSX.Element {
                           value={prod.topic}
                           onChange={(e) => handleProducerTopicChange(prod.id, e.target.value)}
                           className="producer-select"
-                          disabled={!connected || isHalted}
+                          disabled={isHalted}
                         >
                           {availableTopics.map((t) => (
                             <option key={t} value={t}>{t}</option>
@@ -2010,7 +2141,7 @@ export default function Page(): React.JSX.Element {
                         </select>
                         <button
                           onClick={() => handleProduceIntent(prod.id)}
-                          disabled={!connected || isHalted}
+                          disabled={isHalted}
                           className="producer-row-btn"
                           title="Produce Single Message"
                         >
@@ -2018,7 +2149,7 @@ export default function Page(): React.JSX.Element {
                         </button>
                         <button
                           onClick={() => handleToggleAutoProduce(prod.id)}
-                          disabled={!connected || isHalted}
+                          disabled={isHalted}
                           className={`producer-auto-toggle-btn ${prod.autoProduceEnabled ? 'producer-auto-toggle-btn--active' : ''}`}
                           title="Toggle Auto-Produce Cadence"
                         >
@@ -2037,7 +2168,7 @@ export default function Page(): React.JSX.Element {
                             value={interval}
                             onChange={(e) => handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))}
                             className="producer-auto-slider"
-                            disabled={!connected || isHalted}
+                            disabled={isHalted}
                             title={`Auto-produce interval: ${interval.toFixed(1)}s`}
                           />
                           <input
@@ -2053,7 +2184,7 @@ export default function Page(): React.JSX.Element {
                               handleAutoProduceIntervalChange(prod.id, clamped);
                             }}
                             className="producer-auto-number-input"
-                            disabled={!connected || isHalted}
+                            disabled={isHalted}
                             title="Exact interval in seconds"
                           />
                         </div>
@@ -2071,7 +2202,7 @@ export default function Page(): React.JSX.Element {
             <div className="card-divider btn-row--single">
               <button
                 onClick={handleProduceAll}
-                disabled={!connected || isHalted || producers.length === 0}
+                disabled={isHalted || producers.length === 0}
                 className="btn btn--primary"
               >
                 ⚡ Produce (All)
@@ -2085,14 +2216,14 @@ export default function Page(): React.JSX.Element {
             <div className="btn-row">
               <button
                 onClick={() => setShowAddConsumerModal(true)}
-                disabled={!connected || isHalted}
+                disabled={isHalted}
                 className="btn btn--indigo"
               >
                 ➕ Add Consumer
               </button>
               <button
                 onClick={handleRemoveConsumer}
-                disabled={!connected || isHalted || consumers.length <= 1}
+                disabled={isHalted || consumers.length <= 1}
                 className="btn btn--ghost"
               >
                 ➖ Remove Consumer
@@ -2167,7 +2298,7 @@ export default function Page(): React.JSX.Element {
                       value={c.topic}
                       onChange={(e) => handleConsumerTopicChange(c.id, e.target.value)}
                       className="producer-select"
-                      disabled={!connected || isHalted || c.joined}
+                      disabled={isHalted || c.joined}
                     >
                       {availableTopics.map((t) => (
                         <option key={t} value={t}>{t}</option>
@@ -2176,7 +2307,7 @@ export default function Page(): React.JSX.Element {
                     {c.joined ? (
                       <button
                         onClick={() => handleConsumerLeaveSpecific(c.id)}
-                        disabled={!connected || isHalted}
+                        disabled={isHalted}
                         className="producer-row-btn"
                         style={{ background: '#f43f5e' }}
                         title="Leave Consumer Group"
@@ -2186,7 +2317,7 @@ export default function Page(): React.JSX.Element {
                     ) : (
                       <button
                         onClick={() => handleConsumerJoinSpecific(c.id)}
-                        disabled={!connected || isHalted}
+                        disabled={isHalted}
                         className="producer-row-btn"
                         style={{ background: '#10b981' }}
                         title="Join Consumer Group"
@@ -2204,8 +2335,8 @@ export default function Page(): React.JSX.Element {
           <div className="card card--pink">
             <p className="card-title card-title--pink">Chaos Laboratory</p>
             <div className="btn-row">
-              <button onClick={handleKillBroker} disabled={!connected || isHalted} className="btn btn--rose">💥 Crash Broker</button>
-              <button onClick={handleRecoverBroker} disabled={!connected || isHalted} className="btn btn--emerald">🔧 Recover Broker</button>
+              <button onClick={handleKillBroker} disabled={isHalted} className="btn btn--rose">💥 Crash Broker</button>
+              <button onClick={handleRecoverBroker} disabled={isHalted} className="btn btn--emerald">🔧 Recover Broker</button>
             </div>
           </div>
 
@@ -2213,7 +2344,7 @@ export default function Page(): React.JSX.Element {
           <div className="card card--white">
             <p className="card-title card-title--gray">Cluster Management</p>
             <div className="btn-row--single">
-              <button onClick={handleAddBroker} disabled={!connected || isHalted} className="btn btn--primary">
+              <button onClick={handleAddBroker} disabled={isHalted} className="btn btn--primary">
                 ➕ Add Broker Node
               </button>
             </div>
@@ -2240,7 +2371,7 @@ export default function Page(): React.JSX.Element {
                   required
                 />
               </div>
-              <button type="submit" disabled={!connected || isHalted} className="btn btn--indigo">
+              <button type="submit" disabled={isHalted} className="btn btn--indigo">
                 📁 Create Topic
               </button>
             </form>

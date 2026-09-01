@@ -14,6 +14,8 @@ export { DeterministicRNG } from './prng/deterministic-rng.js';
 export { MinHeapPriorityQueue } from './scheduler/min-heap.js';
 export { VirtualTimeline } from './scheduler/virtual-timeline.js';
 export { SimulationEngine } from './engine/simulation-engine.js';
+export { pureStateTransition, type TransitionResult } from './engine/state-transitions.js';
+export type { SimEvent } from './engine/types.js';
 export { InvariantChecker } from './invariants/invariant-checker.js';
 export { SnapshotManager } from './snapshot/snapshot-manager.js';
 
