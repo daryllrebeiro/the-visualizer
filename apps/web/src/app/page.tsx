@@ -23,6 +23,7 @@ import { RabbitMQVisualizer } from '../components/rabbitmq/RabbitMQVisualizer';
 import { StorageEngineVisualizer } from '../components/storage/StorageEngineVisualizer';
 import { NetworkingVisualizer } from '../components/networking/NetworkingVisualizer';
 import { DomainDirectoryModal } from '../components/domains/DomainDirectoryModal';
+import { OnboardingTour, DataTableModal } from '@the-visualizer/ui';
 import {
   SimulationReconstitutor,
   type ReconstitutedStepMetadata,
@@ -1824,6 +1825,86 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
   const availableTopics = liveState ? Object.keys(liveState.topics) : ['orders'];
 
+  const [showTourModal, setShowTourModal] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
+
+  const accessibleRows = React.useMemo(() => {
+    if (selectedDomain === 'kafka') {
+      return Object.values(renderedState?.brokers ?? {}).map((b) => ({
+        id: `broker-${b.id}`,
+        name: `Broker ${b.id} (${b.rack})`,
+        roleOrType: 'Kafka Broker',
+        status: b.status,
+        metrics: `Disk: ${(b.diskUsageBytes / (1024 * 1024)).toFixed(1)} MB / 10 GB`,
+      }));
+    }
+    if (selectedDomain === 'raft') {
+      return Object.values(raftState.nodes).map((n) => ({
+        id: `raft-${n.id}`,
+        name: `Raft Node ${n.id}`,
+        roleOrType: n.role,
+        status: n.status,
+        metrics: `Term: ${n.currentTerm} | Log Entries: ${n.log.length}`,
+      }));
+    }
+    if (selectedDomain === 'database') {
+      return Object.values(dbState.nodes).map((n) => ({
+        id: `db-${n.id}`,
+        name: `Node ${n.id} (${n.host})`,
+        roleOrType: `Tokens: ${n.tokens.length}`,
+        status: n.status,
+        metrics: `Storage: ${Object.keys(n.storage).length} keys | Hints: ${n.hints.length}`,
+      }));
+    }
+    if (selectedDomain === 'redis') {
+      return Object.values(redisState.nodes).map((n) => ({
+        id: `redis-${n.id}`,
+        name: `Redis Node ${n.id} (${n.role})`,
+        roleOrType: n.role,
+        status: n.status,
+        metrics: `Ranges: ${n.slotRanges.length} | Keys: ${Object.keys(n.storage).length} | Mem: ${(n.memoryUsedBytes / (1024 * 1024)).toFixed(1)} MB`,
+      }));
+    }
+    if (selectedDomain === 'kubernetes') {
+      return Object.values(k8sState.nodes).map((n) => ({
+        id: `k8s-node-${n.id}`,
+        name: `${n.name} (${n.role})`,
+        roleOrType: n.role,
+        status: n.status,
+        metrics: `CPU: ${n.allocated.cpuMillis}/${n.capacity.cpuMillis}m | Mem: ${n.allocated.memoryMb}/${n.capacity.memoryMb}MB | Pods: ${n.podIds.length}`,
+      }));
+    }
+    if (selectedDomain === 'rabbitmq') {
+      return Object.values(rabbitState.queues).map((q) => ({
+        id: `queue-${q.id}`,
+        name: q.name,
+        roleOrType: q.durable ? 'Durable Queue' : 'Transient Queue',
+        status: 'ALIVE',
+        metrics: `Messages: ${q.messages.length} | Consumers: ${q.consumerCount}`,
+      }));
+    }
+    if (selectedDomain === 'storage') {
+      return [
+        {
+          id: 'storage-engine',
+          name: storageState.activeEngine === 'B_TREE' ? 'B+Tree Page Engine' : 'LSM-Tree Log Engine',
+          roleOrType: storageState.activeEngine,
+          status: 'ACTIVE',
+          metrics: `Writes: ${storageState.totalWrites} | Reads: ${storageState.totalReads} | Splits/Compactions: ${storageState.activeEngine === 'B_TREE' ? storageState.btree.totalPageSplits : storageState.lsm.totalCompactions}`,
+        },
+      ];
+    }
+    return [
+      {
+        id: 'tcp-connection',
+        name: 'TCP Client-Server Connection',
+        roleOrType: `Client: ${networkingState.clientState} | Server: ${networkingState.serverState}`,
+        status: networkingState.clientState === 'ESTABLISHED' ? 'ACTIVE' : 'IDLE',
+        metrics: `CWND: ${networkingState.congestion.cwnd} MSS | SSTHRESH: ${networkingState.congestion.ssthresh} | In-Flight: ${networkingState.inFlightPackets.length} | Sent: ${networkingState.totalPacketsSent}`,
+      },
+    ];
+  }, [selectedDomain, renderedState, raftState, dbState, redisState, k8sState, rabbitState, storageState, networkingState]);
+
   return (
     <div className="app-shell">
 
@@ -2004,6 +2085,22 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
               title="Ingest serialized JSON event log for offline deterministic replay"
             >
               📥 Ingest Trace
+            </button>
+
+            <button
+              onClick={() => setShowTableModal(true)}
+              className="btn btn--secondary"
+              title="Open accessible non-canvas data table view"
+            >
+              📊 Table View
+            </button>
+
+            <button
+              onClick={() => setShowTourModal(true)}
+              className="btn btn--ghost"
+              title="Start feature tour (?)"
+            >
+              💡 Tour
             </button>
 
             <button onClick={() => { void handleSandboxLogin(); }} className="btn btn--ghost">
@@ -2729,6 +2826,20 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         activeDomain={selectedDomain}
         onSelectDomain={(dom) => setSelectedDomain(dom)}
         onClose={() => setShowDomainDirectoryModal(false)}
+      />
+
+      {/* ── Feature Onboarding Tour ── */}
+      <OnboardingTour
+        isOpen={showTourModal}
+        onClose={() => setShowTourModal(false)}
+      />
+
+      {/* ── Accessible Data Table Modal ── */}
+      <DataTableModal
+        isOpen={showTableModal}
+        onClose={() => setShowTableModal(false)}
+        domainName={selectedDomain.toUpperCase()}
+        rows={accessibleRows}
       />
 
       {/* ── Halt Banner ── */}
