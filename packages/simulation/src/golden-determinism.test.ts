@@ -114,16 +114,71 @@ describe('Golden Determinism Suite', () => {
 
   // Lock in the golden hashes — these values are computed once and then
   // committed. If a reducer changes, the test fails and forces review.
-  // To regenerate: run the test with `REGENERATE_GOLDEN=1` and copy the
-  // logged values below.
   it('creates reproducible default states', () => {
     for (const meta of domains) {
       const plugin = DomainRegistry.get(meta.id)!;
       const state = plugin.createDefaultState();
       const hash = stableHash(state);
-      // Verify the hash is a positive integer (basic sanity)
       expect(hash).toBeGreaterThan(0);
       expect(typeof hash).toBe('number');
     }
+  });
+
+  // Deep state-mutation determinism test for Storage Engine (B+Tree splits + LSM compactions)
+  it('[storage] produces deterministic state hash across B+Tree page splits and LSM compactions', () => {
+    const plugin = DomainRegistry.get('storage')!;
+    const runStoragePipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Insert 25 keys to trigger B+Tree splits and LSM flushes
+      for (let i = 1; i <= 25; i++) {
+        const insertEvt = {
+          id: `evt-insert-${i}`,
+          tick: i,
+          type: 'STORAGE_INSERT',
+          payload: { key: i * 7, value: `val-${i * 7}` },
+        };
+        const res = plugin.reduceState(state, insertEvt, rng);
+        state = res.nextState;
+      }
+      return stableHash(state);
+    };
+
+    const hash1 = runStoragePipeline();
+    const hash2 = runStoragePipeline();
+    expect(hash1).toBe(hash2);
+    expect(hash1).toBeGreaterThan(0);
+  });
+
+  // Deep state-mutation determinism test for RabbitMQ (publishing, queue routing, DLQ)
+  it('[rabbitmq] produces deterministic state hash across AMQP publish, binding, and routing cycles', () => {
+    const plugin = DomainRegistry.get('rabbitmq')!;
+    const runRabbitPipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Publish 20 messages to trigger message IDs, routing, and delivery
+      for (let i = 1; i <= 20; i++) {
+        const publishEvt = {
+          id: `evt-pub-${i}`,
+          tick: i,
+          type: 'RABBITMQ_PUBLISH',
+          payload: {
+            exchangeName: 'amq.direct',
+            routingKey: i % 2 === 0 ? 'orders.created' : 'orders.cancelled',
+            payload: { orderId: i, amount: i * 100 },
+          },
+        };
+        const res = plugin.reduceState(state, publishEvt, rng);
+        state = res.nextState;
+      }
+      return stableHash(state);
+    };
+
+    const hash1 = runRabbitPipeline();
+    const hash2 = runRabbitPipeline();
+    expect(hash1).toBe(hash2);
+    expect(hash1).toBeGreaterThan(0);
   });
 });

@@ -96,7 +96,7 @@ function splitNode(state: BTreeState, nodeId: string): void {
   const promotedKey = node.keys[mid]!;
   const promotedValue = node.values[mid]!;
 
-  const newNodeId = `node-${String(Date.now())}-${Math.random().toString(36).substring(2, 5)}`;
+  const newNodeId = `node-split-${String(state.totalPageSplits)}-${node.id}-r`;
   const rightNode: BTreeNode = {
     id: newNodeId,
     keys: node.keys.slice(mid + (node.isLeaf ? 0 : 1)),
@@ -121,7 +121,7 @@ function splitNode(state: BTreeState, nodeId: string): void {
 
   if (!node.parentId) {
     // Creating new root
-    const newRootId = `node-root-${String(Date.now())}`;
+    const newRootId = `node-root-${String(state.totalPageSplits)}`;
     const newRoot: BTreeNode = {
       id: newRootId,
       keys: [promotedKey],

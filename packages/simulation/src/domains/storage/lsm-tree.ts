@@ -80,7 +80,7 @@ export function flushMemTable(state: LSMTreeState, tick: number): void {
   const maxKey = Math.max(...keys);
 
   const sstable: SSTable = {
-    id: `sstable-L0-${String(tick)}-${Math.random().toString(36).substring(2, 5)}`,
+    id: `sstable-L0-${String(tick)}-${String((state.levels['0']?.length ?? 0) + 1)}`,
     level: 0,
     minKey,
     maxKey,
@@ -129,7 +129,7 @@ export function compactLevel(state: LSMTreeState, fromLevel: number, tick: numbe
   const maxKey = keys.length > 0 ? Math.max(...keys) : 0;
 
   const compactedTable: SSTable = {
-    id: `sstable-L${String(fromLevel + 1)}-${String(tick)}-${Math.random().toString(36).substring(2, 5)}`,
+    id: `sstable-L${String(fromLevel + 1)}-${String(tick)}-c${String(state.totalCompactions)}`,
     level: fromLevel + 1,
     minKey,
     maxKey,

@@ -214,7 +214,7 @@ function handlePublish(
   const exchange = state.exchanges[p.exchangeName];
   if (!exchange) return;
 
-  const msgId = `msg-${String(state.tick)}-${Math.random().toString(36).substring(2, 6)}`;
+  const msgId = `msg-${String(state.tick)}-${String(state.totalPublished + 1)}`;
   const message: AMQPMessage = {
     id: msgId,
     payload: p.payload,
