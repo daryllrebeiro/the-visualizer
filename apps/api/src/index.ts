@@ -42,12 +42,18 @@ app.use(
   '*',
   cors({
     origin: (origin) => {
-      // Allow local development ports or any configured origin
-      if (!origin) return '*';
-      if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:')) {
+      if (!origin) return undefined;
+      // Allow localhost dev ports
+      if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:') || origin.startsWith('http://127.0.0.1:')) {
         return origin;
       }
-      return '*';
+      // Allow Cloud Run and configured production domains
+      const allowedEnv = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : [];
+      if (allowedEnv.includes(origin) || origin.endsWith('.run.app')) {
+        return origin;
+      }
+      // Reject any unlisted/arbitrary origin
+      return null;
     },
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
