@@ -179,6 +179,23 @@ export function ${PascalName}Visualizer({ state, onCrashNode }: ${PascalName}Vis
 
 fs.writeFileSync(path.join(webComponentDir, `${PascalName}Visualizer.tsx`), componentContent);
 
+// 6. Update packages/simulation/src/index.ts with domain re-exports
+const simIndexPath = path.join(rootDir, 'packages', 'simulation', 'src', 'index.ts');
+if (fs.existsSync(simIndexPath)) {
+  let simIndexContent = fs.readFileSync(simIndexPath, 'utf8');
+  const exportBlock = `
+// Domain: ${domainName}
+export * from './domains/${domainId}/${domainId}-types.js';
+export * from './domains/${domainId}/${domainId}-state-transitions.js';
+export * from './domains/${domainId}/${domainId}-invariants.js';
+`;
+  if (!simIndexContent.includes(`./domains/${domainId}/`)) {
+    simIndexContent += exportBlock;
+    fs.writeFileSync(simIndexPath, simIndexContent);
+    console.log(`- Updated packages/simulation/src/index.ts with exports`);
+  }
+}
+
 console.log(`✅ Successfully scaffolded ${domainName} (${domainId})!`);
 console.log(`- Simulation files: packages/simulation/src/domains/${domainId}/`);
 console.log(`- UI Visualizer: apps/web/src/components/${domainId}/${PascalName}Visualizer.tsx`);
