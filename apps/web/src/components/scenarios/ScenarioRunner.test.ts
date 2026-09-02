@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 export interface ScenarioDefinition {
   id: string;
@@ -136,6 +136,6 @@ describe('Scenario Runner Step Execution Suite', () => {
     };
 
     expect(rawTrace.events.length).toBe(1);
-    expect(rawTrace.events[0].type).toBe('TOPIC_CREATED');
+    expect(rawTrace.events[0]?.type).toBe('TOPIC_CREATED');
   });
 });

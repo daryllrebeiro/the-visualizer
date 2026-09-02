@@ -60,38 +60,54 @@ export function RaftVisualizer({
           </div>
         </div>
 
-        {/* Client Propose Form */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (commandInput.trim()) onProposeCommand(commandInput.trim());
-          }}
-          style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
-        >
-          <input
-            type="text"
-            value={commandInput}
-            onChange={(e) => setCommandInput(e.target.value)}
-            placeholder="e.g. SET balance = 500"
-            style={{
-              padding: '6px 12px',
-              fontSize: '0.8rem',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '4px',
-              color: '#f8fafc',
-              width: '200px',
+        {/* Client Propose Form & Split-Brain Lab */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (commandInput.trim()) onProposeCommand(commandInput.trim());
             }}
-          />
-          <button
-            type="submit"
-            disabled={!state.activeLeaderId}
-            className="btn btn--primary"
-            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+            style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
           >
-            ✍️ Propose Write
+            <input
+              type="text"
+              value={commandInput}
+              onChange={(e) => setCommandInput(e.target.value)}
+              placeholder="e.g. SET balance = 500"
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                backgroundColor: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+                color: '#f8fafc',
+                width: '180px',
+              }}
+            />
+            <button
+              type="submit"
+              disabled={!state.activeLeaderId}
+              className="btn btn--primary"
+              style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+            >
+              ✍️ Propose Write
+            </button>
+          </form>
+
+          {/* Quick Partition Lab */}
+          <button
+            onClick={() => {
+              // Isolate minority {1, 2}
+              if (!state.isolatedNodeIds.includes('1')) onTogglePartition('1');
+              if (!state.isolatedNodeIds.includes('2')) onTogglePartition('2');
+            }}
+            className="btn btn--secondary"
+            style={{ fontSize: '0.75rem', padding: '6px 10px', background: 'rgba(234, 179, 8, 0.1)', color: '#fbbf24', border: '1px solid #eab308' }}
+            title="Isolate minority nodes {1, 2} to demonstrate majority quorum survival on {3, 4, 5}"
+          >
+            ⚡ Split-Brain Minority {`{1,2}`}
           </button>
-        </form>
+        </div>
       </div>
 
       {/* Nodes Quorum Grid */}

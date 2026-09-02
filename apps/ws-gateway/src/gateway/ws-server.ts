@@ -4,7 +4,7 @@ import { pack, unpack } from 'msgpackr';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 
-import { ClientIntentSchema, type KafkaClusterState } from '@the-visualizer/contracts';
+import { ClientIntentSchema, IntentJoinRoomSchema, IntentGapRecoverySchema, type KafkaClusterState } from '@the-visualizer/contracts';
 import {
   captureException,
   logger,
@@ -13,6 +13,8 @@ import {
   wsMessagesSentTotal,
   wsRateLimitedMessagesTotal,
 } from '@the-visualizer/logging';
+
+import { DomainRegistry } from '@the-visualizer/simulation';
 
 import { authenticateConnection } from './auth.js';
 import { roomManager } from './room-manager.js';
@@ -273,23 +275,54 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
           // A. Handle JOIN_ROOM intent
           if (type === 'JOIN_ROOM') {
-            const targetRoomId = payload?.roomId as unknown;
-            if (typeof targetRoomId === 'string') {
-              await roomManager.joinRoom(targetRoomId, ws.userId ?? '', ws);
+            const result = IntentJoinRoomSchema.safeParse({
+              id: payload?.id || crypto.randomUUID(),
+              type: 'JOIN_ROOM',
+              roomId: payload?.roomId,
+              domainId: payload?.domainId,
+            });
+
+            if (!result.success) {
+              ws.send(
+                pack({
+                  type: 'MSG_SESSION_ERROR',
+                  payload: { code: 'ERR_BAD_REQUEST', message: 'Invalid JOIN_ROOM payload', fatal: true },
+                }),
+              );
+              return;
+            }
+
+            const targetRoomId = result.data.roomId;
+            const domainId = result.data.domainId;
+
+            try {
+              await roomManager.joinRoom(targetRoomId, domainId, ws.userId ?? '', ws);
+            } catch (err: any) {
+              ws.send(
+                pack({
+                  type: 'MSG_SESSION_ERROR',
+                  payload: { code: 'ERR_DOMAIN_LOCKED', message: err.message, fatal: true },
+                })
+              );
+              return;
+            }
 
               // Fetch cached topology or use default
               const cachedTopologyStr = await roomManager.getCachedTopology(targetRoomId);
-              let topology = DEFAULT_TOPOLOGY;
+              
+              const domainPlugin = DomainRegistry.get(domainId);
+              let topology = domainPlugin ? domainPlugin.createDefaultState() : DEFAULT_TOPOLOGY;
+
               if (cachedTopologyStr) {
                 try {
-                  topology = JSON.parse(cachedTopologyStr) as KafkaClusterState;
+                  topology = JSON.parse(cachedTopologyStr);
                 } catch {
                   // Ignore JSON parse errors
                 }
               }
 
               // Start simulation runner session
-              simulationRunner.startSession(targetRoomId, topology);
+              simulationRunner.startSession(targetRoomId, domainId, topology);
 
               // Fetch current engine state if session exists
               const session = simulationRunner.getSession(targetRoomId);
@@ -316,7 +349,6 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                 }),
               );
               wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT' });
-            }
             return;
           }
 
@@ -325,25 +357,39 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
           // B. Handle GAP_RECOVERY request
           if (type === 'GAP_RECOVERY') {
-            const fromSeq = payload?.fromSequence as number | undefined;
-            if (typeof fromSeq === 'number') {
-              const recoveredPayloads = sequenceReconciler.recoverGap(roomId, fromSeq);
-              if (recoveredPayloads) {
-                // Send back buffered updates sequentially
-                for (const recoveredPayload of recoveredPayloads) {
-                  ws.send(pack(recoveredPayload));
-                  wsMessagesSentTotal.inc({ type: recoveredPayload.type });
-                }
-              } else {
-                // Missing messages evicted -> notify client a full snapshot refresh is required
-                ws.send(
-                  pack({
-                    type: 'INIT_SNAPSHOT_REQUIRED',
-                    payload: { roomId },
-                  }),
-                );
-                wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT_REQUIRED' });
+            const result = IntentGapRecoverySchema.safeParse({
+              id: payload?.id || crypto.randomUUID(),
+              type: 'GAP_RECOVERY',
+              fromSequence: payload?.fromSequence,
+            });
+
+            if (!result.success) {
+              ws.send(
+                pack({
+                  type: 'MSG_SESSION_ERROR',
+                  payload: { code: 'ERR_BAD_REQUEST', message: 'Invalid GAP_RECOVERY payload', fatal: false },
+                }),
+              );
+              return;
+            }
+
+            const fromSeq = result.data.fromSequence;
+            const recoveredPayloads = sequenceReconciler.recoverGap(roomId, fromSeq);
+            if (recoveredPayloads) {
+              // Send back buffered updates sequentially
+              for (const recoveredPayload of recoveredPayloads) {
+                ws.send(pack(recoveredPayload));
+                wsMessagesSentTotal.inc({ type: recoveredPayload.type });
               }
+            } else {
+              // Missing messages evicted -> notify client a full snapshot refresh is required
+              ws.send(
+                pack({
+                  type: 'INIT_SNAPSHOT_REQUIRED',
+                  payload: { roomId },
+                }),
+              );
+              wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT_REQUIRED' });
             }
             return;
           }

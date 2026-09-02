@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import type { KafkaClusterState } from '@the-visualizer/contracts';
-import { partitionForKey } from '@the-visualizer/simulation';
+import { kafkaMurmur2, toPositive } from '@the-visualizer/simulation';
 import type { EventLogItem } from '../../app/ws-client';
 import { VirtualizedEventTimeline } from '../events/VirtualizedEventTimeline';
 
@@ -489,14 +489,18 @@ function ProducerContent({
   onViewEvents: () => void;
 }): React.JSX.Element {
   const partitions = state.topics[topic] ?? [];
-  const calculatedPartition = partitionForKey(testKey, partitions.length || 1);
+  const numParts = partitions.length || 1;
+  const rawHash = testKey ? kafkaMurmur2(testKey) : 0;
+  const posHash = toPositive(rawHash);
+  const calculatedPartition = posHash % numParts;
+  const keyBytes = typeof window !== 'undefined' && testKey ? Array.from(new TextEncoder().encode(testKey)) : [];
 
   if (activeTab === 'partitioner') {
     return (
       <div className="inspector-section">
         <h3 className="inspector-section__title">Kafka Murmur2 Key Partitioner Playground</h3>
         <p className="inspector-text-muted">
-          Kafka maps messages to partitions using <code>toPositive(murmur2(keyBytes)) % numPartitions</code>.
+          Exact Apache Kafka hashing formula: <code>toPositive(murmur2(keyBytes)) % numPartitions</code>.
         </p>
 
         <div className="form-group">
@@ -521,15 +525,38 @@ function ProducerContent({
           />
         </div>
 
-        <div className="partitioner-result-card">
-          <div><strong>Computed Partition:</strong> Partition {String(calculatedPartition)} of topic &quot;{topic}&quot;</div>
+        {/* Step-by-Step Byte Computation Card */}
+        <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', border: '1px solid #1e293b', marginTop: '12px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#94a3b8' }}>
+          <div style={{ color: '#38bdf8', fontWeight: 600, marginBottom: '6px' }}>
+            ⚡ Murmur2 Step-by-Step Hash Breakdown
+          </div>
+          <div>
+            <strong>1. UTF-8 Byte Array:</strong>{' '}
+            <span style={{ color: '#f1f5f9' }}>
+              [{keyBytes.map((b) => `0x${b.toString(16).padStart(2, '0')}`).join(', ') || '0x00'}]
+            </span>{' '}
+            ({keyBytes.length} bytes)
+          </div>
+          <div>
+            <strong>2. Murmur2 Seed:</strong> <span style={{ color: '#fbbf24' }}>0x9747b28c</span>
+          </div>
+          <div>
+            <strong>3. Signed 32-bit Hash:</strong> <span style={{ color: '#a78bfa' }}>{rawHash}</span> (0x{(rawHash >>> 0).toString(16).padStart(8, '0')})
+          </div>
+          <div>
+            <strong>4. Positive Unsigned Hash:</strong> <span style={{ color: '#34d399' }}>{posHash}</span> (hash & 0x7fffffff)
+          </div>
+          <div style={{ borderTop: '1px dashed #334155', paddingTop: '6px', marginTop: '6px', color: '#f8fafc', fontWeight: 600 }}>
+            <strong>5. Target Partition:</strong> {posHash} % {numParts} = <span style={{ color: '#38bdf8', fontSize: '13px' }}>Partition {calculatedPartition}</span>
+          </div>
         </div>
 
         <button
           onClick={() => onProduceKey?.(topic, testKey, testVal)}
           className="btn btn--indigo btn--full"
+          style={{ marginTop: '14px' }}
         >
-          🚀 Dispatch Keyed Record
+          🚀 Dispatch Keyed Record to Partition {calculatedPartition}
         </button>
       </div>
     );

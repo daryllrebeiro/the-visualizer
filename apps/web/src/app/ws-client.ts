@@ -33,6 +33,7 @@ export class WebSocketClient {
   private url: string;
   private token: string;
   private roomId: string;
+  private domainId: string;
   private callbacks: WsClientCallbacks;
 
   private status: ConnectionStatus = 'DISCONNECTED';
@@ -44,10 +45,11 @@ export class WebSocketClient {
   private maxReconnectDelay = 16000;
   private isClosedIntentional = false;
 
-  constructor(url: string, token: string, roomId: string, callbacks: WsClientCallbacks) {
+  constructor(url: string, token: string, roomId: string, domainId: string, callbacks: WsClientCallbacks) {
     this.url = url;
     this.token = token;
     this.roomId = roomId;
+    this.domainId = domainId;
     this.callbacks = callbacks;
   }
 
@@ -66,7 +68,7 @@ export class WebSocketClient {
         this.addLog('Connected to WebSocket gateway', 'SUCCESS');
 
         // Join the requested room
-        this.sendIntent('JOIN_ROOM', { roomId: this.roomId });
+        this.sendIntent('JOIN_ROOM', { roomId: this.roomId, domainId: this.domainId });
       };
 
       this.socket.onmessage = (event: MessageEvent) => {

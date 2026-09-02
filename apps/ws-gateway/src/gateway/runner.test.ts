@@ -67,7 +67,7 @@ describe('Authoritative Simulation Runner Tests', () => {
   });
 
   it('should start session and advance ticks', async () => {
-    simulationRunner.startSession(testRoomId, mockTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
     const session = simulationRunner.getSession(testRoomId);
     expect(session).toBeDefined();
     expect(session?.isHalted).toBe(false);
@@ -90,7 +90,7 @@ describe('Authoritative Simulation Runner Tests', () => {
     };
     await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(intentPayload));
 
-    simulationRunner.startSession(testRoomId, mockTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
     const session = simulationRunner.getSession(testRoomId);
     expect(session).toBeDefined();
 
@@ -145,7 +145,7 @@ describe('Authoritative Simulation Runner Tests', () => {
     };
     await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(intentPayload));
 
-    simulationRunner.startSession(testRoomId, brokenTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', brokenTopology);
     const session = simulationRunner.getSession(testRoomId);
     expect(session).toBeDefined();
 
@@ -184,7 +184,7 @@ describe('Authoritative Simulation Runner Tests', () => {
       },
     };
 
-    simulationRunner.startSession(testRoomId, autoTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', autoTopology);
     const session = simulationRunner.getSession(testRoomId);
     expect(session).toBeDefined();
 
@@ -223,7 +223,7 @@ describe('Authoritative Simulation Runner Tests', () => {
   });
 
   it('should immediately adjust next fire tick on live frequency change without toggling off/on', async () => {
-    simulationRunner.startSession(testRoomId, mockTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
     const session = simulationRunner.getSession(testRoomId);
     expect(session).toBeDefined();
 
@@ -257,7 +257,7 @@ describe('Authoritative Simulation Runner Tests', () => {
   });
 
   it('should produce exactly 30 (+-1) messages over 60 virtual seconds at 2.0s interval without drift', async () => {
-    simulationRunner.startSession(testRoomId, mockTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
     const session = simulationRunner.getSession(testRoomId);
     expect(session).toBeDefined();
 
@@ -291,7 +291,7 @@ describe('Authoritative Simulation Runner Tests', () => {
   });
 
   it('should cleanly reset simulation state, cancel auto-producers, and purge Redis keys on INTENT_RESET', async () => {
-    simulationRunner.startSession(testRoomId, mockTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
     const session = simulationRunner.getSession(testRoomId);
 
     // Setup active producer

@@ -9,6 +9,7 @@ export interface DomainCardInfo {
   icon: string;
   tagline: string;
   fidelityTag: string;
+  fidelityDisplayName?: string;
   oracleSystem: string;
   color: string;
   highlights: string[];
@@ -22,6 +23,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '⚡',
     tagline: 'Log partitioning, consumer group rebalances, ISR replication, exactly-once transactions.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Kafka-tested',
     oracleSystem: 'apache/kafka:4.3 (Testcontainers Oracle Harness)',
     color: '#6366f1',
     highlights: ['Deterministic Discrete-Event Engine', 'Murmur2 Partitioning', 'Two-Phase Commit Txn Coordinator', 'Log Compaction & Segments'],
@@ -33,6 +35,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '🛡️',
     tagline: 'Leader elections, term counters, randomized election timers, quorum log replication, split-brain safety.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Raft-tested',
     oracleSystem: 'etcd-io/raft Reference Oracle',
     color: '#a855f7',
     highlights: ['Term Invariant Assertion', 'Quorum Disjointness Election Safety', 'Asymmetric Network Partitions', 'Heartbeat Countdowns'],
@@ -44,6 +47,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '🗄️',
     tagline: 'Consistent hashing with vnodes, tunable quorum consistency (R+W>N), hinted handoffs, background read-repair.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Cassandra-tested',
     oracleSystem: 'cassandra:4.1 / scylladb Architecture Model',
     color: '#10b981',
     highlights: ['32-Bit FNV-1a Hash Ring', 'PACELC Eventual vs Strong Quorums', 'Zero-Downtime Scale-Out Joins', 'Vector Clock Version Reconciliation'],
@@ -55,6 +59,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '⚡',
     tagline: '16,384 hash slots with CRC16 hashtags, primary/replica pairs, MOVED/ASK client redirects, and LRU/LFU/TTL eviction.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Redis-tested',
     oracleSystem: 'redis:7.2 Cluster Protocol',
     color: '#ef4444',
     highlights: ['16,384 Slot Allocation Bar', 'CRC16 Hashtag {user:id} Parser', 'Multi-Policy Eviction Sandbox', 'Master-to-Replica Failover'],
@@ -66,6 +71,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '☸️',
     tagline: 'Two-phase pod scheduling (predicates/scoring), CPU/Memory bin-packing, rolling updates, and declarative reconciliation loops.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'K8s-tested',
     oracleSystem: 'kind/k8s:v1.30 Control Plane Model',
     color: '#3b82f6',
     highlights: ['Two-Phase Scheduler Filter & Score', 'Why is this Pod Pending? Diagnostics', 'Zero-Downtime Rolling Updates', 'Node Cordon & Drain Eviction'],
@@ -77,6 +83,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '🐇',
     tagline: 'Direct/Fanout/Topic exchange routing with wildcards (*, #), Dead-Letter Exchanges (DLX), and prefetch QoS.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'RabbitMQ-tested',
     oracleSystem: 'rabbitmq:3.13 AMQP 0-9-1 Protocol',
     color: '#f97316',
     highlights: ['Topic Pattern Wildcards (*, #)', 'Dead-Letter Exchange (DLX) Routing', 'Message Rejection & Poison Pill Isolation', 'Competing Consumer Prefetch QoS'],
@@ -88,6 +95,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '💾',
     tagline: 'B+ Tree page splits/balancing (SQLite) vs. LSM-Tree MemTable flushes, immutable SSTables, Bloom filters, and Leveled Compaction (RocksDB).',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'SQLite-tested',
     oracleSystem: 'sqlite3 / rocksdb:v8 Storage Layer Model',
     color: '#14b8a6',
     highlights: ['Order-B B+ Tree Page Split & Root Balancing', 'Append-Only WAL & MemTable Threshold Flush', '16-Bit Bloom Filter Key Membership Bitsets', 'Multi-Level SSTable Merging & Compaction'],
@@ -99,6 +107,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     icon: '🌐',
     tagline: 'Packet-level simulation of TCP 3-way handshake (SYN -> SYN-ACK -> ACK), sliding window sequence numbering, and AIMD congestion control.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'RFC-tested',
     oracleSystem: 'RFC 793 / RFC 5681 TCP Protocol Model',
     color: '#06b6d4',
     highlights: ['3-Way Handshake Connection Sequence Ladder', 'Sliding Window Sequence Numbering & Buffering', 'In-Flight Packet Drop Simulation', 'Slow Start & Congestion Avoidance AIMD Curve'],
@@ -260,7 +269,7 @@ export function DomainDirectoryModal({
                     alignItems: 'center',
                   }}
                 >
-                  <span>Oracle: {dom.fidelityTag}</span>
+                  <span>Oracle: {dom.fidelityDisplayName || dom.fidelityTag}</span>
                   <button
                     className="btn"
                     style={{

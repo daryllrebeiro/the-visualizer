@@ -30,7 +30,8 @@ export class RoomManager {
   // Sockets that are connected but haven't joined a room
   private unassignedSockets = new Set<WebSocket>();
 
-  // Room lifecycle activity tracking: roomId -> lastActivityEpochMs
+  // Room metadata and lifecycle activity
+  private roomMetadata = new Map<string, { domainId: string }>();
   private roomLastActivity = new Map<string, number>();
   private roomStates = new Map<string, RoomLifecycleState>();
   private reaperInterval: NodeJS.Timeout | null = null;
@@ -86,8 +87,12 @@ export class RoomManager {
   public getRoomState(roomId: string): RoomLifecycleState {
     return this.roomStates.get(roomId) ?? 'IDLE';
   }
+  
+  public getRoomDomain(roomId: string): string | undefined {
+    return this.roomMetadata.get(roomId)?.domainId;
+  }
 
-  public async joinRoom(roomId: string, userId: string, socket: WebSocket): Promise<void> {
+  public async joinRoom(roomId: string, domainId: string, userId: string, socket: WebSocket): Promise<void> {
     // 1. Leave previous room if any
     await this.leaveRoom(socket);
 
@@ -96,8 +101,14 @@ export class RoomManager {
     if (!clients) {
       clients = new Set();
       this.rooms.set(roomId, clients);
+      this.roomMetadata.set(roomId, { domainId });
       // Subscribe to Redis channel for this room
       await this.sub.subscribe(`room:${roomId}`);
+    } else {
+      const existingDomain = this.roomMetadata.get(roomId)?.domainId;
+      if (existingDomain && existingDomain !== domainId) {
+        throw new Error(`Room ${roomId} is locked to domain ${existingDomain}`);
+      }
     }
 
     const client: RoomClient = { userId, socket };

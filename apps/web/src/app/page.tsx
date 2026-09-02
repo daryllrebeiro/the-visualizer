@@ -346,7 +346,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     if (clientRef.current) clientRef.current.disconnect();
     if (!token) { addLog('Cannot connect: auth token missing.', 'ERROR'); return; }
     setIsHalted(false); setHaltError(null); setStateHistory([]);
-    const client = new WebSocketClient(wsUrl, token, roomId, {
+    const client = new WebSocketClient(wsUrl, token, roomId, selectedDomain, {
       onStateChange: (s) => {
         setLiveState({ ...s });
       },

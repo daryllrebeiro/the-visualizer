@@ -9,7 +9,7 @@ describe('Event Log Timeline Replay Controller Suite', () => {
     brokers: {},
     topics: {},
     consumerGroups: {},
-    kraft: { activeControllerId: '1', controllerEpoch: 1, voters: ['1', '2', '3'] },
+    kraft: { activeControllerId: '1' as any, controllerEpoch: 1, voters: ['1' as any, '2' as any, '3' as any], metadataOffset: 0 },
     transactions: {},
   });
 

@@ -84,7 +84,7 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
 
   it('drains multiple client intents sequentially, manages auto-producers, and records replay keyframes', async () => {
     // 1. Start simulation session
-    simulationRunner.startSession(testRoomId, mockTopology);
+    simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
     const session = simulationRunner.getSession(testRoomId);
     expect(session).toBeDefined();
 

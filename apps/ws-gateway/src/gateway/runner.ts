@@ -31,6 +31,7 @@ export interface AutoProducerSchedule {
 
 export interface RoomSession {
   roomId: string;
+  domainId: string;
   engine: SimulationEngine;
   tickCount: number;
   timer: NodeJS.Timeout | null;
@@ -55,7 +56,7 @@ export class SimulationRunner {
   /**
    * Starts a simulation session for a room if not already running.
    */
-  public startSession(roomId: string, initialTopology: KafkaClusterState): void {
+  public startSession(roomId: string, domainId: string, initialTopology: any): void {
     if (this.activeSessions.has(roomId)) {
       return;
     }
@@ -94,6 +95,7 @@ export class SimulationRunner {
 
     const session: RoomSession = {
       roomId,
+      domainId,
       engine,
       tickCount: 0,
       timer: null,
