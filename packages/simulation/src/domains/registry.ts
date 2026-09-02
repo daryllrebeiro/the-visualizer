@@ -18,6 +18,7 @@ export interface DomainPluginMetadata {
   category: 'STREAMING' | 'CONSENSUS' | 'DATABASE' | 'CACHE' | 'ORCHESTRATION' | 'NETWORKING';
   description: string;
   fidelityTag: 'CONCEPTUAL' | 'BEHAVIORAL' | 'ORACLE_TESTED' | 'PROTOCOL_COMPATIBLE' | 'VERSION_COMPATIBLE';
+  fidelityDisplayName?: string | undefined;
   oracleSystemName?: string | undefined;
   icon?: string | undefined;
   color?: string | undefined;
@@ -29,7 +30,10 @@ export interface DomainPlugin<TState = any, TEvent = any> {
   reduceState: (state: TState, event: TEvent, rng: DeterministicRNG) => { nextState: TState; emittedEvents: TEvent[] };
   validateInvariants: (state: TState) => { passed: boolean; violation?: { name: string; description: string } };
   scenarioLibrary: any[];
+  oracleAdapter?: any;
 }
+
+import { KafkaOracleHarness } from '../oracle/oracle-harness.js';
 
 export const KafkaDomainPlugin: DomainPlugin<KafkaClusterState, SimEvent> = {
   metadata: {
@@ -39,6 +43,7 @@ export const KafkaDomainPlugin: DomainPlugin<KafkaClusterState, SimEvent> = {
     category: 'STREAMING',
     description: 'Distributed event streaming platform with KRaft consensus, partition replication, and consumer groups.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Kafka-tested',
   },
   createDefaultState: () => createDefaultBaselineState(),
   reduceState: (state, event, rng) => pureStateTransition(state, event, rng),
@@ -57,6 +62,7 @@ export const KafkaDomainPlugin: DomainPlugin<KafkaClusterState, SimEvent> = {
     return { passed: true };
   },
   scenarioLibrary: [],
+  oracleAdapter: new KafkaOracleHarness(),
 };
 
 export const RaftDomainPlugin: DomainPlugin<RaftClusterState, RaftSimEvent> = {
@@ -67,6 +73,7 @@ export const RaftDomainPlugin: DomainPlugin<RaftClusterState, RaftSimEvent> = {
     category: 'CONSENSUS',
     description: 'Leader election, log replication, commit indices, and network partition split-brain resilience.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Raft-tested',
   },
   createDefaultState: () => createDefaultRaftCluster(),
   reduceState: (state, event, rng) => pureRaftTransition(state, event, rng),
@@ -103,6 +110,7 @@ export const DatabaseDomainPlugin: DomainPlugin<DBClusterState, DBSimEvent> = {
     category: 'DATABASE',
     description: 'Consistent hash ring partitioning with vnodes, tunable quorum consistency (R + W > N), hinted handoffs, and read repair.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Cassandra-tested',
   },
   createDefaultState: () => createDefaultDBCluster(),
   reduceState: (state, event, rng) => pureDBTransition(state, event, rng),
@@ -139,6 +147,7 @@ export const RedisDomainPlugin: DomainPlugin<RedisClusterState, RedisSimEvent> =
     category: 'CACHE',
     description: '16,384 hash slots with CRC16 hashtags, primary/replica pairs, MOVED/ASK client redirects, and LRU/LFU/TTL eviction policies.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'Redis-tested',
   },
   createDefaultState: () => createDefaultRedisCluster(),
   reduceState: (state, event, rng) => pureRedisTransition(state, event, rng),
@@ -175,6 +184,7 @@ export const KubernetesDomainPlugin: DomainPlugin<K8sClusterState, K8sSimEvent> 
     category: 'ORCHESTRATION',
     description: 'Two-phase pod scheduling (predicates/scoring), CPU/Memory bin-packing, rolling deployments, taints/tolerations, and declarative control loops.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'K8s-tested',
     icon: '☸️',
     color: '#3b82f6',
   },
@@ -213,6 +223,7 @@ export const RabbitMQDomainPlugin: DomainPlugin<RabbitClusterState, RabbitSimEve
     category: 'STREAMING',
     description: 'Direct/Fanout/Topic exchange routing with wildcards (*, #), Dead-Letter Exchanges (DLX), message acks/nacks, TTL, and prefetch QoS.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'RabbitMQ-tested',
     icon: '🐇',
     color: '#f97316',
   },
@@ -251,6 +262,7 @@ export const StorageDomainPlugin: DomainPlugin<StorageEngineClusterState, Storag
     category: 'DATABASE',
     description: 'B+ Tree page splits/balancing (SQLite/PostgreSQL) vs. LSM-Tree MemTable flushes, immutable SSTables, Bloom filters, and Leveled Compaction (RocksDB/Cassandra).',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'SQLite-tested',
     icon: '💾',
     color: '#14b8a6',
   },
@@ -289,6 +301,7 @@ export const NetworkingDomainPlugin: DomainPlugin<NetworkingClusterState, Networ
     category: 'NETWORKING',
     description: 'Packet-level simulation of TCP 3-way handshake (SYN -> SYN-ACK -> ACK), sliding window sequence numbering, packet drop retransmissions, and AIMD congestion control.',
     fidelityTag: 'ORACLE_TESTED',
+    fidelityDisplayName: 'RFC-tested',
     icon: '🌐',
     color: '#06b6d4',
   },

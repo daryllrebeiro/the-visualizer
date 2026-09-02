@@ -61,7 +61,7 @@ export function reconcileCluster(state: K8sClusterState): void {
         const podId = `pod-${rs.id}-${String(state.tick)}-${String(i + 1)}`;
         state.pods[podId] = {
           id: podId,
-          name: `${rs.name}-${String(Math.random().toString(36).substring(2, 6))}`,
+          name: `${rs.name}-${String(state.tick)}-${String(i + 1)}`,
           namespace: 'default',
           deploymentId: rs.deploymentId,
           replicaSetId: rs.id,
