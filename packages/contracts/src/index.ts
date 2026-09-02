@@ -20,3 +20,6 @@ export * from './websocket/index.js';
 
 // API contracts
 export * from './api/index.js';
+
+// Auth & Revocation
+export * from './auth/token-revocation.js';

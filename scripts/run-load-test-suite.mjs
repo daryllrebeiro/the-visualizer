@@ -1,11 +1,14 @@
 /**
- * WebSocket Load & Concurrency Test Script
- * Connects N concurrent WebSocket clients to ws-gateway, joins rooms, sends heartbeats/intents,
- * and measures throughput, error rate, memory delta, and connection success rate.
+ * Self-Contained Gateway Concurrency & Load Benchmark Suite
  */
 
+import http from 'http';
 import crypto from 'crypto';
+import { createWebSocketServer } from '../apps/ws-gateway/dist/gateway/ws-server.js';
 
+const PORT = 4077;
+const CONCURRENT_CLIENTS = 50;
+const DURATION_SECONDS = 120;
 const SECRET = process.env.SESSION_SECRET || '01234567890123456789012345678901';
 
 function makeJWT(payload, secret) {
@@ -15,19 +18,20 @@ function makeJWT(payload, secret) {
   return `${header}.${body}.${sig}`;
 }
 
-const CONCURRENT_CLIENTS = 50;
-const DURATION_SECONDS = 10;
-const WS_BASE_URL = process.env.WS_GATEWAY_URL || 'ws://localhost:4001';
+async function main() {
+  console.log('🚀 Launching Dedicated Load Test Server on port', PORT);
+  const server = http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('OK');
+  });
 
-async function runLoadTest() {
+  const wss = createWebSocketServer(server);
+  await new Promise((resolve) => server.listen(PORT, resolve));
+
   const token = makeJWT({ id: 'load-tester', email: 'load@example.com' }, SECRET);
-  const WS_URL = `${WS_BASE_URL}?token=${token}`;
+  const WS_URL = `ws://localhost:${PORT}?token=${token}`;
 
-  console.log(`🚀 Starting WebSocket Gateway Concurrency & Load Test`);
-  console.log(`- Target: ${WS_BASE_URL}`);
-  console.log(`- Concurrency: ${CONCURRENT_CLIENTS} concurrent clients`);
-  console.log(`- Duration: ${DURATION_SECONDS}s`);
-  console.log('='.repeat(80));
+  console.log(`📡 Connecting ${CONCURRENT_CLIENTS} concurrent WebSocket clients to ws://localhost:${PORT}...`);
 
   let connectedCount = 0;
   let errorCount = 0;
@@ -40,33 +44,26 @@ async function runLoadTest() {
   const startRssMb = process.memoryUsage().rss / (1024 * 1024);
   const startHeapMb = process.memoryUsage().heapUsed / (1024 * 1024);
 
-  // Connect all clients
   for (let i = 0; i < CONCURRENT_CLIENTS; i++) {
-    const roomId = `load-room-${i % 5}`;
-    const client = new WebSocket(WS_URL);
-    sockets.push(client);
+    const roomId = `room-${i % 5}`;
+    const ws = new WebSocket(WS_URL);
+    sockets.push(ws);
 
-    client.onopen = () => {
+    ws.onopen = () => {
       connectedCount++;
-      // Send JOIN_ROOM intent
-      client.send(
-        JSON.stringify({
-          type: 'JOIN_ROOM',
-          payload: { roomId, domainId: 'kafka' },
-        })
-      );
+      ws.send(JSON.stringify({ type: 'JOIN_ROOM', payload: { roomId, domainId: 'kafka' } }));
       messagesSent++;
     };
 
-    client.onmessage = () => {
+    ws.onmessage = () => {
       messagesReceived++;
     };
 
-    client.onerror = () => {
+    ws.onerror = (err) => {
       errorCount++;
     };
 
-    client.onclose = () => {
+    ws.onclose = () => {
       if (Date.now() - startTime < DURATION_SECONDS * 1000 - 500) {
         droppedCount++;
       }
@@ -95,6 +92,9 @@ async function runLoadTest() {
   }
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
+  server.close();
+  wss.close();
+
   const totalTimeSec = (Date.now() - startTime) / 1000;
   const endRssMb = process.memoryUsage().rss / (1024 * 1024);
   const endHeapMb = process.memoryUsage().heapUsed / (1024 * 1024);
@@ -112,6 +112,7 @@ async function runLoadTest() {
   console.log(`- Starting Memory (RSS): ${startRssMb.toFixed(2)} MB (Heap: ${startHeapMb.toFixed(2)} MB)`);
   console.log(`- Ending Memory (RSS): ${endRssMb.toFixed(2)} MB (Heap: ${endHeapMb.toFixed(2)} MB)`);
   console.log(`- RSS Memory Growth: ${rssDeltaMb >= 0 ? '+' : ''}${rssDeltaMb.toFixed(2)} MB (Heap Growth: ${heapDeltaMb >= 0 ? '+' : ''}${heapDeltaMb.toFixed(2)} MB)`);
+  process.exit(0);
 }
 
-runLoadTest().catch(console.error);
+main().catch(console.error);

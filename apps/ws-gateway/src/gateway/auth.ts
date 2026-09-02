@@ -1,3 +1,4 @@
+import { tokenRevocationStore } from '@the-visualizer/contracts';
 import { verify } from 'hono/jwt';
 
 import { JWT_SECRET } from '../config.js';
@@ -35,6 +36,11 @@ export async function authenticateConnection(
     }
 
     if (!token) return null;
+
+    // Check revocation store before accepting
+    if (await tokenRevocationStore.isRevoked(token)) {
+      return null;
+    }
 
     // Verify JWT payload
     const payload = (await verify(token, JWT_SECRET, 'HS256')) as Record<string, unknown>;

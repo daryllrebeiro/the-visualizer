@@ -96,6 +96,13 @@ if (process.env.NODE_ENV !== 'test') {
     }
   );
 
+  // Explicit HTTP transport timeouts (prevent slowloris and resource starvation)
+  const httpServer = server as import('http').Server;
+  httpServer.keepAliveTimeout = 65000;
+  httpServer.headersTimeout = 66000;
+  httpServer.requestTimeout = 30000;
+  httpServer.maxHeadersCount = 100;
+
   const handleShutdown = (signal: string) => {
     console.log(`Received ${signal}. Shutting down API server gracefully...`);
     if (server) {

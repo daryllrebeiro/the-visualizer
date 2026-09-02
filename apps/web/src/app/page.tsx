@@ -15,6 +15,7 @@ import { type ConnectionStatus, type EntityRef, type EventLogItem, WebSocketClie
 import { EntityInspector, type InspectableEntity } from '../components/inspector/EntityInspector';
 import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
 import { TraceImportModal } from '../components/scenarios/TraceImportModal';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { RaftVisualizer } from '../components/raft/RaftVisualizer';
 import { HashRingVisualizer } from '../components/database/HashRingVisualizer';
 import { RedisClusterVisualizer } from '../components/redis/RedisClusterVisualizer';
@@ -2033,33 +2034,39 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         <div className="header-right">
           <div className="connection-pill">
             <div className="connection-field">
-              <span className="connection-field-label">REST Gateway</span>
+              <label htmlFor="rest-gateway-url-input" className="connection-field-label">REST Gateway</label>
               <input
+                id="rest-gateway-url-input"
                 type="text"
                 value={restUrl}
                 onChange={(e) => setRestUrl(e.target.value)}
+                aria-label="REST Gateway URL"
                 className="connection-field-input"
                 style={{ width: 160 }}
               />
             </div>
             <div className="connection-divider" />
             <div className="connection-field">
-              <span className="connection-field-label">WS Tunnel</span>
+              <label htmlFor="ws-tunnel-url-input" className="connection-field-label">WS Tunnel</label>
               <input
+                id="ws-tunnel-url-input"
                 type="text"
                 value={wsUrl}
                 onChange={(e) => setWsUrl(e.target.value)}
+                aria-label="WebSocket Tunnel URL"
                 className="connection-field-input"
                 style={{ width: 160 }}
               />
             </div>
             <div className="connection-divider" />
             <div className="connection-field">
-              <span className="connection-field-label">Room</span>
+              <label htmlFor="room-id-input" className="connection-field-label">Room</label>
               <input
+                id="room-id-input"
                 type="text"
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
+                aria-label="Simulation Room ID"
                 className="connection-field-input"
                 style={{ width: 72 }}
               />
@@ -2126,7 +2133,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       <div className="app-body">
 
         {/* ── Left Sidebar ── */}
-        <aside className="sidebar">
+        <aside className="sidebar" aria-label={`${selectedDomain} simulation controls and overview`}>
 
           {/* System Overview */}
           <div className="card card--yellow">
@@ -2171,6 +2178,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 <select
                   value={producerSelectedTopic}
                   onChange={(e) => setProducerSelectedTopic(e.target.value)}
+                  aria-label="Bind producer to topic"
                   className="producer-select"
                   style={{ width: '100%', marginBottom: '8px' }}
                 >
@@ -2229,6 +2237,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                         <select
                           value={prod.topic}
                           onChange={(e) => handleProducerTopicChange(prod.id, e.target.value)}
+                          aria-label={`Select topic for producer ${prod.id}`}
                           className="producer-select"
                           disabled={isHalted}
                         >
@@ -2256,6 +2265,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
                       {/* Auto-Produce Cadence Slider & Input Drawer */}
                       <div className="producer-auto-drawer">
+                        <label className="producer-auto-rate-label" style={{ display: 'block', marginBottom: '2px', fontSize: '9px', fontWeight: 600 }}>
+                          Cadence (seconds):
+                        </label>
                         <div className="producer-auto-controls-row">
                           <input
                             type="range"
@@ -2266,6 +2278,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                             onChange={(e) => handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))}
                             className="producer-auto-slider"
                             disabled={isHalted}
+                            aria-label={`Auto-produce interval for producer ${prod.id} in seconds`}
                             title={`Auto-produce interval: ${interval.toFixed(1)}s`}
                           />
                           <input
@@ -2282,6 +2295,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                             }}
                             className="producer-auto-number-input"
                             disabled={isHalted}
+                            aria-label={`Exact auto-produce interval in seconds for producer ${prod.id}`}
                             title="Exact interval in seconds"
                           />
                         </div>
@@ -2334,6 +2348,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 <select
                   value={consumerSelectedTopic}
                   onChange={(e) => setConsumerSelectedTopic(e.target.value)}
+                  aria-label="Select topic to subscribe"
                   className="producer-select"
                   style={{ width: '100%', marginBottom: '8px' }}
                 >
@@ -2346,6 +2361,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 <select
                   value={consumerSelectedGroup}
                   onChange={(e) => setConsumerSelectedGroup(e.target.value)}
+                  aria-label="Select consumer group"
                   className="producer-select"
                   style={{ width: '100%', marginBottom: '8px' }}
                 >
@@ -2394,6 +2410,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                     <select
                       value={c.topic}
                       onChange={(e) => handleConsumerTopicChange(c.id, e.target.value)}
+                      aria-label={`Topic subscription for consumer ${c.id}`}
                       className="producer-select"
                       disabled={isHalted || c.joined}
                     >
@@ -2447,23 +2464,27 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
             </div>
             <form onSubmit={handleCreateTopic} className="form-body">
               <div className="form-group">
-                <span className="form-label">Topic Name</span>
+                <label htmlFor="new-topic-name-input" className="form-label">Topic Name</label>
                 <input
+                  id="new-topic-name-input"
                   type="text"
                   value={newTopicName}
                   onChange={(e) => setNewTopicName(e.target.value)}
+                  aria-label="New topic name"
                   className="form-input"
                   required
                 />
               </div>
               <div className="form-group">
-                <span className="form-label">Partitions</span>
+                <label htmlFor="new-partitions-input" className="form-label">Partitions</label>
                 <input
+                  id="new-partitions-input"
                   type="number"
                   min="1"
                   max="10"
                   value={newPartitions}
                   onChange={(e) => setNewPartitions(parseInt(e.target.value, 10))}
+                  aria-label="Number of partitions"
                   className="form-input"
                   required
                 />
@@ -2677,80 +2698,82 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
         {/* ── Center Canvas ── */}
         <main className="canvas-panel">
-          {selectedDomain === 'kafka' ? (
-            <Visualizer
-              state={renderedState}
-              producers={producers}
-              consumers={consumers}
-              produceTrigger={produceTrigger}
-              resetTrigger={resetCounter}
-              onHoverDetails={setHoverDetails}
-              onSelectEntity={(entity) => setInspectEntity(entity)}
-            />
-          ) : selectedDomain === 'raft' ? (
-            <RaftVisualizer
-              state={raftState}
-              onProposeCommand={handleRaftProposeCommand}
-              onCrashNode={handleRaftCrashNode}
-              onRecoverNode={handleRaftRecoverNode}
-              onTogglePartition={handleRaftTogglePartition}
-            />
-          ) : selectedDomain === 'database' ? (
-            <HashRingVisualizer
-              state={dbState}
-              onWriteKey={handleDBWriteKey}
-              onReadKey={handleDBReadKey}
-              onAddNode={handleDBAddNode}
-              onCrashNode={handleDBCrashNode}
-              onRecoverNode={handleDBRecoverNode}
-              onUpdateConsistency={handleDBUpdateConsistency}
-            />
-          ) : selectedDomain === 'redis' ? (
-            <RedisClusterVisualizer
-              state={redisState}
-              onSetKey={handleRedisSetKey}
-              onGetKey={handleRedisGetKey}
-              onDelKey={handleRedisDelKey}
-              onReshard={handleRedisReshard}
-              onCrashNode={handleRedisCrashNode}
-              onRecoverNode={handleRedisRecoverNode}
-              onSetEvictionPolicy={handleRedisSetEvictionPolicy}
-            />
-          ) : selectedDomain === 'kubernetes' ? (
-            <K8sClusterVisualizer
-              state={k8sState}
-              onScaleDeployment={handleK8sScaleDeployment}
-              onUpdateImage={handleK8sUpdateImage}
-              onNodeCordon={handleK8sNodeCordon}
-              onNodeDrain={handleK8sNodeDrain}
-              onNodeCrash={handleK8sNodeCrash}
-              onNodeRecover={handleK8sNodeRecover}
-            />
-          ) : selectedDomain === 'rabbitmq' ? (
-            <RabbitMQVisualizer
-              state={rabbitState}
-              onPublish={handleRabbitPublish}
-              onAck={handleRabbitAck}
-              onNack={handleRabbitNack}
-              onReject={handleRabbitReject}
-            />
-          ) : selectedDomain === 'storage' ? (
-            <StorageEngineVisualizer
-              state={storageState}
-              onWrite={handleStorageWrite}
-              onRead={handleStorageRead}
-              onSwitchEngine={handleStorageSwitchEngine}
-              onTriggerFlush={handleStorageTriggerFlush}
-              onTriggerCompaction={handleStorageTriggerCompaction}
-            />
-          ) : (
-            <NetworkingVisualizer
-              state={networkingState}
-              onStartHandshake={handleNetworkingStartHandshake}
-              onSendData={handleNetworkingSendData}
-              onDropPacket={handleNetworkingDropPacket}
-            />
-          )}
+          <ErrorBoundary fallbackTitle={`${selectedDomain.toUpperCase()} Visualizer Fault`}>
+            {selectedDomain === 'kafka' ? (
+              <Visualizer
+                state={renderedState}
+                producers={producers}
+                consumers={consumers}
+                produceTrigger={produceTrigger}
+                resetTrigger={resetCounter}
+                onHoverDetails={setHoverDetails}
+                onSelectEntity={(entity) => setInspectEntity(entity)}
+              />
+            ) : selectedDomain === 'raft' ? (
+              <RaftVisualizer
+                state={raftState}
+                onProposeCommand={handleRaftProposeCommand}
+                onCrashNode={handleRaftCrashNode}
+                onRecoverNode={handleRaftRecoverNode}
+                onTogglePartition={handleRaftTogglePartition}
+              />
+            ) : selectedDomain === 'database' ? (
+              <HashRingVisualizer
+                state={dbState}
+                onWriteKey={handleDBWriteKey}
+                onReadKey={handleDBReadKey}
+                onAddNode={handleDBAddNode}
+                onCrashNode={handleDBCrashNode}
+                onRecoverNode={handleDBRecoverNode}
+                onUpdateConsistency={handleDBUpdateConsistency}
+              />
+            ) : selectedDomain === 'redis' ? (
+              <RedisClusterVisualizer
+                state={redisState}
+                onSetKey={handleRedisSetKey}
+                onGetKey={handleRedisGetKey}
+                onDelKey={handleRedisDelKey}
+                onReshard={handleRedisReshard}
+                onCrashNode={handleRedisCrashNode}
+                onRecoverNode={handleRedisRecoverNode}
+                onSetEvictionPolicy={handleRedisSetEvictionPolicy}
+              />
+            ) : selectedDomain === 'kubernetes' ? (
+              <K8sClusterVisualizer
+                state={k8sState}
+                onScaleDeployment={handleK8sScaleDeployment}
+                onUpdateImage={handleK8sUpdateImage}
+                onNodeCordon={handleK8sNodeCordon}
+                onNodeDrain={handleK8sNodeDrain}
+                onNodeCrash={handleK8sNodeCrash}
+                onNodeRecover={handleK8sNodeRecover}
+              />
+            ) : selectedDomain === 'rabbitmq' ? (
+              <RabbitMQVisualizer
+                state={rabbitState}
+                onPublish={handleRabbitPublish}
+                onAck={handleRabbitAck}
+                onNack={handleRabbitNack}
+                onReject={handleRabbitReject}
+              />
+            ) : selectedDomain === 'storage' ? (
+              <StorageEngineVisualizer
+                state={storageState}
+                onWrite={handleStorageWrite}
+                onRead={handleStorageRead}
+                onSwitchEngine={handleStorageSwitchEngine}
+                onTriggerFlush={handleStorageTriggerFlush}
+                onTriggerCompaction={handleStorageTriggerCompaction}
+              />
+            ) : (
+              <NetworkingVisualizer
+                state={networkingState}
+                onStartHandshake={handleNetworkingStartHandshake}
+                onSendData={handleNetworkingSendData}
+                onDropPacket={handleNetworkingDropPacket}
+              />
+            )}
+          </ErrorBoundary>
           {hoverDetails && selectedDomain === 'kafka' && (
             <div className="hover-tooltip">
               <p className="hover-tooltip__title">{hoverDetails.title}</p>
@@ -2771,7 +2794,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         </main>
 
         {/* ── Right Event Log ── */}
-        <aside className="card card--purple log-sidebar">
+        <aside className="card card--purple log-sidebar" aria-label="Event audit log and state inspector">
           <p className="card-title card-title--purple">Event Log Stream</p>
           <div className="log-list">
             {eventLogs.length === 0

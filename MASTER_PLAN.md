@@ -320,3 +320,20 @@ When slicing a phase for a coding agent:
 3. Require `pnpm test:determinism` before and after every change.
 4. Forbid `packages/simulation` reducer modifications when the task is UI-only (Phases 1–3, 7).
 5. Each PR maps to one checklist cluster with acceptance criteria in the PR description.
+
+---
+
+## Next Horizon: Modern AI Infrastructure Expansion (Domains 9–13)
+
+With General Availability (GA) hardening complete and Scorecard V4 certified at 94/100, the platform is expanding to 13 domains to cover the modern Generative AI Infrastructure stack:
+
+| Domain Key | Subsystem | Focus Area | Phased Milestone |
+| :--- | :--- | :--- | :---: |
+| `/rag` | Retrieval-Augmented Generation | Chunking, hybrid BM25/vector search, cross-encoder re-ranking | Phase N.1 - N.6 |
+| `/agents` | Multi-Agent Orchestration & MCP | ReAct loops, Model Context Protocol tools, hierarchical supervision | Phase N.1 - N.6 |
+| `/llm-serving` | LLM Inference & PagedAttention | Virtual KV-cache block allocator, continuous batching, speculative decoding | Phase N.1 - N.6 |
+| `/vectordb` | Vector DB & ANN Search | Multi-layer HNSW graphs, IVF-PQ quantization, greedy beam routing | Phase N.1 - N.6 |
+| `/gpu-cluster` | GPU Scheduling & 3D Parallelism | 1F1B pipeline schedule, Tensor Parallelism, DeepSpeed ZeRO-3 sharding | Phase N.1 - N.6 |
+
+*See full architectural specifications, invariants, and phased implementation schedule in [`docs/architecture/AI_INFRA_EXPANSION_PLAN.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/docs/architecture/AI_INFRA_EXPANSION_PLAN.md).*
+

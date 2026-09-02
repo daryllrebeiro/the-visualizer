@@ -262,8 +262,9 @@ The platform is designed around **Deterministic Discrete-Event Simulation (DDES)
 
 ---
 
-## 3. Platform Directory Matrix
+## 3. Platform Directory Matrix (13-Domain Suite)
 
+### Part I: Core Distributed Systems Foundations
 | Domain Key | System Title | Category | Reference Spec | Key Invariant |
 |---|---|---|---|---|
 | `/kafka` | Apache Kafka | Streaming | KRaft / Kafka 4.0 | Monotonic High Watermark |
@@ -274,6 +275,17 @@ The platform is designed around **Deterministic Discrete-Event Simulation (DDES)
 | `/rabbitmq` | RabbitMQ | Messaging | AMQP 0-9-1 / DLX | Queue FIFO & Poison DLX |
 | `/storage` | Storage Engine | Storage | SQLite B+ Tree vs RocksDB LSM | Bloom Filter No False Negatives |
 | `/networking` | TCP Networking | Networking | RFC 793 TCP / RFC 5681 AIMD | Strict Sliding Window Bounds |
+
+### Part II: Modern AI Infrastructure Stack
+| Domain Key | System Title | Category | Reference Spec | Key Invariant |
+|---|---|---|---|---|
+| `/rag` | Retrieval-Augmented Generation | AI / Retrieval | Modular RAG / DPR / Cross-Encoder | Context Budget Bounds & Citation Grounding |
+| `/agents` | Multi-Agent MCP Swarm | AI / Orchestration | Anthropic MCP Spec 2024 / ReAct | Acyclic Delegation & Schema Conformance |
+| `/llm-serving` | LLM Inference & PagedAttention | AI / Systems | vLLM SOSP '23 / Continuous Batching | Zero Physical KV-Block Collision |
+| `/vectordb` | Vector DB & ANN Search | AI / Vector | HNSW (Malkov) / IVF-PQ (Jegou) | Layer Subsumption & Node Degree Ceiling |
+| `/gpu-cluster` | GPU Scheduling & 3D Parallelism | AI / Compute | Megatron-LM / DeepSpeed ZeRO-3 | 3D Consistency ($TP \times PP \times DP = N$) |
+
+*Comprehensive specifications and phased implementation roadmap available in [`docs/architecture/AI_INFRA_EXPANSION_PLAN.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/docs/architecture/AI_INFRA_EXPANSION_PLAN.md).*
 
 ---
 

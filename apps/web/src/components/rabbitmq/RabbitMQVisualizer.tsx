@@ -74,6 +74,7 @@ export function RabbitMQVisualizer({
           <select
             value={selectedExchange}
             onChange={(e) => setSelectedExchange(e.target.value)}
+            aria-label="Target RabbitMQ exchange"
             style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
           >
             {exchanges.map((ex) => (

@@ -28,15 +28,23 @@ export function HashRingVisualizer({
   const [readKeyInput, setReadKeyInput] = useState('user:42');
   const [lastReadResult, setLastReadResult] = useState<string | null>(null);
 
-  // Hash Ring calculations for SVG
-  const ring = new ConsistentHashRing(3);
-  ring.setRingTokens(state.ringTokens);
-  const activeKeyToken = keyInput ? hashToToken(keyInput) : 0;
-  const { replicaNodeIds } = ring.findReplicas(keyInput, state.replicationFactor);
-
   const cx = 200;
   const cy = 200;
   const radius = 140;
+
+  // Memoized Consistent Hash Ring instance to prevent continuous re-allocation
+  const ring = React.useMemo(() => {
+    const r = new ConsistentHashRing(3);
+    r.setRingTokens(state.ringTokens);
+    return r;
+  }, [state.ringTokens]);
+
+  const activeKeyToken = React.useMemo(() => (keyInput ? hashToToken(keyInput) : 0), [keyInput]);
+
+  const replicaNodeIds = React.useMemo(
+    () => ring.findReplicas(keyInput, state.replicationFactor).replicaNodeIds,
+    [ring, keyInput, state.replicationFactor],
+  );
 
   const tokenToAngle = (token: number): number => {
     return (token / 4294967295) * 360;
@@ -49,6 +57,22 @@ export function HashRingVisualizer({
       y: cy + radius * Math.sin(rad),
     };
   };
+
+  // Pre-calculated vnode coordinate mapping
+  const tokenCoordinates = React.useMemo(() => {
+    return state.ringTokens.map((item, idx) => {
+      const deg = (item.token / 4294967295) * 360;
+      const rad = ((deg - 90) * Math.PI) / 180;
+      return {
+        idx,
+        item,
+        pos: {
+          x: cx + radius * Math.cos(rad),
+          y: cy + radius * Math.sin(rad),
+        },
+      };
+    });
+  }, [state.ringTokens]);
 
   // PACELC Quorum Calculation
   const getRequiredCount = (level: ConsistencyLevel): number => {
@@ -136,6 +160,7 @@ export function HashRingVisualizer({
             <select
               value={state.writeConsistency}
               onChange={(e) => onUpdateConsistency(state.readConsistency, e.target.value as ConsistencyLevel)}
+              aria-label="Write consistency level (W)"
               style={{ backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', padding: '4px' }}
             >
               <option value="ONE">ONE (1)</option>
@@ -147,6 +172,7 @@ export function HashRingVisualizer({
             <select
               value={state.readConsistency}
               onChange={(e) => onUpdateConsistency(e.target.value as ConsistencyLevel, state.writeConsistency)}
+              aria-label="Read consistency level (R)"
               style={{ backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', padding: '4px' }}
             >
               <option value="ONE">ONE (1)</option>
@@ -199,9 +225,7 @@ export function HashRingVisualizer({
             />
 
             {/* Vnode Markers on Perimeter */}
-            {state.ringTokens.map((item, idx) => {
-              const deg = tokenToAngle(item.token);
-              const pos = angleToCoord(deg);
+            {tokenCoordinates.map(({ idx, item, pos }) => {
               const node = state.nodes[item.nodeId];
               const isTargetReplica = replicaNodeIds.includes(item.nodeId);
 

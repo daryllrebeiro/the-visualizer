@@ -34,7 +34,7 @@ interface ExtendedWebSocket extends WebSocket {
   };
 }
 
-function checkConnectionRateLimit(ws: ExtendedWebSocket): { allowed: boolean; terminate: boolean } {
+export function checkConnectionRateLimit(ws: ExtendedWebSocket): { allowed: boolean; terminate: boolean } {
   const now = Date.now();
 
   // 1. Hard system limit (250 msgs/s)
@@ -177,7 +177,7 @@ export const DEFAULT_TOPOLOGY: KafkaClusterState = {
 };
 
 export function createWebSocketServer(server: http.Server): WebSocketServer {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
   // 1. Handle upgrade requests with authentication validation
   server.on('upgrade', (request, socket, head) => {
@@ -217,6 +217,12 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
     ws.on('pong', () => {
       ws.isAlive = true;
+    });
+
+    ws.on('error', (err) => {
+      // Handle protocol-level errors (e.g. maxPayload exceeded) gracefully.
+      // The 'close' event will fire after this, triggering room cleanup.
+      logger.warn({ err, userId: ws.userId }, 'WebSocket connection error');
     });
 
     ws.on('message', (data: Buffer, isBinary: boolean) => {

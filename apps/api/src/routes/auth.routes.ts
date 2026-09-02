@@ -4,6 +4,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sign, verify } from 'hono/jwt';
 import { z } from 'zod';
 
+import { tokenRevocationStore } from '@the-visualizer/contracts';
 import { JWT_SECRET } from '../config.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
@@ -184,11 +185,33 @@ authRouter.post('/refresh', async (c) => {
   }
 });
 
-// ─── 4. Logout ────────────────────────────────────────────────────────────────
-authRouter.post('/logout', (c) => {
+// ─── 4. Logout & Revocation ──────────────────────────────────────────────────
+authRouter.post('/logout', async (c) => {
+  const sessionToken = getCookie(c, 'session_token');
+  const refreshToken = getCookie(c, 'refresh_token');
+  const authHeader = c.req.header('Authorization');
+  let bearerToken: string | undefined;
+  if (authHeader?.startsWith('Bearer ')) {
+    bearerToken = authHeader.substring(7);
+  }
+
+  if (sessionToken) await tokenRevocationStore.revoke(sessionToken);
+  if (refreshToken) await tokenRevocationStore.revoke(refreshToken);
+  if (bearerToken) await tokenRevocationStore.revoke(bearerToken);
+
   deleteCookie(c, 'session_token', { path: '/' });
   deleteCookie(c, 'refresh_token', { path: '/auth/refresh' });
-  return c.json({ success: true, message: 'Successfully logged out' });
+  return c.json({ success: true, message: 'Successfully logged out and session revoked' });
+});
+
+const revokeSchema = z.object({
+  token: z.string().min(1),
+});
+
+authRouter.post('/revoke', zValidator('json', revokeSchema), async (c) => {
+  const { token } = c.req.valid('json');
+  await tokenRevocationStore.revoke(token);
+  return c.json({ success: true, message: 'Token successfully revoked' });
 });
 
 // ─── 5. Dev Login (Strictly Gated from Production) ────────────────────────────

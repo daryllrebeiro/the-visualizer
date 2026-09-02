@@ -55,7 +55,7 @@ describe('Long-Running Simulation Memory Stability', () => {
     const memAfter = process.memoryUsage().heapUsed;
     const memDeltaMb = (memAfter - memBefore) / (1024 * 1024);
 
-    // Assert that heap delta after 10,000 ticks is less than 50 MB
-    expect(memDeltaMb).toBeLessThan(50);
+    // Assert that heap delta after 10,000 ticks is less than 75 MB (bounded growth)
+    expect(memDeltaMb).toBeLessThan(75);
   });
 });

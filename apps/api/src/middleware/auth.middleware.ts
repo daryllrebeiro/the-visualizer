@@ -1,3 +1,4 @@
+import { tokenRevocationStore } from '@the-visualizer/contracts';
 import type { MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { verify } from 'hono/jwt';
@@ -37,6 +38,12 @@ export const authenticate: MiddlewareHandler = async (c, next) => {
 
   if (token) {
     try {
+      // Check revocation store before processing
+      if (await tokenRevocationStore.isRevoked(token)) {
+        await next();
+        return;
+      }
+
       const payload = await verify(token, JWT_SECRET, 'HS256');
       if (payload && typeof payload.id === 'string') {
         // Fetch or verify user exists in DB

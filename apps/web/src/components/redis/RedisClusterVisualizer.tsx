@@ -87,6 +87,7 @@ export function RedisClusterVisualizer({
           <select
             value={state.evictionPolicy}
             onChange={(e) => onSetEvictionPolicy(e.target.value as EvictionPolicy)}
+            aria-label="Redis cache eviction policy"
             style={{
               backgroundColor: '#1e293b',
               color: '#f8fafc',
@@ -204,6 +205,7 @@ export function RedisClusterVisualizer({
               <select
                 value={targetNodeInput}
                 onChange={(e) => setTargetNodeInput(e.target.value)}
+                aria-label="Target Redis contact node"
                 style={{ flex: 1, padding: '5px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
               >
                 <option value="">Auto-Route</option>
