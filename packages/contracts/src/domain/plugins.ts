@@ -16,6 +16,7 @@ export const DomainPluginMetadataSchema = z.object({
   category: z.enum(['STREAMING', 'CONSENSUS', 'DATABASE', 'CACHE', 'ORCHESTRATION', 'NETWORKING']),
   description: z.string().max(1000),
   fidelityTag: FidelityTagSchema,
+  fidelityDisplayName: z.string().optional(),
   oracleSystemName: z.string().optional(), // e.g. "apache/kafka:4.3", "etcd-io/raft", "cassandra:4.1", "redis:7.2", "kind/k8s:v1.30"
   icon: z.string().default('⚡'),
   color: z.string().default('#6366f1'),

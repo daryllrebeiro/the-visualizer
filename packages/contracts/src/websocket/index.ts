@@ -98,11 +98,24 @@ export const IntentResetSchema = IntentBaseSchema.extend({
   type: z.literal('INTENT_RESET'),
 });
 
+export const IntentJoinRoomSchema = IntentBaseSchema.extend({
+  type: z.literal('JOIN_ROOM'),
+  roomId: z.string().min(1).max(255),
+  domainId: z.string().min(1).max(255).default('kafka'),
+});
+
+export const IntentGapRecoverySchema = IntentBaseSchema.extend({
+  type: z.literal('GAP_RECOVERY'),
+  fromSequence: z.number().nonnegative(),
+});
+
 /**
  * Discriminated union of all valid client intents.
  * Validated on the server before any simulation action is taken.
  */
 export const ClientIntentSchema = z.discriminatedUnion('type', [
+  IntentJoinRoomSchema,
+  IntentGapRecoverySchema,
   IntentProduceSchema,
   IntentConsumerJoinSchema,
   IntentConsumerLeaveSchema,
