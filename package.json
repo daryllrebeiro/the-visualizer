@@ -8,11 +8,11 @@
     "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "build": "pnpm --recursive build",
+    "build": "turbo build",
     "dev": "pnpm --recursive --parallel dev",
-    "test": "pnpm --filter @the-visualizer/simulation test",
-    "test:determinism": "pnpm --filter @the-visualizer/simulation exec vitest run src/golden-determinism.test.ts",
-    "test:all": "pnpm --filter @the-visualizer/simulation test && pnpm --filter @the-visualizer/web test",
+    "test": "vitest run packages/simulation",
+    "test:determinism": "vitest run packages/simulation/src/golden-determinism.test.ts",
+    "test:all": "vitest run",
     "sim": "node scripts/sim-cli.mjs",
     "create:domain": "node scripts/create-domain.mjs",
     "lint": "pnpm --recursive lint",

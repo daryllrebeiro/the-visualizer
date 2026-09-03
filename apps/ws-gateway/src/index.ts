@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
     });
     register
       .metrics()
-      .then((metricsText) => {
+      .then((metricsText: string) => {
         res.end(metricsText);
       })
       .catch((err: unknown) => {

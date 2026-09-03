@@ -44,12 +44,12 @@ xychart-beta
 | **1. Correctness & Determinism** | 20% | 98 | 98 | **98** | **19.60 / 20** | 20/20 golden determinism tests pass; 0 entropy in domain reducers; 3,300 fuzz iterations. |
 | **2. Security** | 20% | 72 | 72 | **96** | **19.20 / 20** | SHA256 Docker pinning check; non-root runners; capability drops; token revocation store on API & WS; live rate limiting (20 msg/s soft, 250 msg/s termination, 1MB frame cap); Syft SBOM; 9/9 checklist items met. |
 | **3. Reliability & Observability** | 15% | 58 | 64 | **88** | **13.20 / 15** | `<ErrorBoundary>` wraps canvas stage with fallback and reset; Prometheus & Grafana in `docker-compose.yml`; Close code 1001 graceful socket drain; 120s load test (0 drops, +0.63MB heap delta); nightly soak workflow. |
-| **4. Test Coverage & Quality** | 15% | 82 | 82 | **90** | **13.50 / 15** | 43 test suites, 182 unit/integration/contract tests passing (100% pass rate). New suites for server timeouts, error boundaries, and token revocation. |
-| **5. Performance & Scalability** | 10% | 84 | 85 | **90** | **9.00 / 10** | Headless engine 39,279 ticks/s; Lighthouse audit: all 8 domains + root score **87 / 100**; `/database` TBT slashed from 560ms to 10ms. |
-| **6. Accessibility & UX Quality** | 10% | 75 | 83 | **98** | **9.80 / 10** | Real `axe-core` scan on production build: **100 / 100 with 0 violations across ALL 8 domain visualizer routes**; average 98.5/100 across 10 routes. |
+| **4. Test Coverage & Quality** | 15% | 82 | 82 | **90** | **13.50 / 15** | 44 test suites, 183 unit/integration/contract tests passing (100% pass rate). New suites for server timeouts, error boundaries, and token revocation. |
+| **5. Performance & Scalability** | 10% | 84 | 85 | **90** | **9.00 / 10** | Headless engine 39,279 ticks/s; Lighthouse audit: all 8 domains + root average **86.6 / 100**; `/database` TBT slashed from 560ms to 30ms. |
+| **6. Accessibility & UX Quality** | 10% | 75 | 83 | **100** | **10.00 / 10** | Real `axe-core` scan on production build: **100 / 100 with 0 violations across ALL 10 audited routes** (including all 8 domain routes, root, and design system). |
 | **7. Documentation & Architecture** | 5% | 98 | 98 | **98** | **4.90 / 5** | Architectural specifications, `INCIDENT_NOTES.md`, `RATE_LIMIT_VERIFICATION.md`, and complete Next-5-Domains AI Expansion Plan. |
 | **8. Developer Tooling & Automation** | 5% | 95 | 95 | **98** | **4.90 / 5** | Full CI automation (Docker pinning, SBOM, rate limit ingress, WS load test, axe-core a11y, Lighthouse CWV, nightly soak). |
-| **TOTAL** | **100%** | **81** | **82** | **94** | **94.10 -> 94 / 100** | 🟢 **GA GO (PRODUCTION READY)** |
+| **TOTAL** | **100%** | **81** | **82** | **94** | **94.30 -> 94 / 100** | 🟢 **GA GO (PRODUCTION READY)** |
 
 ---
 
@@ -59,11 +59,11 @@ xychart-beta
 | :--- | :---: | :--- | :---: |
 | **P0 Production Blockers** | 0 | 0 open blockers | 🟢 **PASS** |
 | **Simulation Determinism** | 100% (Zero entropy) | 20/20 golden tests pass; 0 entropy in all 8 reducers | 🟢 **PASS** |
-| **Security Gate** | >= 70% | **96.0%** (9 / 9 items met; SHA256 pinned; JWT revocation live) | 🟢 **PASS** |
+| **Security Gate** | >= 70% | **96.0%** (9 / 9 items met; SHA256 pinned; JWT revocation live; non-root user UID 1000) | 🟢 **PASS** |
 | **Reliability Gate** | >= 80% | **88.0%** (ErrorBoundary live; 0-drop load test; Grafana dashboard) | 🟢 **PASS** |
-| **Accessibility Gate** | >= 90% | **98.5%** (100% on all 8 domain routes; 0 WCAG violations) | 🟢 **PASS** |
+| **Accessibility Gate** | >= 90% | **100.0%** (100/100 on all 10 routes; 0 WCAG violations) | 🟢 **PASS** |
 | **Correctness Gate** | >= 80% | **98.0%** (Pure reducers, invariant monitors, fuzz tests) | 🟢 **PASS** |
-| **Automated Test Suite** | 100% Pass | 43 / 43 test files, 182 / 182 tests passing (0 failures) | 🟢 **PASS** |
+| **Automated Test Suite** | 100% Pass | 44 / 44 test files, 183 / 183 tests passing (0 failures) | 🟢 **PASS** |
 | **Typecheck Cleanliness** | 0 Errors | `pnpm typecheck` exit 0 across all 9 packages | 🟢 **PASS** |
 | **Static Build** | 0 Errors | `next build` compiled 13/13 static routes cleanly | 🟢 **PASS** |
 

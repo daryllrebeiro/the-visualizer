@@ -362,7 +362,7 @@ export class SimulationRunner {
 
             const partitions = engine.state.topics[entry.topic] ?? [];
             const activePartitions = partitions.filter(
-              (p) => p.leaderBrokerId && engine.state?.brokers[p.leaderBrokerId]?.status === 'ALIVE',
+              (p: (typeof partitions)[number]) => Boolean(p.leaderBrokerId && engine.state?.brokers[p.leaderBrokerId]?.status === 'ALIVE'),
             );
 
             if (activePartitions.length > 0) {

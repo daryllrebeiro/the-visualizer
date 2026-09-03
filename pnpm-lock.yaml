@@ -384,6 +384,9 @@ importers:
 
   packages/test-utils:
     dependencies:
+      '@the-visualizer/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       fast-check:
         specifier: ^3.22.0
         version: 3.23.2
@@ -391,9 +394,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(jsdom@30.0.1)(supports-color@7.2.0)
     devDependencies:
-      '@the-visualizer/contracts':
-        specifier: workspace:*
-        version: link:../contracts
       '@types/node':
         specifier: ^22.10.5
         version: 22.20.1

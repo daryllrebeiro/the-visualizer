@@ -31,7 +31,7 @@ export default function DesignSystemPage(): React.JSX.Element {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   return (
-    <div
+    <main
       style={{
         minHeight: '100vh',
         background: 'var(--bg-page, #f8fafc)',
@@ -41,7 +41,7 @@ export default function DesignSystemPage(): React.JSX.Element {
       }}
     >
       {/* Header */}
-      <div
+      <header
         style={{
           maxWidth: '1100px',
           margin: '0 auto 32px auto',
@@ -75,9 +75,10 @@ export default function DesignSystemPage(): React.JSX.Element {
           <StatusPill status="CONNECTED" />
           <StatusPill status="SANDBOX" />
         </div>
-      </div>
+      </header>
 
-      <div
+      <section
+        aria-label="Design System Components"
         style={{
           maxWidth: '1100px',
           margin: '0 auto',
@@ -275,7 +276,7 @@ export default function DesignSystemPage(): React.JSX.Element {
             </Button>
           </div>
         </Card>
-      </div>
+      </section>
 
       {/* Demo Modal */}
       <Modal
@@ -321,6 +322,6 @@ export default function DesignSystemPage(): React.JSX.Element {
           </div>
         </div>
       </Drawer>
-    </div>
+    </main>
   );
 }

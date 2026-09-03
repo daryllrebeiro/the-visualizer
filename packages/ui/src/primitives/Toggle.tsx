@@ -41,6 +41,7 @@ export const Toggle: React.FC<ToggleProps> = ({
       <div
         role="switch"
         aria-checked={checked}
+        aria-label={label ?? 'Toggle switch'}
         tabIndex={disabled ? -1 : 0}
         onClick={() => !disabled && onChange(!checked)}
         onKeyDown={(e) => {

@@ -55,6 +55,7 @@ export const Select = <T extends string | number = string>({
       <select
         value={String(value)}
         onChange={(e) => onChange(e.target.value as unknown as T)}
+        aria-label={label ?? 'Select option'}
         disabled={disabled}
         style={{
           padding: isSm ? '4px 8px' : '7px 12px',

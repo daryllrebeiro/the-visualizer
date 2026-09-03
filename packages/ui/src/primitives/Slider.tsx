@@ -67,6 +67,7 @@ export const Slider: React.FC<SliderProps> = ({
           max={max}
           step={step}
           value={value}
+          aria-label={label ?? 'Range slider'}
           disabled={disabled}
           onChange={(e) => onChange(Number(e.target.value))}
           style={{
