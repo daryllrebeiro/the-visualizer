@@ -112,18 +112,20 @@ services:
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:v2.54.1@sha256:373f1d3eef4a873132cf05d6cb44322471b6cb46e8c89c89ceba7a0d4c8851c1
+    image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
     container_name: kafka-visualizer-prometheus
     volumes:
       - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.2.0@sha256:d8ba39c9f7a77e1bf9a660a952243d9c79ecf79a9bc48972ec0b4e0bf129ba04
+    image: grafana/grafana:11.2.0@sha256:408afb9726de5122b00a2576763a8a57a3c86d5b0eff5305bc994ceb3eb96c3f
     container_name: kafka-visualizer-grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin

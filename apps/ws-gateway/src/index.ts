@@ -6,10 +6,17 @@ import { initGlobalExceptionHandling, logger, register } from '@the-visualizer/l
 
 initGlobalExceptionHandling('ws-gateway');
 
+import { Redis } from 'ioredis';
+import { tokenRevocationStore } from '@the-visualizer/contracts';
+
 import { config } from './config.js';
 import { roomManager } from './gateway/room-manager.js';
 import { simulationRunner } from './gateway/runner.js';
 import { createWebSocketServer } from './gateway/ws-server.js';
+
+const revocationRedis = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
+revocationRedis.on('error', (err) => logger.warn({ err: String(err) }, 'Revocation Redis connection error'));
+tokenRevocationStore.setBackend(revocationRedis);
 
 const server = http.createServer((req, res) => {
   if (req.url === '/metrics') {

@@ -46,13 +46,24 @@ export const authenticate: MiddlewareHandler = async (c, next) => {
 
       const payload = await verify(token, JWT_SECRET, 'HS256');
       if (payload && typeof payload.id === 'string') {
-        // Fetch or verify user exists in DB
-        const user = await userRepository.getUserById(payload.id);
+        let user: { id: string; email: string; name?: string | null } | undefined;
+        try {
+          user = await userRepository.getUserById(payload.id);
+        } catch {
+          // DB lookup failed or offline
+        }
+
         if (user) {
           c.set('user', {
             id: user.id,
             email: user.email,
             name: user.name || '',
+          });
+        } else if (payload.email && typeof payload.email === 'string') {
+          c.set('user', {
+            id: payload.id,
+            email: payload.email,
+            name: typeof payload.name === 'string' ? payload.name : '',
           });
         }
       }

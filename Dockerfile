@@ -4,7 +4,9 @@
 # Stage 1: Base & Dependencies
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
 WORKDIR /app
-RUN npm install -g pnpm@9.15.4
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
 # Stage 2: Dependencies Cache
 FROM base AS deps

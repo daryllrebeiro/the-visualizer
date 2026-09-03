@@ -8,9 +8,12 @@ import { secureHeaders } from 'hono/secure-headers';
 
 initGlobalExceptionHandling('api');
 
+import { tokenRevocationStore } from '@the-visualizer/contracts';
 import { config } from './config.js';
 import { pool } from './db/index.js';
 import { redis } from './db/redis.js';
+
+tokenRevocationStore.setBackend(redis);
 import { authenticate } from './middleware/auth.middleware.js';
 import { requestLogger } from './middleware/logging.middleware.js';
 import { rateLimiter } from './middleware/rate-limiter.js';

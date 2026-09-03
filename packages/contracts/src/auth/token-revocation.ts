@@ -4,8 +4,21 @@
  * Provides an in-memory TTL-bounded store with optional external backend integration.
  */
 
+export interface RevocationBackend {
+  set(key: string, value: string, mode: string, duration: number): Promise<unknown>;
+  exists(key: string): Promise<number>;
+}
+
 class TokenRevocationManager {
   private revokedTokens = new Map<string, number>(); // token -> expiresAtTimestampMs
+  private backend: RevocationBackend | null = null;
+
+  /**
+   * Configure an external backend (e.g. Redis) for cross-process synchronization.
+   */
+  setBackend(backend: RevocationBackend | null): void {
+    this.backend = backend;
+  }
 
   /**
    * Mark a token as revoked.
@@ -15,6 +28,13 @@ class TokenRevocationManager {
   async revoke(token: string, ttlSeconds: number = 7 * 24 * 3600): Promise<void> {
     const expiresAt = Date.now() + ttlSeconds * 1000;
     this.revokedTokens.set(token, expiresAt);
+    if (this.backend) {
+      try {
+        await this.backend.set(`revoked_token:${token}`, '1', 'EX', ttlSeconds);
+      } catch {
+        // Fallback to local memory if backend temporarily unavailable
+      }
+    }
     this.cleanup();
   }
 
@@ -22,6 +42,15 @@ class TokenRevocationManager {
    * Check if a token has been revoked.
    */
   async isRevoked(token: string): Promise<boolean> {
+    if (this.backend) {
+      try {
+        const exists = await this.backend.exists(`revoked_token:${token}`);
+        if (exists === 1) return true;
+      } catch {
+        // Fallback to local memory check
+      }
+    }
+
     const expiresAt = this.revokedTokens.get(token);
     if (!expiresAt) return false;
     if (Date.now() > expiresAt) {
