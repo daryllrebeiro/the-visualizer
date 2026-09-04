@@ -1,6 +1,6 @@
 export interface ResourceRequirements {
   cpuMillis: number; // e.g. 250 = 0.25 core
-  memoryMb: number;  // e.g. 256 MiB
+  memoryMb: number; // e.g. 256 MiB
 }
 
 export type TaintEffect = 'NoSchedule' | 'PreferNoSchedule' | 'NoExecute';
@@ -18,12 +18,7 @@ export interface Toleration {
 }
 
 export type PodStatus =
-  | 'Pending'
-  | 'ContainerCreating'
-  | 'Running'
-  | 'CrashLoopBackOff'
-  | 'Terminating'
-  | 'Failed';
+  'Pending' | 'ContainerCreating' | 'Running' | 'CrashLoopBackOff' | 'Terminating' | 'Failed';
 
 export type PodQoSClass = 'Guaranteed' | 'Burstable' | 'BestEffort';
 

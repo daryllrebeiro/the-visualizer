@@ -11,6 +11,7 @@
 
 2. **Pure State Transitions**:
    State reducers are pure functions with zero mutation of the previous state object:
+
    ```ts
    reduceState(state: TState, event: TEvent, rng: DeterministicRNG): {
      nextState: TState;
@@ -34,8 +35,15 @@ Every domain visualizer implements the `DomainPlugin` contract:
 export interface DomainPlugin<TState, TEvent> {
   metadata: DomainPluginMetadata;
   createDefaultState: () => TState;
-  reduceState: (state: TState, event: TEvent, rng: DeterministicRNG) => { nextState: TState; emittedEvents: TEvent[] };
-  validateInvariants: (state: TState) => { passed: boolean; violation?: { name: string; description: string } };
+  reduceState: (
+    state: TState,
+    event: TEvent,
+    rng: DeterministicRNG,
+  ) => { nextState: TState; emittedEvents: TEvent[] };
+  validateInvariants: (state: TState) => {
+    passed: boolean;
+    violation?: { name: string; description: string };
+  };
   scenarioLibrary: ScenarioDefinition[];
   oracleAdapter?: OracleAdapter;
 }
@@ -45,16 +53,16 @@ export interface DomainPlugin<TState, TEvent> {
 
 ## Supported Domains
 
-| Domain | Protocol / Focus | Invariant Assertions | Fidelity |
-|---|---|---|---|
-| **Kafka** | KRaft Leader Election, Partition ISR, High Watermark | No Split-Brain, ISR strictly in Replicas, Monotonic HW | Oracle-Tested |
-| **Raft** | Consensus, Log Replication, Leader Election | Election Safety, Leader Append-Only, State Machine Safety | Protocol-Compatible |
-| **Distributed DB** | Consistent Hashing Ring, Virtual Nodes, PACELC | Quorum Consistency ($R + W > N$), Token Uniqueness | Behavioral |
-| **Redis Cluster** | 16,384 Hash Slots, Master-Replica Failover, Eviction | Slot Exhaustion, Master Uniqueness, MOVED Accuracy | Behavioral |
-| **Kubernetes** | Reconciliation Loop, ReplicaSet, Pod Scheduling | Desired vs Actual Convergence, Resource Non-Negative | Behavioral |
-| **RabbitMQ** | AMQP 0-9-1 Exchange Bindings, DLQ Poison Routing | FIFO Ordering, Unroutable to Alternate/DLQ | Protocol-Compatible |
-| **Storage Engine** | B+Tree Page Traversal, LSM MemTable / Compaction | B+Tree Sorted Order, WAL Durability, Bloom Negative Safety | Conceptual |
-| **TCP Networking** | 3-Way Handshake, Sliding Window, AIMD Congestion | Seq/Ack Invariant, No CWND < 1 MSS, Byte Conservation | Protocol-Compatible |
+| Domain             | Protocol / Focus                                     | Invariant Assertions                                       | Fidelity            |
+| ------------------ | ---------------------------------------------------- | ---------------------------------------------------------- | ------------------- |
+| **Kafka**          | KRaft Leader Election, Partition ISR, High Watermark | No Split-Brain, ISR strictly in Replicas, Monotonic HW     | Oracle-Tested       |
+| **Raft**           | Consensus, Log Replication, Leader Election          | Election Safety, Leader Append-Only, State Machine Safety  | Protocol-Compatible |
+| **Distributed DB** | Consistent Hashing Ring, Virtual Nodes, PACELC       | Quorum Consistency ($R + W > N$), Token Uniqueness         | Behavioral          |
+| **Redis Cluster**  | 16,384 Hash Slots, Master-Replica Failover, Eviction | Slot Exhaustion, Master Uniqueness, MOVED Accuracy         | Behavioral          |
+| **Kubernetes**     | Reconciliation Loop, ReplicaSet, Pod Scheduling      | Desired vs Actual Convergence, Resource Non-Negative       | Behavioral          |
+| **RabbitMQ**       | AMQP 0-9-1 Exchange Bindings, DLQ Poison Routing     | FIFO Ordering, Unroutable to Alternate/DLQ                 | Protocol-Compatible |
+| **Storage Engine** | B+Tree Page Traversal, LSM MemTable / Compaction     | B+Tree Sorted Order, WAL Durability, Bloom Negative Safety | Conceptual          |
+| **TCP Networking** | 3-Way Handshake, Sliding Window, AIMD Congestion     | Seq/Ack Invariant, No CWND < 1 MSS, Byte Conservation      | Protocol-Compatible |
 
 ---
 

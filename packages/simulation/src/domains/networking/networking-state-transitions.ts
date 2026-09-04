@@ -6,10 +6,10 @@ import {
   updateRttAndRto,
 } from './congestion-control.js';
 import type {
-  NetworkingClusterState,
   NetworkSimEvent,
-  TCPPacket,
+  NetworkingClusterState,
   TCPCongestionAlgorithm,
+  TCPPacket,
 } from './networking-types.js';
 
 export interface NetworkTransitionResult {
@@ -17,7 +17,9 @@ export interface NetworkTransitionResult {
   emittedEvents: NetworkSimEvent[];
 }
 
-export function createDefaultNetworkingCluster(clusterId = 'tcp-cluster-1'): NetworkingClusterState {
+export function createDefaultNetworkingCluster(
+  clusterId = 'tcp-cluster-1',
+): NetworkingClusterState {
   const windowSize = 4;
   const windowScaleShift = 0;
 
@@ -55,7 +57,9 @@ export function pureNetworkingTransition(
   event: NetworkSimEvent,
   rng: DeterministicRNG,
 ): NetworkTransitionResult {
-  const nextState: NetworkingClusterState = JSON.parse(JSON.stringify(state)) as NetworkingClusterState;
+  const nextState: NetworkingClusterState = JSON.parse(
+    JSON.stringify(state),
+  ) as NetworkingClusterState;
   const emittedEvents: NetworkSimEvent[] = [];
 
   nextState.tick = event.tick;

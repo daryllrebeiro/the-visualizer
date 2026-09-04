@@ -20,11 +20,11 @@
 
 ## 1. Test Results
 
-| # | Security Control | Configured Limit | Observed Behavior | Close Code / Payload | Result |
-| :-: | :--- | :--- | :--- | :--- | :---: |
-| **1** | Free Tier Message Rate Limit | 20 msgs/sec | Sent 35-message burst. Messages 1–20 accepted. Messages 21+ received `SESSION_ERROR` response with `code: 'RATE_LIMIT_EXCEEDED'`, `fatal: false`. Connection stayed open. | Payload: `{code: 'RATE_LIMIT_EXCEEDED', message: 'Free tier message rate limit exceeded (20 msgs/sec). Dropping message.', fatal: false}` | 🟢 **PASS** |
-| **2** | Hard System Flood Protection | 250 msgs/sec | Sent 300-message burst. Messages 1–250 consumed tokens. Message 251 triggered forced socket termination. | Close Code: **1006** (Abnormal Closure — server called `ws.terminate()`) | 🟢 **PASS** |
-| **3** | Max Frame Payload Size | 1,048,576 bytes (1 MB) | Sent 1.5 MB text frame. Server's `ws` library rejected at receiver level with `RangeError: Max payload size exceeded`. Error handled gracefully (no crash). Connection closed. | Close Code: **1009** (Message Too Big), Error Code: `WS_ERR_UNSUPPORTED_MESSAGE_LENGTH` | 🟢 **PASS** |
+|   #   | Security Control             | Configured Limit       | Observed Behavior                                                                                                                                                              | Close Code / Payload                                                                                                                      |   Result    |
+| :---: | :--------------------------- | :--------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- | :---------: |
+| **1** | Free Tier Message Rate Limit | 20 msgs/sec            | Sent 35-message burst. Messages 1–20 accepted. Messages 21+ received `SESSION_ERROR` response with `code: 'RATE_LIMIT_EXCEEDED'`, `fatal: false`. Connection stayed open.      | Payload: `{code: 'RATE_LIMIT_EXCEEDED', message: 'Free tier message rate limit exceeded (20 msgs/sec). Dropping message.', fatal: false}` | 🟢 **PASS** |
+| **2** | Hard System Flood Protection | 250 msgs/sec           | Sent 300-message burst. Messages 1–250 consumed tokens. Message 251 triggered forced socket termination.                                                                       | Close Code: **1006** (Abnormal Closure — server called `ws.terminate()`)                                                                  | 🟢 **PASS** |
+| **3** | Max Frame Payload Size       | 1,048,576 bytes (1 MB) | Sent 1.5 MB text frame. Server's `ws` library rejected at receiver level with `RangeError: Max payload size exceeded`. Error handled gracefully (no crash). Connection closed. | Close Code: **1009** (Message Too Big), Error Code: `WS_ERR_UNSUPPORTED_MESSAGE_LENGTH`                                                   | 🟢 **PASS** |
 
 ---
 
@@ -77,10 +77,10 @@ $ npx vitest run apps/ws-gateway/src/gateway/rate-limiting.test.ts
 
 ## 3. Difference from V2 Report
 
-| Aspect | V2 (Round 2) | V3 (Round 3) |
-| :--- | :--- | :--- |
-| **Test method** | Unit test only (`checkConnectionRateLimit` function called in isolation) | Live in-process WebSocket server with real TCP connections |
-| **`maxPayload` enforcement** | Claimed "enforced at WebSocket upgrade level" — **false**, was never set | Fixed and verified: `maxPayload: 1024 * 1024` added, Close Code 1009 observed |
-| **Error handling** | Not tested | Crash bug found and fixed: server-side `ws.on('error')` handler added |
-| **Close codes captured** | None | 1006 (flood termination), 1009 (oversized frame) |
-| **Rejection payloads captured** | None | Full `SESSION_ERROR` payload with `RATE_LIMIT_EXCEEDED` code |
+| Aspect                          | V2 (Round 2)                                                             | V3 (Round 3)                                                                  |
+| :------------------------------ | :----------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
+| **Test method**                 | Unit test only (`checkConnectionRateLimit` function called in isolation) | Live in-process WebSocket server with real TCP connections                    |
+| **`maxPayload` enforcement**    | Claimed "enforced at WebSocket upgrade level" — **false**, was never set | Fixed and verified: `maxPayload: 1024 * 1024` added, Close Code 1009 observed |
+| **Error handling**              | Not tested                                                               | Crash bug found and fixed: server-side `ws.on('error')` handler added         |
+| **Close codes captured**        | None                                                                     | 1006 (flood termination), 1009 (oversized frame)                              |
+| **Rejection payloads captured** | None                                                                     | Full `SESSION_ERROR` payload with `RATE_LIMIT_EXCEEDED` code                  |

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { ErrorBoundary } from './ErrorBoundary';
 
 describe('Canvas ErrorBoundary Component', () => {

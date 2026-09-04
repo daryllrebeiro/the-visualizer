@@ -67,7 +67,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               {this.props.fallbackTitle ?? 'Simulation Visualizer Error'}
             </h3>
             <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8', maxWidth: '500px' }}>
-              The active simulation visualizer encountered an unexpected render state error. The underlying simulation engine remains safe.
+              The active simulation visualizer encountered an unexpected render state error. The
+              underlying simulation engine remains safe.
             </p>
           </div>
 

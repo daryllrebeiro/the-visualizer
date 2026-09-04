@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 import { kafkaMurmur2, toPositive } from '@the-visualizer/simulation';
+
 import type { EventLogItem } from '../../app/ws-client';
 import { VirtualizedEventTimeline } from '../events/VirtualizedEventTimeline';
 
@@ -12,25 +14,35 @@ export type InspectableEntity =
   | { type: 'consumer'; memberId: string; groupId: string }
   | { type: 'producer'; producerId: string; topic: string };
 
-export function getEntityEventLog(globalLog: EventLogItem[], entity: InspectableEntity): EventLogItem[] {
+export function getEntityEventLog(
+  globalLog: EventLogItem[],
+  entity: InspectableEntity,
+): EventLogItem[] {
   return globalLog.filter((e) => {
     if (e.involvedEntities && e.involvedEntities.length > 0) {
       return e.involvedEntities.some((ref) => {
         if (entity.type === 'producer') {
-          return (ref.type === 'producer' && ref.id === entity.producerId) ||
-                 (ref.type === 'topic' && ref.id === entity.topic);
+          return (
+            (ref.type === 'producer' && ref.id === entity.producerId) ||
+            (ref.type === 'topic' && ref.id === entity.topic)
+          );
         }
         if (entity.type === 'broker') {
           return ref.type === 'broker' && ref.id === entity.brokerId;
         }
         if (entity.type === 'consumer') {
-          return (ref.type === 'consumer' && ref.id === entity.memberId) ||
-                 (ref.type === 'consumer' && ref.id === entity.groupId) ||
-                 (ref.type === 'consumerGroup' && ref.id === entity.groupId);
+          return (
+            (ref.type === 'consumer' && ref.id === entity.memberId) ||
+            (ref.type === 'consumer' && ref.id === entity.groupId) ||
+            (ref.type === 'consumerGroup' && ref.id === entity.groupId)
+          );
         }
         if (entity.type === 'partition') {
-          return (ref.type === 'partition' && ref.id === `${entity.topic}-${String(entity.partition)}`) ||
-                 (ref.type === 'topic' && ref.id === entity.topic);
+          return (
+            (ref.type === 'partition' &&
+              ref.id === `${entity.topic}-${String(entity.partition)}`) ||
+            (ref.type === 'topic' && ref.id === entity.topic)
+          );
         }
         return false;
       });
@@ -39,16 +51,29 @@ export function getEntityEventLog(globalLog: EventLogItem[], entity: Inspectable
     // Fallback search across log message text if involvedEntities was omitted
     const msg = e.message.toLowerCase();
     if (entity.type === 'producer') {
-      return msg.includes(entity.producerId.toLowerCase()) || (msg.includes('producer') && msg.includes(entity.topic.toLowerCase()));
+      return (
+        msg.includes(entity.producerId.toLowerCase()) ||
+        (msg.includes('producer') && msg.includes(entity.topic.toLowerCase()))
+      );
     }
     if (entity.type === 'broker') {
-      return msg.includes(`broker ${entity.brokerId}`) || msg.includes(`broker #${entity.brokerId}`) || msg.includes(`broker "${entity.brokerId}"`);
+      return (
+        msg.includes(`broker ${entity.brokerId}`) ||
+        msg.includes(`broker #${entity.brokerId}`) ||
+        msg.includes(`broker "${entity.brokerId}"`)
+      );
     }
     if (entity.type === 'consumer') {
-      return msg.includes(entity.memberId.toLowerCase()) || (msg.includes('consumer') && msg.includes(entity.groupId.toLowerCase()));
+      return (
+        msg.includes(entity.memberId.toLowerCase()) ||
+        (msg.includes('consumer') && msg.includes(entity.groupId.toLowerCase()))
+      );
     }
     if (entity.type === 'partition') {
-      return msg.includes(`${entity.topic}-${String(entity.partition)}`) || (msg.includes(entity.topic) && msg.includes(`p-${String(entity.partition)}`));
+      return (
+        msg.includes(`${entity.topic}-${String(entity.partition)}`) ||
+        (msg.includes(entity.topic) && msg.includes(`p-${String(entity.partition)}`))
+      );
     }
     return false;
   });
@@ -73,7 +98,9 @@ export function EntityInspector({
   onRecoverBroker,
   onProduceKey,
 }: EntityInspectorProps): React.JSX.Element | null {
-  const [activeTab, setActiveTab] = useState<'overview' | 'events' | 'segments' | 'replicas' | 'partitioner'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'events' | 'segments' | 'replicas' | 'partitioner'
+  >('overview');
   const [testKey, setTestKey] = useState('user-1001');
   const [testVal, setTestVal] = useState('order_created');
 
@@ -153,8 +180,18 @@ export function EntityInspector({
         <div className="inspector-body">
           {/* ── Per-Entity Virtualized Event Log View ── */}
           {activeTab === 'events' && (
-            <div className="inspector-section" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div
+              className="inspector-section"
+              style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '8px',
+                }}
+              >
                 <h3 className="inspector-section__title" style={{ margin: 0 }}>
                   Entity Timeline History
                 </h3>
@@ -167,7 +204,8 @@ export function EntityInspector({
                 </button>
               </div>
               <p className="inspector-text-muted" style={{ margin: '0 0 8px 0', fontSize: '11px' }}>
-                Real-time chronological timeline filtered specifically for <strong>{entityTitle}</strong>.
+                Real-time chronological timeline filtered specifically for{' '}
+                <strong>{entityTitle}</strong>.
               </p>
               <div style={{ flex: 1, minHeight: '380px', display: 'flex' }}>
                 <VirtualizedEventTimeline
@@ -257,7 +295,8 @@ function PartitionContent({
       <div className="inspector-section">
         <h3 className="inspector-section__title">Physical Log Segments on Disk</h3>
         <p className="inspector-text-muted">
-          Kafka partitions are stored on the broker as rolled <code>.log</code> files with sparse <code>.index</code> offsets:
+          Kafka partitions are stored on the broker as rolled <code>.log</code> files with sparse{' '}
+          <code>.index</code> offsets:
         </p>
         <div className="segment-list">
           <div className="segment-card segment-card--active">
@@ -266,10 +305,18 @@ function PartitionContent({
               <span className="segment-badge segment-badge--green">OPEN (RW)</span>
             </div>
             <div className="segment-stats-grid">
-              <div><strong>Base Offset:</strong> 0</div>
-              <div><strong>High Watermark:</strong> {String(part.highWatermark)}</div>
-              <div><strong>Estimated Size:</strong> ~{String(part.highWatermark * 128)} Bytes</div>
-              <div><strong>Index Entries:</strong> {String(Math.ceil(part.highWatermark / 4))} entries</div>
+              <div>
+                <strong>Base Offset:</strong> 0
+              </div>
+              <div>
+                <strong>High Watermark:</strong> {String(part.highWatermark)}
+              </div>
+              <div>
+                <strong>Estimated Size:</strong> ~{String(part.highWatermark * 128)} Bytes
+              </div>
+              <div>
+                <strong>Index Entries:</strong> {String(Math.ceil(part.highWatermark / 4))} entries
+              </div>
             </div>
           </div>
         </div>
@@ -297,7 +344,9 @@ function PartitionContent({
               const broker = state.brokers[rep.brokerId];
               return (
                 <tr key={rep.brokerId}>
-                  <td><strong>Broker {rep.brokerId}</strong></td>
+                  <td>
+                    <strong>Broker {rep.brokerId}</strong>
+                  </td>
                   <td>
                     {isLeader ? (
                       <span className="badge badge--amber">👑 Leader</span>
@@ -339,7 +388,9 @@ function PartitionContent({
         </div>
         <div className="inspector-stat-card">
           <div className="inspector-stat-label">Min In-Sync Replicas</div>
-          <div className="inspector-stat-value">{String(part.minInsyncReplicas)} / {String(part.replicas.length)}</div>
+          <div className="inspector-stat-value">
+            {String(part.minInsyncReplicas)} / {String(part.replicas.length)}
+          </div>
         </div>
       </div>
 
@@ -388,7 +439,9 @@ function BrokerContent({
         </div>
         <div className="inspector-stat-card">
           <div className="inspector-stat-label">Host & Port</div>
-          <div className="inspector-stat-value">{broker.host}:{String(broker.port)}</div>
+          <div className="inspector-stat-value">
+            {broker.host}:{String(broker.port)}
+          </div>
         </div>
         <div className="inspector-stat-card">
           <div className="inspector-stat-label">Disk Storage Usage</div>
@@ -439,11 +492,15 @@ function ConsumerContent({
         </div>
         <div className="inspector-stat-card">
           <div className="inspector-stat-label">Group State & Gen</div>
-          <div className="inspector-stat-value">{group.state} (Gen {String(group.generationId)})</div>
+          <div className="inspector-stat-value">
+            {group.state} (Gen {String(group.generationId)})
+          </div>
         </div>
         <div className="inspector-stat-card">
           <div className="inspector-stat-label">Assigned Partitions</div>
-          <div className="inspector-stat-value">{String(member.assignedPartitions.length)} partition(s)</div>
+          <div className="inspector-stat-value">
+            {String(member.assignedPartitions.length)} partition(s)
+          </div>
         </div>
       </div>
 
@@ -493,14 +550,16 @@ function ProducerContent({
   const rawHash = testKey ? kafkaMurmur2(testKey) : 0;
   const posHash = toPositive(rawHash);
   const calculatedPartition = posHash % numParts;
-  const keyBytes = typeof window !== 'undefined' && testKey ? Array.from(new TextEncoder().encode(testKey)) : [];
+  const keyBytes =
+    typeof window !== 'undefined' && testKey ? Array.from(new TextEncoder().encode(testKey)) : [];
 
   if (activeTab === 'partitioner') {
     return (
       <div className="inspector-section">
         <h3 className="inspector-section__title">Kafka Murmur2 Key Partitioner Playground</h3>
         <p className="inspector-text-muted">
-          Exact Apache Kafka hashing formula: <code>toPositive(murmur2(keyBytes)) % numPartitions</code>.
+          Exact Apache Kafka hashing formula:{' '}
+          <code>toPositive(murmur2(keyBytes)) % numPartitions</code>.
         </p>
 
         <div className="form-group">
@@ -526,7 +585,18 @@ function ProducerContent({
         </div>
 
         {/* Step-by-Step Byte Computation Card */}
-        <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', border: '1px solid #1e293b', marginTop: '12px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#94a3b8' }}>
+        <div
+          style={{
+            background: '#0f172a',
+            borderRadius: '8px',
+            padding: '12px',
+            border: '1px solid #1e293b',
+            marginTop: '12px',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '11px',
+            color: '#94a3b8',
+          }}
+        >
           <div style={{ color: '#38bdf8', fontWeight: 600, marginBottom: '6px' }}>
             ⚡ Murmur2 Step-by-Step Hash Breakdown
           </div>
@@ -541,13 +611,27 @@ function ProducerContent({
             <strong>2. Murmur2 Seed:</strong> <span style={{ color: '#fbbf24' }}>0x9747b28c</span>
           </div>
           <div>
-            <strong>3. Signed 32-bit Hash:</strong> <span style={{ color: '#a78bfa' }}>{rawHash}</span> (0x{(rawHash >>> 0).toString(16).padStart(8, '0')})
+            <strong>3. Signed 32-bit Hash:</strong>{' '}
+            <span style={{ color: '#a78bfa' }}>{rawHash}</span> (0x
+            {(rawHash >>> 0).toString(16).padStart(8, '0')})
           </div>
           <div>
-            <strong>4. Positive Unsigned Hash:</strong> <span style={{ color: '#34d399' }}>{posHash}</span> (hash & 0x7fffffff)
+            <strong>4. Positive Unsigned Hash:</strong>{' '}
+            <span style={{ color: '#34d399' }}>{posHash}</span> (hash & 0x7fffffff)
           </div>
-          <div style={{ borderTop: '1px dashed #334155', paddingTop: '6px', marginTop: '6px', color: '#f8fafc', fontWeight: 600 }}>
-            <strong>5. Target Partition:</strong> {posHash} % {numParts} = <span style={{ color: '#38bdf8', fontSize: '13px' }}>Partition {calculatedPartition}</span>
+          <div
+            style={{
+              borderTop: '1px dashed #334155',
+              paddingTop: '6px',
+              marginTop: '6px',
+              color: '#f8fafc',
+              fontWeight: 600,
+            }}
+          >
+            <strong>5. Target Partition:</strong> {posHash} % {numParts} ={' '}
+            <span style={{ color: '#38bdf8', fontSize: '13px' }}>
+              Partition {calculatedPartition}
+            </span>
           </div>
         </div>
 

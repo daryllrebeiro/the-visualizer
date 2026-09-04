@@ -1,4 +1,9 @@
-import type { BindingSpec, RabbitClusterState, RabbitConsumer, RabbitQueue } from './rabbitmq-types.js';
+import type {
+  BindingSpec,
+  RabbitClusterState,
+  RabbitConsumer,
+  RabbitQueue,
+} from './rabbitmq-types.js';
 
 export interface RabbitInvariantViolation {
   ruleId: string;

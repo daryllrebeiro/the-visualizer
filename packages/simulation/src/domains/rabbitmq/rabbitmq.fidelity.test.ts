@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import {
-  createDefaultRabbitCluster,
-  pureRabbitTransition,
-} from './rabbitmq-state-transitions.js';
+import { createDefaultRabbitCluster, pureRabbitTransition } from './rabbitmq-state-transitions.js';
 import type { RabbitSimEvent } from './rabbitmq-types.js';
 
 describe('RabbitMQ Domain Fidelity Test Suite (AMQP 0-9-1 & Quorum Queues)', () => {

@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { RabbitInvariantChecker } from './rabbitmq-invariants.js';
-import {
-  createDefaultRabbitCluster,
-  pureRabbitTransition,
-} from './rabbitmq-state-transitions.js';
+import { createDefaultRabbitCluster, pureRabbitTransition } from './rabbitmq-state-transitions.js';
 import type { RabbitSimEvent } from './rabbitmq-types.js';
 import { matchTopicPattern } from './topic-matcher.js';
 

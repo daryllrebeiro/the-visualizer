@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { DBInvariantChecker } from './db-invariants.js';
+import { createDefaultDBCluster, pureDBTransition } from './db-state-transitions.js';
+import type { DBNode, DBSimEvent } from './db-types.js';
 import { ConsistentHashRing } from './hash-ring.js';
-import {
-  createDefaultDBCluster,
-  pureDBTransition,
-} from './db-state-transitions.js';
-import type { DBSimEvent, DBNode } from './db-types.js';
 
 describe('Distributed Database (Consistent Hash Ring & Quorum)', () => {
   it('should initialize 4-node cluster with 12 vnodes distributed monotonically across ring', () => {

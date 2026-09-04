@@ -1,11 +1,5 @@
 export type ConsistencyLevel =
-  | 'ONE'
-  | 'TWO'
-  | 'THREE'
-  | 'QUORUM'
-  | 'ALL'
-  | 'LOCAL_QUORUM'
-  | 'EACH_QUORUM';
+  'ONE' | 'TWO' | 'THREE' | 'QUORUM' | 'ALL' | 'LOCAL_QUORUM' | 'EACH_QUORUM';
 
 export type DBNodeStatus = 'ALIVE' | 'DOWN' | 'JOINING' | 'LEAVING';
 

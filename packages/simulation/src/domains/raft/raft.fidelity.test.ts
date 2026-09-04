@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import {
-  createDefaultRaftCluster,
-  pureRaftTransition,
-} from './raft-state-transitions.js';
+import { createDefaultRaftCluster, pureRaftTransition } from './raft-state-transitions.js';
 import type { RaftSimEvent } from './raft-types.js';
 
 describe('Raft Consensus Domain Fidelity Test Suite (Ongaro & Ousterhout 2014 & etcd/raft)', () => {

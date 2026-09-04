@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { BrokerNode } from '@the-visualizer/contracts';
 
 describe('Broker Reconnection Animation & Pulse Trigger Suite', () => {
@@ -11,7 +12,6 @@ describe('Broker Reconnection Animation & Pulse Trigger Suite', () => {
     maxDiskSizeBytes: 10240,
     lastHeartbeatTick: 0,
   });
-
 
   it('should detect when a broker transitions from CRASHED to ALIVE and trigger pulse', () => {
     const prevState: Record<string, BrokerNode> = {

@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { extractHashTag, getClusterSlot } from './crc16.js';
 import { evictUntilMemoryAvailable } from './redis-eviction.js';
-import {
-  createDefaultRedisCluster,
-  pureRedisTransition,
-} from './redis-state-transitions.js';
+import { createDefaultRedisCluster, pureRedisTransition } from './redis-state-transitions.js';
 import type { RedisNode, RedisSimEvent } from './redis-types.js';
 
 describe('Redis Cluster Domain Fidelity Test Suite (Redis 7.2+ Cluster Spec)', () => {
@@ -97,11 +95,46 @@ describe('Redis Cluster Domain Fidelity Test Suite (Redis 7.2+ Cluster Spec)', (
         memoryUsedBytes: 500,
         maxMemoryBytes: 500, // Full memory
         storage: {
-          k1: { key: 'k1', value: 'v1', ttl: null, lastAccessedTick: 10, accessCount: 1, sizeBytes: 100 },
-          k2: { key: 'k2', value: 'v2', ttl: null, lastAccessedTick: 20, accessCount: 1, sizeBytes: 100 },
-          k3: { key: 'k3', value: 'v3', ttl: null, lastAccessedTick: 30, accessCount: 1, sizeBytes: 100 },
-          k4: { key: 'k4', value: 'v4', ttl: null, lastAccessedTick: 40, accessCount: 1, sizeBytes: 100 },
-          k5: { key: 'k5', value: 'v5', ttl: null, lastAccessedTick: 50, accessCount: 1, sizeBytes: 100 },
+          k1: {
+            key: 'k1',
+            value: 'v1',
+            ttl: null,
+            lastAccessedTick: 10,
+            accessCount: 1,
+            sizeBytes: 100,
+          },
+          k2: {
+            key: 'k2',
+            value: 'v2',
+            ttl: null,
+            lastAccessedTick: 20,
+            accessCount: 1,
+            sizeBytes: 100,
+          },
+          k3: {
+            key: 'k3',
+            value: 'v3',
+            ttl: null,
+            lastAccessedTick: 30,
+            accessCount: 1,
+            sizeBytes: 100,
+          },
+          k4: {
+            key: 'k4',
+            value: 'v4',
+            ttl: null,
+            lastAccessedTick: 40,
+            accessCount: 1,
+            sizeBytes: 100,
+          },
+          k5: {
+            key: 'k5',
+            value: 'v5',
+            ttl: null,
+            lastAccessedTick: 50,
+            accessCount: 1,
+            sizeBytes: 100,
+          },
         },
         color: '#fff',
       };
@@ -130,8 +163,22 @@ describe('Redis Cluster Domain Fidelity Test Suite (Redis 7.2+ Cluster Spec)', (
         memoryUsedBytes: 400,
         maxMemoryBytes: 400,
         storage: {
-          perm1: { key: 'perm1', value: 'p1', ttl: null, lastAccessedTick: 1, accessCount: 1, sizeBytes: 200 },
-          vol1: { key: 'vol1', value: 'v1', ttl: 60, lastAccessedTick: 5, accessCount: 1, sizeBytes: 200 },
+          perm1: {
+            key: 'perm1',
+            value: 'p1',
+            ttl: null,
+            lastAccessedTick: 1,
+            accessCount: 1,
+            sizeBytes: 200,
+          },
+          vol1: {
+            key: 'vol1',
+            value: 'v1',
+            ttl: 60,
+            lastAccessedTick: 5,
+            accessCount: 1,
+            sizeBytes: 200,
+          },
         },
         color: '#fff',
       };

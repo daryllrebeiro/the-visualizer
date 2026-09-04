@@ -1,11 +1,6 @@
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { reconcileCluster } from './k8s-reconciliation.js';
-import type {
-  DeploymentSpec,
-  K8sClusterState,
-  K8sNode,
-  K8sSimEvent,
-} from './k8s-types.js';
+import type { DeploymentSpec, K8sClusterState, K8sNode, K8sSimEvent } from './k8s-types.js';
 
 export interface K8sTransitionResult {
   nextState: K8sClusterState;
@@ -180,12 +175,16 @@ export function pureK8sTransition(
     }
     case 'K8S_EVICT_UNDER_PRESSURE': {
       const targetId = String(event.payload['nodeId'] ?? '');
-      const node = nextState.nodes[targetId] ?? Object.values(nextState.nodes).find((n) => n.name === targetId);
+      const node =
+        nextState.nodes[targetId] ??
+        Object.values(nextState.nodes).find((n) => n.name === targetId);
       if (node) {
         // Collect pods on node and sort by QoS priority (BestEffort -> Burstable -> Guaranteed)
         const nodePods = node.podIds
           .map((id) => nextState.pods[id])
-          .filter((p): p is typeof nextState.pods[string] => p !== undefined && p.status === 'Running');
+          .filter(
+            (p): p is (typeof nextState.pods)[string] => p !== undefined && p.status === 'Running',
+          );
 
         const qosOrder: Record<string, number> = {
           BestEffort: 0,
@@ -221,8 +220,14 @@ export function pureK8sTransition(
             victim.status = 'Failed';
             victim.pendingReason = 'Evicted under memory pressure';
             node.podIds = node.podIds.filter((id) => id !== victim.id);
-            node.allocated.cpuMillis = Math.max(0, node.allocated.cpuMillis - victim.resources.cpuMillis);
-            node.allocated.memoryMb = Math.max(0, node.allocated.memoryMb - victim.resources.memoryMb);
+            node.allocated.cpuMillis = Math.max(
+              0,
+              node.allocated.cpuMillis - victim.resources.cpuMillis,
+            );
+            node.allocated.memoryMb = Math.max(
+              0,
+              node.allocated.memoryMb - victim.resources.memoryMb,
+            );
             nextState.totalPodsEvicted++;
             emittedEvents.push({
               id: `evict-${victim.id}-${String(nextState.tick)}`,

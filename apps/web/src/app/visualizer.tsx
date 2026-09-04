@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
+import type { InspectableEntity } from '../components/inspector/EntityInspector';
+
 export interface ProducerConfig {
   id: string;
   topic: string;
@@ -25,8 +27,6 @@ export interface HoverDetails {
   subtitle?: string | undefined;
   stats: { label: string; value: string; color?: string | undefined }[];
 }
-
-import type { InspectableEntity } from '../components/inspector/EntityInspector';
 
 export interface ProduceTrigger {
   id: string;
@@ -107,7 +107,9 @@ export function Visualizer({
   stateRef.current = state;
 
   const producerLastProduceTimes = useRef<Map<string, number>>(new Map());
-  const reconnectionPulsesRef = useRef<Map<string, { startTime: number; duration: number }>>(new Map());
+  const reconnectionPulsesRef = useRef<Map<string, { startTime: number; duration: number }>>(
+    new Map(),
+  );
   const prevConnectedBrokersRef = useRef<Map<string, Set<string>>>(new Map());
 
   const producersRef = useRef<ProducerConfig[]>(producers);
@@ -116,7 +118,9 @@ export function Visualizer({
   const consumersRef = useRef<ConsumerConfig[]>(consumers);
   consumersRef.current = consumers;
 
-  const getTransformedMousePos = (e: React.MouseEvent<HTMLCanvasElement>): { worldX: number; worldY: number; screenX: number; screenY: number } => {
+  const getTransformedMousePos = (
+    e: React.MouseEvent<HTMLCanvasElement>,
+  ): { worldX: number; worldY: number; screenX: number; screenY: number } => {
     const canvas = canvasRef.current;
     if (!canvas) return { worldX: 0, worldY: 0, screenX: 0, screenY: 0 };
     const rect = canvas.getBoundingClientRect();
@@ -183,11 +187,7 @@ export function Visualizer({
     };
   }, []);
 
-  const spawnProduceFlow = (
-    producerId: string,
-    topicName: string,
-    partitionId: number,
-  ): void => {
+  const spawnProduceFlow = (producerId: string, topicName: string, partitionId: number): void => {
     const prodPos = producerPositions.current.get(producerId);
     const partKey = `${topicName}-${String(partitionId)}`;
     const partPos = partitionPositions.current.get(partKey);
@@ -260,11 +260,7 @@ export function Visualizer({
     if (!produceTrigger) return;
     const key = `${produceTrigger.topic}-${String(produceTrigger.partition)}`;
     recentManualTriggers.current.set(key, Date.now());
-    spawnProduceFlow(
-      produceTrigger.producerId,
-      produceTrigger.topic,
-      produceTrigger.partition,
-    );
+    spawnProduceFlow(produceTrigger.producerId, produceTrigger.topic, produceTrigger.partition);
   }, [produceTrigger]);
 
   // Particle Spawning on WebSocket HW Updates (Kernel Scheduled & Auto-Produce Events)
@@ -280,7 +276,8 @@ export function Visualizer({
 
         if (prevHw !== undefined && newPart.highWatermark > prevHw) {
           const manualTriggerTs = recentManualTriggers.current.get(key);
-          const isRecentManual = manualTriggerTs !== undefined && (Date.now() - manualTriggerTs < 1200);
+          const isRecentManual =
+            manualTriggerTs !== undefined && Date.now() - manualTriggerTs < 1200;
 
           if (isRecentManual) {
             // Already animated immediately by manual UI button trigger
@@ -288,7 +285,8 @@ export function Visualizer({
           } else {
             // Server-scheduled / Auto-produce message arrived
             const matchingProducers = producersRef.current.filter((p) => p.topic === topicName);
-            const activeProds = matchingProducers.length > 0 ? matchingProducers : producersRef.current;
+            const activeProds =
+              matchingProducers.length > 0 ? matchingProducers : producersRef.current;
 
             if (activeProds.length > 0) {
               const targetProd = activeProds.find((p) => p.autoProduceEnabled) || activeProds[0]!;
@@ -407,7 +405,8 @@ export function Visualizer({
         producerPositions.current.set(prod.id, custom);
       } else {
         const x = 95;
-        const y = numProducers > 1 ? 100 + (index * (height - 200)) / (numProducers - 1) : height / 2;
+        const y =
+          numProducers > 1 ? 100 + (index * (height - 200)) / (numProducers - 1) : height / 2;
         producerPositions.current.set(prod.id, { x, y });
       }
     });
@@ -451,7 +450,10 @@ export function Visualizer({
 
     // 2. Gather local configured consumers not yet active in cluster state
     consumersRef.current.forEach((localC) => {
-      if (!seenConsumerIds.has(localC.id) && (!localC.memberId || !seenConsumerIds.has(localC.memberId))) {
+      if (
+        !seenConsumerIds.has(localC.id) &&
+        (!localC.memberId || !seenConsumerIds.has(localC.memberId))
+      ) {
         allGroupMembers.push({
           memberId: localC.id,
           clientId: localC.id,
@@ -472,7 +474,8 @@ export function Visualizer({
         consumerPositions.current.set(member.memberId, custom);
       } else {
         const x = width - 105;
-        const y = numConsumers > 1 ? 100 + (index * (height - 200)) / (numConsumers - 1) : height / 2;
+        const y =
+          numConsumers > 1 ? 100 + (index * (height - 200)) / (numConsumers - 1) : height / 2;
         consumerPositions.current.set(member.memberId, { x, y });
       }
     });
@@ -540,7 +543,7 @@ export function Visualizer({
         const brokerPos = brokerPositions.current.get(brokerId);
         if (brokerPos) {
           const pulse = reconnectionPulsesRef.current.get(`${prod.id}-${brokerId}`);
-          const isReconnecting = pulse && (timeNow - pulse.startTime < pulse.duration);
+          const isReconnecting = pulse && timeNow - pulse.startTime < pulse.duration;
 
           if (isReconnecting) {
             const pProgress = (timeNow - pulse.startTime) / pulse.duration;
@@ -734,8 +737,13 @@ export function Visualizer({
         // Group label
         ctx.fillStyle = '#818cf8';
         ctx.font = '600 6.5px monospace';
-        const grpLabel = member.groupId.length > 10 ? `${member.groupId.substring(0, 8)}…` : member.groupId;
-        ctx.fillText(`[${grpLabel}]`, pos.x, pos.y + (member.joined && member.assignedPartitions.length > 0 ? 26 : 18));
+        const grpLabel =
+          member.groupId.length > 10 ? `${member.groupId.substring(0, 8)}…` : member.groupId;
+        ctx.fillText(
+          `[${grpLabel}]`,
+          pos.x,
+          pos.y + (member.joined && member.assignedPartitions.length > 0 ? 26 : 18),
+        );
       }
     });
 
@@ -763,11 +771,7 @@ export function Visualizer({
         ctx.stroke();
       }
 
-      ctx.fillStyle = isCrashed
-        ? '#fef2f2'
-        : isRecovering
-          ? '#fffbeb'
-          : '#ecfdf5';
+      ctx.fillStyle = isCrashed ? '#fef2f2' : isRecovering ? '#fffbeb' : '#ecfdf5';
 
       ctx.strokeStyle = isCrashed ? '#ef4444' : isRecovering ? '#f59e0b' : '#10b981';
       ctx.lineWidth = 2.5;
@@ -830,7 +834,8 @@ export function Visualizer({
         const activeSegments = Math.min(part.highWatermark, totalSegments);
         const segmentWidth = 7;
         const segmentGap = 2;
-        const startX = pos.x - ((segmentWidth * totalSegments + segmentGap * (totalSegments - 1)) / 2);
+        const startX =
+          pos.x - (segmentWidth * totalSegments + segmentGap * (totalSegments - 1)) / 2;
         const segmentY = pos.y + 9;
 
         for (let s = 0; s < totalSegments; s++) {
@@ -859,9 +864,10 @@ export function Visualizer({
       particle.trail.forEach((t, tIdx) => {
         t.alpha *= 0.85;
         const radius = (tIdx / particle.trail.length) * 3.5;
-        ctx.fillStyle = particle.leg === 1
-          ? `rgba(59, 130, 246, ${String(t.alpha)})`
-          : `rgba(124, 58, 237, ${String(t.alpha)})`;
+        ctx.fillStyle =
+          particle.leg === 1
+            ? `rgba(59, 130, 246, ${String(t.alpha)})`
+            : `rgba(124, 58, 237, ${String(t.alpha)})`;
         ctx.beginPath();
         ctx.arc(t.x, t.y, radius, 0, 2 * Math.PI);
         ctx.fill();
@@ -912,7 +918,9 @@ export function Visualizer({
                   (ap) => ap.topic === particle.topic && ap.partition === particle.partition,
                 )
               ) {
-                const cPos = consumerPositions.current.get(mId) || consumerPositions.current.get(member.clientId);
+                const cPos =
+                  consumerPositions.current.get(mId) ||
+                  consumerPositions.current.get(member.clientId);
                 if (cPos) {
                   assignedTargets.push({ memberId: mId, pos: cPos });
                 }
@@ -1064,7 +1072,12 @@ export function Visualizer({
     // If middle mouse or alt key or background click -> pan camera
     if (e.button === 1 || e.altKey) {
       isPanningRef.current = true;
-      panStartRef.current = { x: screenX, y: screenY, camX: cameraRef.current.x, camY: cameraRef.current.y };
+      panStartRef.current = {
+        x: screenX,
+        y: screenY,
+        camX: cameraRef.current.x,
+        camY: cameraRef.current.y,
+      };
       return;
     }
 
@@ -1081,7 +1094,12 @@ export function Visualizer({
       setHasCustomPositions(true);
     } else {
       isPanningRef.current = true;
-      panStartRef.current = { x: screenX, y: screenY, camX: cameraRef.current.x, camY: cameraRef.current.y };
+      panStartRef.current = {
+        x: screenX,
+        y: screenY,
+        camX: cameraRef.current.x,
+        camY: cameraRef.current.y,
+      };
     }
   };
 
@@ -1192,9 +1210,12 @@ export function Visualizer({
               leaderSet.add(p.leaderBrokerId);
             }
           }
-          const brokerStr = leaderSet.size > 0
-            ? Array.from(leaderSet).map((b) => `B${b}`).join(', ')
-            : 'No Leaders (OFFLINE)';
+          const brokerStr =
+            leaderSet.size > 0
+              ? Array.from(leaderSet)
+                  .map((b) => `B${b}`)
+                  .join(', ')
+              : 'No Leaders (OFFLINE)';
 
           onHoverDetails({
             title: `Producer [${prodId.startsWith('producer-') ? `P-${prodId.substring(9)}` : prodId}]`,
@@ -1236,11 +1257,13 @@ export function Visualizer({
           }
         }
 
-        const localC = consumersRef.current.find((c) => c.id === memberId || c.memberId === memberId);
+        const localC = consumersRef.current.find(
+          (c) => c.id === memberId || c.memberId === memberId,
+        );
         const clientId = matchedMember?.clientId ?? localC?.id ?? memberId;
         const topicsStr = matchedMember?.subscribedTopics
           ? matchedMember.subscribedTopics.join(', ')
-          : localC?.topic ?? 'orders';
+          : (localC?.topic ?? 'orders');
         const assignedCount = matchedMember?.assignedPartitions?.length ?? 0;
         const isJoined = Boolean(matchedMember || localC?.joined);
 
@@ -1288,7 +1311,9 @@ export function Visualizer({
           onSelectEntity({ type: 'producer', producerId: prodId, topic: p?.topic ?? 'orders' });
         } else if (drag.key.startsWith('consumer-')) {
           const memberId = drag.key.substring(9);
-          const c = consumersRef.current.find((item) => item.id === memberId || item.memberId === memberId);
+          const c = consumersRef.current.find(
+            (item) => item.id === memberId || item.memberId === memberId,
+          );
           onSelectEntity({
             type: 'consumer',
             memberId,
@@ -1311,7 +1336,9 @@ export function Visualizer({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         className="w-full h-full block rounded-xl bg-white"
-        style={{ cursor: isDraggingState ? 'grabbing' : isPanningRef.current ? 'grabbing' : 'default' }}
+        style={{
+          cursor: isDraggingState ? 'grabbing' : isPanningRef.current ? 'grabbing' : 'default',
+        }}
       />
 
       {/* ── Infinite Canvas Camera Controls HUD ── */}
@@ -1350,7 +1377,13 @@ export function Visualizer({
         <button
           onClick={handleResetCamera}
           className="btn btn--ghost"
-          style={{ padding: '2px 8px', fontSize: '10px', color: '#94a3b8', height: '22px', fontFamily: 'var(--font-mono)' }}
+          style={{
+            padding: '2px 8px',
+            fontSize: '10px',
+            color: '#94a3b8',
+            height: '22px',
+            fontFamily: 'var(--font-mono)',
+          }}
           title="Reset Zoom & Pan"
         >
           {Math.round(zoomDisplay * 100)}%

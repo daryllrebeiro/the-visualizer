@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { K8sScheduler } from './k8s-scheduler.js';
-import {
-  createDefaultK8sCluster,
-  pureK8sTransition,
-} from './k8s-state-transitions.js';
+import { createDefaultK8sCluster, pureK8sTransition } from './k8s-state-transitions.js';
 import type { K8sNode, K8sSimEvent, PodSpec } from './k8s-types.js';
 
 describe('Kubernetes Domain Fidelity Test Suite (Kubernetes v1.31 Control Plane)', () => {

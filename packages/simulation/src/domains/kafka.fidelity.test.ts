@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DeterministicRNG } from '../prng/deterministic-rng.js';
-import { createDefaultBaselineState } from '../reconstitution/event-log-parser.js';
+
 import { pureStateTransition } from '../engine/state-transitions.js';
 import type { SimEvent } from '../engine/types.js';
+import { DeterministicRNG } from '../prng/deterministic-rng.js';
+import { createDefaultBaselineState } from '../reconstitution/event-log-parser.js';
 
 describe('Kafka Domain Fidelity Test Suite (Apache Kafka 4.0 KRaft)', () => {
   describe('min.insync.replicas + acks=all Blockade Semantics', () => {
@@ -29,12 +30,16 @@ describe('Kafka Domain Fidelity Test Suite (Apache Kafka 4.0 KRaft)', () => {
       };
 
       const result = pureStateTransition(state, produceEvent, rng);
-      const failedEvent = result.emittedEvents.find((e) => e.type === ('RECORD_PRODUCED_FAILED' as any));
+      const failedEvent = result.emittedEvents.find(
+        (e) => e.type === ('RECORD_PRODUCED_FAILED' as any),
+      );
 
       expect(failedEvent).toBeDefined();
       expect(failedEvent?.payload['error']).toBe('NOT_ENOUGH_REPLICAS');
       // LEO should not have advanced
-      const leaderReplica = result.nextState.topics['orders']![0]!.replicas.find((r) => r.brokerId === '1')!;
+      const leaderReplica = result.nextState.topics['orders']![0]!.replicas.find(
+        (r) => r.brokerId === '1',
+      )!;
       expect(leaderReplica.logEndOffset).toBe(0);
     });
 
@@ -60,7 +65,9 @@ describe('Kafka Domain Fidelity Test Suite (Apache Kafka 4.0 KRaft)', () => {
       };
 
       const result = pureStateTransition(state, produceEvent, rng);
-      const leaderReplica = result.nextState.topics['orders']![0]!.replicas.find((r) => r.brokerId === '1')!;
+      const leaderReplica = result.nextState.topics['orders']![0]!.replicas.find(
+        (r) => r.brokerId === '1',
+      )!;
       expect(leaderReplica.logEndOffset).toBe(1);
     });
   });
@@ -103,11 +110,15 @@ describe('Kafka Domain Fidelity Test Suite (Apache Kafka 4.0 KRaft)', () => {
       };
 
       const resultDup = pureStateTransition(state, evDup, rng);
-      const dupEvent = resultDup.emittedEvents.find((e) => e.type === ('RECORD_PRODUCED_DUPLICATE_IGNORED' as any));
+      const dupEvent = resultDup.emittedEvents.find(
+        (e) => e.type === ('RECORD_PRODUCED_DUPLICATE_IGNORED' as any),
+      );
       expect(dupEvent).toBeDefined();
 
       // LEO should still be 1 (duplicate not appended)
-      const leaderAfterDup = resultDup.nextState.topics['orders']![0]!.replicas.find((r) => r.brokerId === '1')!;
+      const leaderAfterDup = resultDup.nextState.topics['orders']![0]!.replicas.find(
+        (r) => r.brokerId === '1',
+      )!;
       expect(leaderAfterDup.logEndOffset).toBe(1);
     });
   });

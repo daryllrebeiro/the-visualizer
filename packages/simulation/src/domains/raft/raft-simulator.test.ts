@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { RaftInvariantChecker } from './raft-invariants.js';
-import {
-  createDefaultRaftCluster,
-  pureRaftTransition,
-} from './raft-state-transitions.js';
+import { createDefaultRaftCluster, pureRaftTransition } from './raft-state-transitions.js';
 import type { RaftSimEvent } from './raft-types.js';
 
 describe('Raft Consensus Simulation Engine', () => {
@@ -158,14 +156,22 @@ describe('Raft Consensus Simulation Engine', () => {
     expect(res.nextState.nodes['1']?.log.length).toBe(1);
 
     // Heartbeats cannot reach majority nodes {3, 4, 5}
-    const hbRes = pureRaftTransition(res.nextState, { id: 'hb-part', tick: 22, type: 'RAFT_HEARTBEAT', payload: { leaderId: '1' } }, rng);
+    const hbRes = pureRaftTransition(
+      res.nextState,
+      { id: 'hb-part', tick: 22, type: 'RAFT_HEARTBEAT', payload: { leaderId: '1' } },
+      rng,
+    );
     const targetNodes = hbRes.emittedEvents.map((e) => (e.payload as any).targetNodeId);
     expect(targetNodes).not.toContain('3');
     expect(targetNodes).not.toContain('4');
     expect(targetNodes).not.toContain('5');
 
     // Heal network
-    const healRes = pureRaftTransition(res.nextState, { id: 'heal-1', tick: 30, type: 'RAFT_NETWORK_HEAL', payload: {} }, rng);
+    const healRes = pureRaftTransition(
+      res.nextState,
+      { id: 'heal-1', tick: 30, type: 'RAFT_NETWORK_HEAL', payload: {} },
+      rng,
+    );
     expect(healRes.nextState.isolatedNodeIds.length).toBe(0);
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+
 import type { EventLogItem } from '../../app/ws-client';
 import { EventTimelineItem } from './EventTimelineItem';
 
@@ -21,7 +22,9 @@ export function VirtualizedEventTimeline({
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(400);
   const [searchFilter, setSearchFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'PRODUCED' | 'CONSUMED' | 'CHAOS' | 'REBALANCE'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<
+    'ALL' | 'PRODUCED' | 'CONSUMED' | 'CHAOS' | 'REBALANCE'
+  >('ALL');
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastSeenCountRef = useRef(events.length);
@@ -49,16 +52,35 @@ export function VirtualizedEventTimeline({
   const filteredEvents = useMemo(() => {
     return events.filter((e) => {
       // Type filter
-      if (typeFilter === 'PRODUCED' && !e.message.toLowerCase().includes('produce') && e.eventType !== 'RECORD_PRODUCED') {
+      if (
+        typeFilter === 'PRODUCED' &&
+        !e.message.toLowerCase().includes('produce') &&
+        e.eventType !== 'RECORD_PRODUCED'
+      ) {
         return false;
       }
-      if (typeFilter === 'CONSUMED' && !e.message.toLowerCase().includes('consum') && e.eventType !== 'RECORD_CONSUMED') {
+      if (
+        typeFilter === 'CONSUMED' &&
+        !e.message.toLowerCase().includes('consum') &&
+        e.eventType !== 'RECORD_CONSUMED'
+      ) {
         return false;
       }
-      if (typeFilter === 'CHAOS' && !e.message.toLowerCase().includes('crash') && !e.message.toLowerCase().includes('recover') && e.eventType !== 'BROKER_STATUS_CHANGED') {
+      if (
+        typeFilter === 'CHAOS' &&
+        !e.message.toLowerCase().includes('crash') &&
+        !e.message.toLowerCase().includes('recover') &&
+        e.eventType !== 'BROKER_STATUS_CHANGED'
+      ) {
         return false;
       }
-      if (typeFilter === 'REBALANCE' && !e.message.toLowerCase().includes('rebalance') && !e.message.toLowerCase().includes('join') && e.eventType !== 'REBALANCE_STARTED' && e.eventType !== 'CONSUMER_JOINED') {
+      if (
+        typeFilter === 'REBALANCE' &&
+        !e.message.toLowerCase().includes('rebalance') &&
+        !e.message.toLowerCase().includes('join') &&
+        e.eventType !== 'REBALANCE_STARTED' &&
+        e.eventType !== 'CONSUMER_JOINED'
+      ) {
         return false;
       }
 
@@ -67,7 +89,9 @@ export function VirtualizedEventTimeline({
         const query = searchFilter.toLowerCase();
         const matchesMsg = e.message.toLowerCase().includes(query);
         const matchesType = (e.eventType || e.type).toLowerCase().includes(query);
-        const matchesEntity = e.involvedEntities?.some((ent) => `${ent.type}:${ent.id}`.toLowerCase().includes(query));
+        const matchesEntity = e.involvedEntities?.some((ent) =>
+          `${ent.type}:${ent.id}`.toLowerCase().includes(query),
+        );
         return matchesMsg || matchesType || matchesEntity;
       }
 
@@ -169,11 +193,7 @@ export function VirtualizedEventTimeline({
       </div>
 
       {/* Virtualized Scrolling Container */}
-      <div
-        ref={containerRef}
-        className="virtualized-timeline-container"
-        onScroll={handleScroll}
-      >
+      <div ref={containerRef} className="virtualized-timeline-container" onScroll={handleScroll}>
         {totalCount === 0 ? (
           <div className="timeline-empty-state">
             <span className="timeline-empty-icon">📜</span>

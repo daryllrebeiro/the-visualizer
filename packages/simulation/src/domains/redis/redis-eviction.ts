@@ -29,9 +29,7 @@ export function evictUntilMemoryAvailable(
     }
 
     const isVolatile = policy.startsWith('volatile-');
-    const candidatePool = isVolatile
-      ? keys.filter((k) => node.storage[k]?.ttl !== null)
-      : keys;
+    const candidatePool = isVolatile ? keys.filter((k) => node.storage[k]?.ttl !== null) : keys;
 
     if (candidatePool.length === 0) {
       // If volatile policy but no keys with TTL, fallback or return failure

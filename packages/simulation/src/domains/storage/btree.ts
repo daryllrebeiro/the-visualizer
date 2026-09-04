@@ -37,7 +37,10 @@ export function createInitialBTree(
   };
 }
 
-export function searchBTree(state: BTreeState, key: number): { value: string | null; path: string[] } {
+export function searchBTree(
+  state: BTreeState,
+  key: number,
+): { value: string | null; path: string[] } {
   const path: string[] = [];
   let currId = state.rootId;
 
@@ -216,7 +219,8 @@ function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): vo
   if (childIndex === -1) return;
 
   const leftSiblingId = childIndex > 0 ? parent.childrenIds[childIndex - 1] : null;
-  const rightSiblingId = childIndex < parent.childrenIds.length - 1 ? parent.childrenIds[childIndex + 1] : null;
+  const rightSiblingId =
+    childIndex < parent.childrenIds.length - 1 ? parent.childrenIds[childIndex + 1] : null;
 
   const leftSibling = leftSiblingId ? state.nodes[leftSiblingId] : null;
   const rightSibling = rightSiblingId ? state.nodes[rightSiblingId] : null;

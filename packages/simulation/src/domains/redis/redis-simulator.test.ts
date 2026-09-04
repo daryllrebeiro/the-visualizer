@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { extractHashTag, getClusterSlot } from './crc16.js';
 import { RedisInvariantChecker } from './redis-invariants.js';
-import {
-  createDefaultRedisCluster,
-  pureRedisTransition,
-} from './redis-state-transitions.js';
+import { createDefaultRedisCluster, pureRedisTransition } from './redis-state-transitions.js';
 import type { RedisNode, RedisSimEvent } from './redis-types.js';
 
 describe('Redis Cluster Simulation (16,384 Slots & Eviction Engine)', () => {

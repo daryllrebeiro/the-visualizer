@@ -1,10 +1,5 @@
 import { K8sScheduler } from './k8s-scheduler.js';
-import type {
-  K8sClusterState,
-  K8sNode,
-  PodSpec,
-  ReplicaSetSpec,
-} from './k8s-types.js';
+import type { K8sClusterState, K8sNode, PodSpec, ReplicaSetSpec } from './k8s-types.js';
 
 export function reconcileCluster(state: K8sClusterState): void {
   state.totalReconciliations++;
@@ -83,7 +78,10 @@ export function reconcileCluster(state: K8sClusterState): void {
         if (pod.nodeName) {
           const node = nodes.find((n) => n.name === pod.nodeName);
           if (node) {
-            node.allocated.cpuMillis = Math.max(0, node.allocated.cpuMillis - pod.resources.cpuMillis);
+            node.allocated.cpuMillis = Math.max(
+              0,
+              node.allocated.cpuMillis - pod.resources.cpuMillis,
+            );
             node.allocated.memoryMb = Math.max(0, node.allocated.memoryMb - pod.resources.memoryMb);
             node.podIds = node.podIds.filter((id) => id !== pod.id);
           }
@@ -94,7 +92,9 @@ export function reconcileCluster(state: K8sClusterState): void {
   }
 
   // 3. Scheduler Loop: Schedule Pending Pods onto available Nodes
-  const pendingPods = (Object.values(state.pods) as PodSpec[]).filter((p) => p.status === 'Pending');
+  const pendingPods = (Object.values(state.pods) as PodSpec[]).filter(
+    (p) => p.status === 'Pending',
+  );
 
   for (const pod of pendingPods) {
     const decision = scheduler.schedule(pod, nodes);

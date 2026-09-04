@@ -1,5 +1,4 @@
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import { matchTopicPattern } from './topic-matcher.js';
 import type {
   AMQPMessage,
   BindingSpec,
@@ -10,6 +9,7 @@ import type {
   RabbitQueue,
   RabbitSimEvent,
 } from './rabbitmq-types.js';
+import { matchTopicPattern } from './topic-matcher.js';
 
 export interface RabbitTransitionResult {
   nextState: RabbitClusterState;
@@ -77,7 +77,7 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
       consumerCount: 1,
       color: '#818cf8',
     },
-    'notifications': {
+    notifications: {
       id: 'q-notif',
       name: 'notifications',
       durable: true,
@@ -387,7 +387,11 @@ function routeToDLX(
 
   state.totalDeadLettered++;
 
-  const dlxMatchingQueues = findMatchingQueues(state, dlx, sourceQueue.deadLetterRoutingKey ?? msg.routingKey);
+  const dlxMatchingQueues = findMatchingQueues(
+    state,
+    dlx,
+    sourceQueue.deadLetterRoutingKey ?? msg.routingKey,
+  );
   for (const qName of dlxMatchingQueues) {
     const targetQ = state.queues[qName];
     if (targetQ) {
@@ -436,7 +440,9 @@ function dispatchMessagesToConsumers(state: RabbitClusterState): void {
     if (!q) continue;
 
     while (consumer.activeMessages.length < consumer.prefetchCount) {
-      const nextMsg = q.messages.find((m) => m.state === 'InQueue' && m.assignedConsumerId === null);
+      const nextMsg = q.messages.find(
+        (m) => m.state === 'InQueue' && m.assignedConsumerId === null,
+      );
       if (!nextMsg) break;
 
       nextMsg.state = 'Delivered';

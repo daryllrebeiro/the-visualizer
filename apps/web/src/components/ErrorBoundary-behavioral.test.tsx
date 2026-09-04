@@ -2,6 +2,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
+
 import { ErrorBoundary } from './ErrorBoundary';
 
 function CrashingCanvas({ shouldThrow }: { shouldThrow: boolean }) {
@@ -28,7 +29,7 @@ describe('ErrorBoundary Behavioral Verification', () => {
             <CrashingCanvas shouldThrow={shouldThrow} />
           </ErrorBoundary>
           <aside data-testid="app-sidebar">Sidebar Usable</aside>
-        </div>
+        </div>,
       );
     };
 
@@ -38,8 +39,12 @@ describe('ErrorBoundary Behavioral Verification', () => {
     });
 
     // Assert app shell remains mounted and usable
-    expect(container.querySelector('[data-testid="app-header"]')?.textContent).toBe('Header Usable');
-    expect(container.querySelector('[data-testid="app-sidebar"]')?.textContent).toBe('Sidebar Usable');
+    expect(container.querySelector('[data-testid="app-header"]')?.textContent).toBe(
+      'Header Usable',
+    );
+    expect(container.querySelector('[data-testid="app-sidebar"]')?.textContent).toBe(
+      'Sidebar Usable',
+    );
 
     // Assert ErrorBoundary caught the error and rendered fallback UI
     const boundaryElem = container.querySelector('[role="alert"]');
@@ -58,7 +63,9 @@ describe('ErrorBoundary Behavioral Verification', () => {
     });
 
     // Assert normal canvas rendering resumes
-    expect(container.querySelector('[data-testid="active-canvas"]')?.textContent).toBe('Normal Canvas Rendered');
+    expect(container.querySelector('[data-testid="active-canvas"]')?.textContent).toBe(
+      'Normal Canvas Rendered',
+    );
     expect(container.querySelector('[role="alert"]')).toBeNull();
 
     consoleSpy.mockRestore();

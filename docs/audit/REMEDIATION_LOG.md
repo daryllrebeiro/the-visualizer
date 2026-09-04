@@ -9,6 +9,7 @@
 ## 1. Executive Summary
 
 Following the independent verification audit of `DELIVERABLES_DONE.md`, four primary issues were isolated and prioritized for remediation:
+
 1. **P0.1 Residual Simulation Entropy**: Unseeded `Math.random()` and `Date.now()` calls in `storage` (B+Tree and LSM-Tree) and `rabbitmq` domain state reducers.
 2. **P0.2 CORS Wildcard with Credentials**: `apps/api/src/index.ts` returned `'*'` for unlisted origins while `credentials: true` was enabled.
 3. **P1.3 Accessible UI Shell Adoption**: `<CanvasShell>` and accessible components (`OnboardingTour`, `DataTableModal`) were created in `@the-visualizer/ui` but needed top-level wiring in `apps/web/src/app/page.tsx`.
@@ -21,6 +22,7 @@ All items have been resolved with reproducible evidence and zero regressions.
 ## 2. Remediation Details & Verification Evidence
 
 ### Item P0.1: Residual Nondeterminism in Storage and RabbitMQ Reducers
+
 - **Severity:** P0 (Critical - Determinism Violation)
 - **Files Modified:**
   - `packages/simulation/src/domains/storage/btree.ts` (Lines 99, 124)
@@ -42,6 +44,7 @@ All items have been resolved with reproducible evidence and zero regressions.
 ---
 
 ### Item P0.2: CORS Wildcard & Credentials Misconfiguration
+
 - **Severity:** P0 (High - Security Misconfiguration)
 - **Files Modified:**
   - `apps/api/src/index.ts` (Lines 44–58)
@@ -57,6 +60,7 @@ All items have been resolved with reproducible evidence and zero regressions.
 ---
 
 ### Item P1.3: CanvasShell & Accessibility Primitives Adoption
+
 - **Severity:** P1 (Medium - Usability & Accessibility)
 - **Files Modified:**
   - `apps/web/src/app/page.tsx`
@@ -69,6 +73,7 @@ All items have been resolved with reproducible evidence and zero regressions.
 ---
 
 ### Item P1.4: Scaffolding Generator Auto-Registration in Index
+
 - **Severity:** P1 (Medium - Developer Experience & Automation)
 - **Files Modified:**
   - `scripts/create-domain.mjs`
@@ -83,22 +88,23 @@ All items have been resolved with reproducible evidence and zero regressions.
 
 ## 3. Summary of Test Verification Results
 
-| Suite | Package | Tests Run | Result |
-| :--- | :--- | :--- | :--- |
-| Golden Determinism | `@the-visualizer/simulation` | 20 | **PASS (100%)** |
-| Simulation Engine & Reducers | `@the-visualizer/simulation` | 83 | **PASS (100%)** |
-| Memory Boundary (10k ticks) | `@the-visualizer/simulation` | 1 | **PASS (<50MB delta)** |
-| Headless Throughput Bench | `@the-visualizer/simulation` | 1 | **PASS (>33,000 ticks/sec)** |
-| Contracts Property Fuzzing | `@the-visualizer/test-utils` | 5 (3,300 runs) | **PASS (0 violations)** |
-| Design System & Glossary | `@the-visualizer/ui` | 3 | **PASS (100%)** |
-| Logging & Trace Context | `@the-visualizer/logging` | 3 | **PASS (100%)** |
-| Configuration & Limits | `@the-visualizer/config` | 2 | **PASS (100%)** |
-| CORS Security Allow-list | `@the-visualizer/api` | 3 | **PASS (100%)** |
-| SSRF Protection & IP Block | `@the-visualizer/ws-gateway` | 7 | **PASS (100%)** |
-| Next.js Static Build | `@the-visualizer/web` | 13 routes | **PASS (Exit 0)** |
-| Workspace Typecheck | All 9 Projects | Full Tree | **PASS (Exit 0)** |
+| Suite                        | Package                      | Tests Run      | Result                       |
+| :--------------------------- | :--------------------------- | :------------- | :--------------------------- |
+| Golden Determinism           | `@the-visualizer/simulation` | 20             | **PASS (100%)**              |
+| Simulation Engine & Reducers | `@the-visualizer/simulation` | 83             | **PASS (100%)**              |
+| Memory Boundary (10k ticks)  | `@the-visualizer/simulation` | 1              | **PASS (<50MB delta)**       |
+| Headless Throughput Bench    | `@the-visualizer/simulation` | 1              | **PASS (>33,000 ticks/sec)** |
+| Contracts Property Fuzzing   | `@the-visualizer/test-utils` | 5 (3,300 runs) | **PASS (0 violations)**      |
+| Design System & Glossary     | `@the-visualizer/ui`         | 3              | **PASS (100%)**              |
+| Logging & Trace Context      | `@the-visualizer/logging`    | 3              | **PASS (100%)**              |
+| Configuration & Limits       | `@the-visualizer/config`     | 2              | **PASS (100%)**              |
+| CORS Security Allow-list     | `@the-visualizer/api`        | 3              | **PASS (100%)**              |
+| SSRF Protection & IP Block   | `@the-visualizer/ws-gateway` | 7              | **PASS (100%)**              |
+| Next.js Static Build         | `@the-visualizer/web`        | 13 routes      | **PASS (Exit 0)**            |
+| Workspace Typecheck          | All 9 Projects               | Full Tree      | **PASS (Exit 0)**            |
 
 ---
 
 ## 4. Sign-Off
+
 All audit findings are remediated and verified with reproducible evidence. The repository is ready for Part B Production Readiness Scoring.

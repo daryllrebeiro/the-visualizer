@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+
 import type {
   BindingSpec,
   ExchangeSpec,
@@ -11,7 +12,12 @@ import type {
 
 interface RabbitMQVisualizerProps {
   state: RabbitClusterState;
-  onPublish: (exchangeName: string, routingKey: string, payload: string, ttl: number | null) => void;
+  onPublish: (
+    exchangeName: string,
+    routingKey: string,
+    payload: string,
+    ttl: number | null,
+  ) => void;
   onAck: (messageId: string, consumerId: string) => void;
   onNack: (messageId: string, consumerId: string, requeue: boolean) => void;
   onReject: (messageId: string, consumerId: string) => void;
@@ -42,7 +48,15 @@ export function RabbitMQVisualizer({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', gap: '16px' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        padding: '16px',
+        gap: '16px',
+      }}
+    >
       {/* Top Banner: Cluster Metrics & Publish Form */}
       <div
         style={{
@@ -64,18 +78,31 @@ export function RabbitMQVisualizer({
               RabbitMQ (AMQP 0-9-1 Exchanges, Queues & Dead-Letter Routing)
             </h2>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Published: <strong style={{ color: '#38bdf8' }}>{state.totalPublished}</strong> · Acked: <strong style={{ color: '#4ade80' }}>{state.totalAcked}</strong> · Nacked: <strong style={{ color: '#fbbf24' }}>{state.totalNacked}</strong> · Dead-Lettered (DLX): <strong style={{ color: '#f43f5e' }}>{state.totalDeadLettered}</strong>
+              Published: <strong style={{ color: '#38bdf8' }}>{state.totalPublished}</strong> ·
+              Acked: <strong style={{ color: '#4ade80' }}>{state.totalAcked}</strong> · Nacked:{' '}
+              <strong style={{ color: '#fbbf24' }}>{state.totalNacked}</strong> · Dead-Lettered
+              (DLX): <strong style={{ color: '#f43f5e' }}>{state.totalDeadLettered}</strong>
             </span>
           </div>
         </div>
 
         {/* Publish Toolbar */}
-        <form onSubmit={handlePublishSubmit} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <form
+          onSubmit={handlePublishSubmit}
+          style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}
+        >
           <select
             value={selectedExchange}
             onChange={(e) => setSelectedExchange(e.target.value)}
             aria-label="Target RabbitMQ exchange"
-            style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
+            style={{
+              padding: '4px 8px',
+              fontSize: '0.75rem',
+              backgroundColor: '#1e293b',
+              color: '#f8fafc',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+            }}
           >
             {exchanges.map((ex) => (
               <option key={ex.name} value={ex.name}>
@@ -88,33 +115,88 @@ export function RabbitMQVisualizer({
             value={routingKeyInput}
             onChange={(e) => setRoutingKeyInput(e.target.value)}
             placeholder="Routing Key e.g. orders.eu.fast"
-            style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', width: '150px' }}
+            style={{
+              padding: '4px 8px',
+              fontSize: '0.75rem',
+              backgroundColor: '#1e293b',
+              color: '#f8fafc',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              width: '150px',
+            }}
           />
           <input
             type="text"
             value={payloadInput}
             onChange={(e) => setPayloadInput(e.target.value)}
             placeholder="Payload"
-            style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', width: '160px' }}
+            style={{
+              padding: '4px 8px',
+              fontSize: '0.75rem',
+              backgroundColor: '#1e293b',
+              color: '#f8fafc',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              width: '160px',
+            }}
           />
           <input
             type="number"
             value={ttlInput}
             onChange={(e) => setTtlInput(e.target.value)}
             placeholder="TTL (opt)"
-            style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', width: '65px' }}
+            style={{
+              padding: '4px 8px',
+              fontSize: '0.75rem',
+              backgroundColor: '#1e293b',
+              color: '#f8fafc',
+              border: '1px solid #334155',
+              borderRadius: '4px',
+              width: '65px',
+            }}
           />
-          <button type="submit" className="btn btn--primary" style={{ padding: '5px 10px', fontSize: '0.75rem' }}>
+          <button
+            type="submit"
+            className="btn btn--primary"
+            style={{ padding: '5px 10px', fontSize: '0.75rem' }}
+          >
             ✉️ Publish
           </button>
         </form>
       </div>
 
       {/* AMQP Topology Canvas: 3 Columns [ Exchanges -> Queues -> Consumers ] */}
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 280px', gap: '16px', flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '240px 1fr 280px',
+          gap: '16px',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {/* Column 1: Exchanges */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: '#0f172a', borderRadius: '8px', padding: '12px', border: '1px solid #1e293b', overflowY: 'auto' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc', borderBottom: '1px solid #1e293b', paddingBottom: '6px' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            backgroundColor: '#0f172a',
+            borderRadius: '8px',
+            padding: '12px',
+            border: '1px solid #1e293b',
+            overflowY: 'auto',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#f8fafc',
+              borderBottom: '1px solid #1e293b',
+              paddingBottom: '6px',
+            }}
+          >
             🔀 Exchanges ({exchanges.length})
           </div>
           {exchanges.map((ex) => {
@@ -132,8 +214,12 @@ export function RabbitMQVisualizer({
                   gap: '4px',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.8rem', color: '#f8fafc' }}>{ex.name}</span>
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: '0.8rem', color: '#f8fafc' }}>
+                    {ex.name}
+                  </span>
                   <span
                     style={{
                       fontSize: '0.6rem',
@@ -149,7 +235,14 @@ export function RabbitMQVisualizer({
                 </div>
                 <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
                   Bindings ({exBindings.length}):
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      marginTop: '2px',
+                    }}
+                  >
                     {exBindings.map((b) => (
                       <span key={b.id} style={{ fontFamily: 'monospace', color: '#cbd5e1' }}>
                         → {b.queueName} {b.routingKeyPattern ? `[${b.routingKeyPattern}]` : ''}
@@ -163,11 +256,36 @@ export function RabbitMQVisualizer({
         </div>
 
         {/* Column 2: Queues */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: '#0f172a', borderRadius: '8px', padding: '12px', border: '1px solid #1e293b', overflowY: 'auto' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc', borderBottom: '1px solid #1e293b', paddingBottom: '6px' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            backgroundColor: '#0f172a',
+            borderRadius: '8px',
+            padding: '12px',
+            border: '1px solid #1e293b',
+            overflowY: 'auto',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#f8fafc',
+              borderBottom: '1px solid #1e293b',
+              paddingBottom: '6px',
+            }}
+          >
             📥 Queues & Buffers ({queues.length})
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '10px',
+            }}
+          >
             {queues.map((q) => {
               const isDLQ = q.name.includes('dlx') || q.name.includes('dead');
               return (
@@ -183,8 +301,20 @@ export function RabbitMQVisualizer({
                     gap: '6px',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.8rem', color: isDLQ ? '#f43f5e' : '#f8fafc' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        color: isDLQ ? '#f43f5e' : '#f8fafc',
+                      }}
+                    >
                       {q.name}
                     </span>
                     <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
@@ -199,9 +329,24 @@ export function RabbitMQVisualizer({
                   )}
 
                   {/* Messages List */}
-                  <div style={{ flex: 1, backgroundColor: '#0f172a', padding: '4px', borderRadius: '4px', minHeight: '60px', maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0f172a',
+                      padding: '4px',
+                      borderRadius: '4px',
+                      minHeight: '60px',
+                      maxHeight: '120px',
+                      overflowY: 'auto',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '3px',
+                    }}
+                  >
                     {q.messages.length === 0 ? (
-                      <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>(empty buffer)</span>
+                      <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>
+                        (empty buffer)
+                      </span>
                     ) : (
                       q.messages.map((m) => (
                         <div
@@ -215,11 +360,18 @@ export function RabbitMQVisualizer({
                             border: '1px solid #1e293b',
                             display: 'flex',
                             justifyContent: 'space-between',
-                            color: m.state === 'DeadLettered' ? '#f43f5e' : m.assignedConsumerId ? '#4ade80' : '#cbd5e1',
+                            color:
+                              m.state === 'DeadLettered'
+                                ? '#f43f5e'
+                                : m.assignedConsumerId
+                                  ? '#4ade80'
+                                  : '#cbd5e1',
                           }}
                         >
                           <span>{m.routingKey}</span>
-                          <span>{m.state} {m.ttl !== null ? `(ttl:${m.ttl})` : ''}</span>
+                          <span>
+                            {m.state} {m.ttl !== null ? `(ttl:${m.ttl})` : ''}
+                          </span>
                         </div>
                       ))
                     )}
@@ -231,8 +383,27 @@ export function RabbitMQVisualizer({
         </div>
 
         {/* Column 3: Consumers Worker Pool */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: '#0f172a', borderRadius: '8px', padding: '12px', border: '1px solid #1e293b', overflowY: 'auto' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc', borderBottom: '1px solid #1e293b', paddingBottom: '6px' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            backgroundColor: '#0f172a',
+            borderRadius: '8px',
+            padding: '12px',
+            border: '1px solid #1e293b',
+            overflowY: 'auto',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: '#f8fafc',
+              borderBottom: '1px solid #1e293b',
+              paddingBottom: '6px',
+            }}
+          >
             👷 Consumer Pool ({consumers.length})
           </div>
           {consumers.map((c) => (
@@ -248,9 +419,15 @@ export function RabbitMQVisualizer({
                 gap: '6px',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.8rem', color: '#f8fafc' }}>{c.name}</span>
-                <span style={{ fontSize: '0.65rem', color: '#38bdf8' }}>Prefetch: {c.prefetchCount}</span>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span style={{ fontWeight: 700, fontSize: '0.8rem', color: '#f8fafc' }}>
+                  {c.name}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: '#38bdf8' }}>
+                  Prefetch: {c.prefetchCount}
+                </span>
               </div>
               <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
                 Bound: <code>{c.queueName}</code>
@@ -259,7 +436,9 @@ export function RabbitMQVisualizer({
               {/* Active Messages with Ack / Reject Controls */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {c.activeMessages.length === 0 ? (
-                  <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>(idle / awaiting messages)</span>
+                  <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>
+                    (idle / awaiting messages)
+                  </span>
                 ) : (
                   c.activeMessages.map((m) => (
                     <div
@@ -274,7 +453,9 @@ export function RabbitMQVisualizer({
                         gap: '3px',
                       }}
                     >
-                      <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#f8fafc' }}>
+                      <div
+                        style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#f8fafc' }}
+                      >
                         {m.routingKey}: &quot;{m.payload}&quot;
                       </div>
                       <div style={{ display: 'flex', gap: '4px' }}>

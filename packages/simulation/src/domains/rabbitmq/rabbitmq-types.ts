@@ -17,12 +17,7 @@ export interface BindingSpec {
   routingKeyPattern: string; // e.g. "orders.*.eu", "logs.#"
 }
 
-export type AMQPMessageState =
-  | 'InExchange'
-  | 'InQueue'
-  | 'Delivered'
-  | 'Acked'
-  | 'DeadLettered';
+export type AMQPMessageState = 'InExchange' | 'InQueue' | 'Delivered' | 'Acked' | 'DeadLettered';
 
 export interface AMQPMessage {
   id: string;

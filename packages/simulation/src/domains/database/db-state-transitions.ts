@@ -1,5 +1,4 @@
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import { ConsistentHashRing, type RingToken } from './hash-ring.js';
 import type {
   ConsistencyLevel,
   DBClusterState,
@@ -8,6 +7,7 @@ import type {
   DBValueRecord,
   HintedHandoffRecord,
 } from './db-types.js';
+import { ConsistentHashRing, type RingToken } from './hash-ring.js';
 
 export interface DBTransitionResult {
   nextState: DBClusterState;
@@ -154,7 +154,8 @@ function handleWriteRequest(
 ): void {
   const key = String(event.payload['key'] ?? '');
   const value = String(event.payload['value'] ?? '');
-  const consistency = (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.writeConsistency;
+  const consistency =
+    (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.writeConsistency;
 
   if (!key) return;
 
@@ -222,7 +223,8 @@ function handleReadRequest(
   emittedEvents: DBSimEvent[],
 ): void {
   const key = String(event.payload['key'] ?? '');
-  const consistency = (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.readConsistency;
+  const consistency =
+    (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.readConsistency;
 
   if (!key) return;
 

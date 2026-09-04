@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import {
   createInitialBTree,
@@ -17,10 +18,7 @@ import {
   testBloomFilter,
   writeLSM,
 } from './lsm-tree.js';
-import {
-  createDefaultStorageCluster,
-  pureStorageTransition,
-} from './storage-state-transitions.js';
+import { createDefaultStorageCluster, pureStorageTransition } from './storage-state-transitions.js';
 
 describe('Storage Engine Domain Fidelity Test Suite', () => {
   describe('SQLite-grade B+Tree High-Fanout & Redistribution', () => {

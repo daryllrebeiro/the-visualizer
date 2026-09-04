@@ -1,25 +1,26 @@
 'use client';
 
-import React, { useState } from 'react';
 import Link from 'next/link';
+import React, { useState } from 'react';
+
 import {
-  Button,
-  IconButton,
   Badge,
-  StatusPill,
+  Button,
   Card,
-  EmptyState,
-  Skeleton,
-  Toggle,
-  Slider,
-  Select,
-  Tooltip,
-  Modal,
-  Drawer,
-  Tabs,
-  ProgressRing,
-  Gauge,
   DOMAIN_COLORS,
+  Drawer,
+  EmptyState,
+  Gauge,
+  IconButton,
+  Modal,
+  ProgressRing,
+  Select,
+  Skeleton,
+  Slider,
+  StatusPill,
+  Tabs,
+  Toggle,
+  Tooltip,
 } from '@the-visualizer/ui';
 
 export default function DesignSystemPage(): React.JSX.Element {
@@ -68,7 +69,8 @@ export default function DesignSystemPage(): React.JSX.Element {
             TheVisualizer Design System
           </h1>
           <p style={{ margin: 0, color: 'var(--text-muted, #64748b)', fontSize: '14px' }}>
-            Unified UI tokens, primitives, and component foundations across all 8 domain visualizers.
+            Unified UI tokens, primitives, and component foundations across all 8 domain
+            visualizers.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -92,7 +94,13 @@ export default function DesignSystemPage(): React.JSX.Element {
           <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 16px 0' }}>
             Domain Color Scales (8 Skins)
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: '12px',
+            }}
+          >
             {Object.entries(DOMAIN_COLORS).map(([key, theme]) => (
               <div
                 key={key}
@@ -114,7 +122,14 @@ export default function DesignSystemPage(): React.JSX.Element {
                     boxShadow: theme.glow,
                   }}
                 />
-                <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'capitalize', color: theme.primary }}>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    textTransform: 'capitalize',
+                    color: theme.primary,
+                  }}
+                >
                   {key}
                 </div>
                 <div style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>
@@ -166,10 +181,18 @@ export default function DesignSystemPage(): React.JSX.Element {
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Badge variant="success" dot>LEADER</Badge>
-              <Badge variant="warning" dot>CANDIDATE</Badge>
-              <Badge variant="danger" dot>CRASHED</Badge>
-              <Badge variant="info" dot>FOLLOWER</Badge>
+              <Badge variant="success" dot>
+                LEADER
+              </Badge>
+              <Badge variant="warning" dot>
+                CANDIDATE
+              </Badge>
+              <Badge variant="danger" dot>
+                CRASHED
+              </Badge>
+              <Badge variant="info" dot>
+                FOLLOWER
+              </Badge>
               <Badge variant="purple">QUORUM</Badge>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

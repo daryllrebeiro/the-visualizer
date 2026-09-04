@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import { ConsistentHashRing } from './hash-ring.js';
-import {
-  createDefaultDBCluster,
-  pureDBTransition,
-} from './db-state-transitions.js';
+import { createDefaultDBCluster, pureDBTransition } from './db-state-transitions.js';
 import type { DBSimEvent } from './db-types.js';
+import { ConsistentHashRing } from './hash-ring.js';
 
 describe('Distributed Database Domain Fidelity Test Suite (Cassandra 5.0 / Dynamo Model)', () => {
   describe('Tunable Quorum Consistency & Required Replica Calculations', () => {
@@ -96,7 +94,9 @@ describe('Distributed Database Domain Fidelity Test Suite (Cassandra 5.0 / Dynam
 
       // Process hint delivery
       const resDelivered = pureDBTransition(resRecover.nextState, hintDeliverEvent!, rng);
-      expect(resDelivered.nextState.nodes[targetDownNodeId]!.storage['user:99']?.value).toBe('charlie');
+      expect(resDelivered.nextState.nodes[targetDownNodeId]!.storage['user:99']?.value).toBe(
+        'charlie',
+      );
       // Hints should be drained from coordinator
       const coordAfter = resDelivered.nextState.nodes[coordinator!.id]!;
       expect(coordAfter.hints.length).toBe(0);

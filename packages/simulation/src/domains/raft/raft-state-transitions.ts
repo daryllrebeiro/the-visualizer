@@ -247,7 +247,7 @@ function handleElectionTimeout(
       id: `req-vote-${candidateId}-${peerId}-${node.currentTerm}`,
       tick: state.tick + 1,
       type: 'RAFT_REQUEST_VOTE',
-      payload: (payload as unknown) as Record<string, unknown>,
+      payload: payload as unknown as Record<string, unknown>,
     });
   }
 }
@@ -296,7 +296,7 @@ function handleRequestVote(
     id: `vote-reply-${receiver.id}-${p.candidateId}-${receiver.currentTerm}`,
     tick: state.tick + 1,
     type: 'RAFT_VOTE_REPLY',
-    payload: (reply as unknown) as Record<string, unknown>,
+    payload: reply as unknown as Record<string, unknown>,
   });
 }
 
@@ -331,7 +331,8 @@ function handleVoteReply(
       // Initialize leader volatile state
       candidate.nextIndex = {};
       candidate.matchIndex = {};
-      const lastIndex = candidate.log.length > 0 ? candidate.log[candidate.log.length - 1]!.index : 0;
+      const lastIndex =
+        candidate.log.length > 0 ? candidate.log[candidate.log.length - 1]!.index : 0;
 
       for (const peerId of Object.keys(state.nodes)) {
         if (peerId !== candidate.id) {
@@ -385,7 +386,7 @@ function handleHeartbeat(
       id: `append-${leader.id}-${peerId}-${state.tick}`,
       tick: state.tick + 1,
       type: 'RAFT_APPEND_ENTRIES',
-      payload: (payload as unknown) as Record<string, unknown>,
+      payload: payload as unknown as Record<string, unknown>,
     });
   }
 }
@@ -443,7 +444,7 @@ function handleAppendEntries(
     id: `append-reply-${follower.id}-${p.leaderId}-${state.tick}`,
     tick: state.tick + 1,
     type: 'RAFT_APPEND_REPLY',
-    payload: (reply as unknown) as Record<string, unknown>,
+    payload: reply as unknown as Record<string, unknown>,
   });
 }
 

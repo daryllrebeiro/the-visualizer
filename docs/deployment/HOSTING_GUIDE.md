@@ -43,14 +43,18 @@ This guide describes production deployment options, architecture blueprints, env
 ## 2. Deployment Strategies
 
 ### Strategy A: Self-Hosted Docker Compose (Single VM / Droplet)
+
 Ideal for single-server production hosting (e.g. AWS EC2, DigitalOcean Droplet, Hetzner, GCP Compute Engine).
 
 #### Step 1: Provision Server & Security Groups
-* Inbound ports: `80` (HTTP), `443` (HTTPS).
-* Internal ports: `3000`, `3001`, `3002`, `5432`, `6379` (blocked from public access).
+
+- Inbound ports: `80` (HTTP), `443` (HTTPS).
+- Internal ports: `3000`, `3001`, `3002`, `5432`, `6379` (blocked from public access).
 
 #### Step 2: Configure Production `.env`
+
 Create `.env.production` on the host:
+
 ```env
 PORT=3000
 DATABASE_URL=postgresql://visualizer_user:SECURE_POSTGRES_PASSWORD@postgres:5432/visualizer_db
@@ -62,11 +66,13 @@ NEXT_PUBLIC_WS_URL=wss://visualizer.yourdomain.com/ws
 ```
 
 #### Step 3: Run with Docker Compose
+
 ```bash
 docker compose -f docker-compose.yml up --build -d
 ```
 
 #### Step 4: Configure NGINX Reverse Proxy with SSL (Certbot)
+
 ```nginx
 server {
     server_name visualizer.yourdomain.com;
@@ -106,13 +112,13 @@ server {
 
 ### Strategy B: Cloud-Native Managed Deployment (AWS / GCP)
 
-| Component | AWS Cloud Blueprint | GCP Cloud Blueprint |
-| :--- | :--- | :--- |
-| **Frontend (`apps/web`)** | AWS Amplify / Vercel / CloudFront + S3 | Cloud Run / Firebase Hosting |
-| **REST API (`apps/api`)** | AWS ECS Fargate / App Runner | Cloud Run (Stateless container) |
-| **WebSocket Gateway (`apps/ws-gateway`)** | AWS ECS Fargate (Network Load Balancer) | Cloud Run (WebSockets enabled) |
-| **Database** | AWS RDS PostgreSQL 16 (Multi-AZ) | GCP Cloud SQL PostgreSQL 16 |
-| **Cache & Pub/Sub** | AWS ElastiCache for Redis 7 | GCP Memorystore for Redis 7 |
+| Component                                 | AWS Cloud Blueprint                     | GCP Cloud Blueprint             |
+| :---------------------------------------- | :-------------------------------------- | :------------------------------ |
+| **Frontend (`apps/web`)**                 | AWS Amplify / Vercel / CloudFront + S3  | Cloud Run / Firebase Hosting    |
+| **REST API (`apps/api`)**                 | AWS ECS Fargate / App Runner            | Cloud Run (Stateless container) |
+| **WebSocket Gateway (`apps/ws-gateway`)** | AWS ECS Fargate (Network Load Balancer) | Cloud Run (WebSockets enabled)  |
+| **Database**                              | AWS RDS PostgreSQL 16 (Multi-AZ)        | GCP Cloud SQL PostgreSQL 16     |
+| **Cache & Pub/Sub**                       | AWS ElastiCache for Redis 7             | GCP Memorystore for Redis 7     |
 
 ---
 

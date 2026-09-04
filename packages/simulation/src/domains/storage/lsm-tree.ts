@@ -74,7 +74,11 @@ export function createInitialLSMTree(
  * Generates bitset with k independent hashes using Kirsch-Mitzenmacher double hashing:
  * h_i(x) = (h1(x) + i * h2(x)) % m
  */
-export function generateBloomFilter(keys: number[], bitsPerKey = 10, hashCount?: number): { bitset: string; bits: number; k: number } {
+export function generateBloomFilter(
+  keys: number[],
+  bitsPerKey = 10,
+  hashCount?: number,
+): { bitset: string; bits: number; k: number } {
   const n = Math.max(1, keys.length);
   const m = Math.max(16, Math.round(n * bitsPerKey));
   const k = hashCount ?? optimalHashCount(bitsPerKey);
@@ -296,13 +300,17 @@ export function compactLevel(state: LSMTreeState, fromLevel: number, tick: numbe
   state.levels[toLvlKey] = [compactedTable];
 
   // Cascading compaction if next level exceeds threshold
-  const nextLvlMaxCapacity = (state.memTableCapacity * 4) * Math.pow(state.levelSizeMultiplier, fromLevel);
+  const nextLvlMaxCapacity =
+    state.memTableCapacity * 4 * Math.pow(state.levelSizeMultiplier, fromLevel);
   if (mergedEntries.length >= nextLvlMaxCapacity && fromLevel < 2) {
     compactLevel(state, fromLevel + 1, tick);
   }
 }
 
-export function readLSM(state: LSMTreeState, key: number): { value: string | null; sstableId?: string; inMemTable: boolean } {
+export function readLSM(
+  state: LSMTreeState,
+  key: number,
+): { value: string | null; sstableId?: string; inMemTable: boolean } {
   // 1. Active MemTable
   const memEntry = state.memTable.find((e) => e.key === key);
   if (memEntry) {
@@ -326,7 +334,11 @@ export function readLSM(state: LSMTreeState, key: number): { value: string | nul
           const entry = t.entries.find((e) => e.key === key);
           if (entry) {
             state.bloomFilterHits++;
-            return { value: entry.tombstone ? null : entry.value, sstableId: t.id, inMemTable: false };
+            return {
+              value: entry.tombstone ? null : entry.value,
+              sstableId: t.id,
+              inMemTable: false,
+            };
           } else {
             state.bloomFilterFalses++;
           }

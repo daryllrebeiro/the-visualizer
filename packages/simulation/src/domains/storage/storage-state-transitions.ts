@@ -1,5 +1,11 @@
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import { createInitialBTree, deleteBTree, deriveBTreeOrder, insertBTree, searchBTree } from './btree.js';
+import {
+  createInitialBTree,
+  deleteBTree,
+  deriveBTreeOrder,
+  insertBTree,
+  searchBTree,
+} from './btree.js';
 import {
   calculateTheoreticalBloomFpRate,
   compactLevel,
@@ -22,7 +28,9 @@ export interface StorageTransitionResult {
   emittedEvents: StorageSimEvent[];
 }
 
-export function createDefaultStorageCluster(clusterId = 'storage-cluster-1'): StorageEngineClusterState {
+export function createDefaultStorageCluster(
+  clusterId = 'storage-cluster-1',
+): StorageEngineClusterState {
   return {
     clusterId,
     tick: 0,
@@ -41,7 +49,9 @@ export function pureStorageTransition(
   event: StorageSimEvent,
   rng: DeterministicRNG,
 ): StorageTransitionResult {
-  const nextState: StorageEngineClusterState = JSON.parse(JSON.stringify(state)) as StorageEngineClusterState;
+  const nextState: StorageEngineClusterState = JSON.parse(
+    JSON.stringify(state),
+  ) as StorageEngineClusterState;
   const emittedEvents: StorageSimEvent[] = [];
 
   nextState.tick = event.tick;
@@ -108,12 +118,19 @@ export function pureStorageTransition(
       if (mode === 'REALISTIC') {
         const pageSize = Number(event.payload['pageSizeBytes'] ?? 4096);
         nextState.btree.pageSizeBytes = pageSize;
-        nextState.btree.maxDegree = deriveBTreeOrder(pageSize, nextState.btree.keySizeBytes, nextState.btree.pointerSizeBytes);
+        nextState.btree.maxDegree = deriveBTreeOrder(
+          pageSize,
+          nextState.btree.keySizeBytes,
+          nextState.btree.pointerSizeBytes,
+        );
 
         const bitsPerKey = Number(event.payload['bitsPerKey'] ?? 10);
         nextState.lsm.bitsPerKey = bitsPerKey;
         nextState.lsm.hashCount = optimalHashCount(bitsPerKey);
-        nextState.lsm.theoreticalFpRate = calculateTheoreticalBloomFpRate(bitsPerKey, nextState.lsm.hashCount);
+        nextState.lsm.theoreticalFpRate = calculateTheoreticalBloomFpRate(
+          bitsPerKey,
+          nextState.lsm.hashCount,
+        );
 
         const walPolicy = event.payload['walSyncPolicy'] as WALSyncPolicy;
         if (walPolicy) nextState.lsm.walSyncPolicy = walPolicy;
