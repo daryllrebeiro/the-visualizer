@@ -241,7 +241,7 @@ export class RoomManager {
 
     for (const [roomId, lastActivity] of this.roomLastActivity.entries()) {
       const activeClients = this.getActiveClientCount(roomId);
-      if (activeClients === 0 && now - lastActivity > ttlMs) {
+      if (activeClients === 0 && now - lastActivity >= ttlMs) {
         logger.info({ roomId, lastActivity, now }, 'Reaping idle room session');
         this.roomStates.set(roomId, 'RECLAIMED');
         this.roomLastActivity.delete(roomId);
