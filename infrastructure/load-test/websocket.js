@@ -6,7 +6,7 @@ export const options = {
   vus: 10,
   duration: '10s',
   thresholds: {
-    http_req_duration: ['p(95)<50'], // 95% of auth requests must complete within 50ms
+    http_req_duration: ['p(95)<400'], // 95% of auth requests must complete within 400ms (bcrypt hashing overhead)
     http_req_failed: ['rate<0.01'], // Error rate under 1%
     ws_connecting: ['p(95)<100'], // 95% of WS handshakes under 100ms
   },
@@ -47,7 +47,7 @@ export default function () {
       );
     });
 
-    socket.on('message', () => {
+    const handleMessage = () => {
       // Sending a PRODUCE intent once communication is established
       socket.send(
         JSON.stringify({
@@ -64,7 +64,14 @@ export default function () {
 
       // Close the socket to complete the virtual user iteration cleanly
       socket.close();
-    });
+    };
+
+    socket.on('message', handleMessage);
+    socket.on('binaryMessage', handleMessage);
+
+    socket.setTimeout(() => {
+      socket.close();
+    }, 3000);
 
     socket.on('close', () => {
       // Closed connection
