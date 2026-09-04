@@ -167,6 +167,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build workspace packages
         run: pnpm turbo run build --filter=./packages/*
+      - name: Run database migrations
+        run: pnpm --filter @the-visualizer/api db:migrate
+        env:
+          DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
       - name: Run unit tests
         run: pnpm test:all
         env:
@@ -265,11 +269,18 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build all packages
         run: pnpm build
+      - name: Run database migrations
+        run: pnpm --filter @the-visualizer/api db:migrate
+        env:
+          DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
       - name: Run integration tests
         run: pnpm test:integration
         env:
           DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
           REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
+          JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
+          PORT: 3000
           NODE_ENV: test
 
   # ─────────────────────────────────────────
@@ -392,6 +403,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build all packages
         run: pnpm build
+      - name: Run database migrations
+        run: pnpm --filter @the-visualizer/api db:migrate
+        env:
+          DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
       - name: Start API and WS-Gateway in Background
         run: |
           node apps/api/dist/index.js &
