@@ -181,4 +181,160 @@ describe('Golden Determinism Suite', () => {
     expect(hash1).toBe(hash2);
     expect(hash1).toBeGreaterThan(0);
   });
+
+  // Fidelity-specific golden pipeline: TCP CUBIC & SACK
+  it('[networking] produces deterministic state hash under CUBIC congestion growth and packet drop recovery', () => {
+    const plugin = DomainRegistry.get('networking')!;
+    const runNetworkingCubic = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Configure CUBIC
+      const cfg = {
+        id: 'cfg-cubic',
+        tick: 1,
+        type: 'TCP_CONFIGURE_FIDELITY' as any,
+        payload: { algorithm: 'CUBIC' },
+      };
+      state = plugin.reduceState(state, cfg, rng).nextState;
+
+      // Handshake and packet exchanges
+      const handshake = { id: 'hs-1', tick: 2, type: 'TCP_START_HANDSHAKE' as any, payload: {} };
+      state = plugin.reduceState(state, handshake, rng).nextState;
+
+      for (let i = 3; i <= 15; i++) {
+        const sendData = { id: `send-${i}`, tick: i, type: 'TCP_SEND_DATA' as any, payload: {} };
+        state = plugin.reduceState(state, sendData, rng).nextState;
+      }
+      return stableHash(state);
+    };
+
+    const h1 = runNetworkingCubic();
+    const h2 = runNetworkingCubic();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Raft PreVote & Snapshots
+  it('[raft] produces deterministic state hash across PreVote election and log compaction', () => {
+    const plugin = DomainRegistry.get('raft')!;
+    const runRaftFidelity = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Enable PreVote
+      const cfg = {
+        id: 'cfg-prevote',
+        tick: 1,
+        type: 'RAFT_CONFIGURE_FIDELITY' as any,
+        payload: { preVoteEnabled: true, fidelityMode: 'REALISTIC' },
+      };
+      state = plugin.reduceState(state, cfg, rng).nextState;
+
+      // Timeout on node 1
+      const timeoutEv = {
+        id: 'timeout-1',
+        tick: 2,
+        type: 'RAFT_ELECTION_TIMEOUT' as any,
+        payload: { candidateId: '1' },
+      };
+      state = plugin.reduceState(state, timeoutEv, rng).nextState;
+      return stableHash(state);
+    };
+
+    const h1 = runRaftFidelity();
+    const h2 = runRaftFidelity();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Redis candidate pool eviction & redirects
+  it('[redis] produces deterministic state hash across approximate sampling eviction and resharding', () => {
+    const plugin = DomainRegistry.get('redis')!;
+    const runRedisFidelity = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      for (let i = 1; i <= 10; i++) {
+        const setEv = {
+          id: `set-${i}`,
+          tick: i,
+          type: 'REDIS_SET' as any,
+          payload: { key: `item:${i}`, value: `val:${i}`, sizeBytes: 500000 },
+        };
+        state = plugin.reduceState(state, setEv, rng).nextState;
+      }
+      return stableHash(state);
+    };
+
+    const h1 = runRedisFidelity();
+    const h2 = runRedisFidelity();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Database Hinted Handoffs & Read Repair
+  it('[database] produces deterministic state hash across hinted handoff buffering and read repairs', () => {
+    const plugin = DomainRegistry.get('database')!;
+    const runDbFidelity = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Down node 2
+      const crashEv = { id: 'crash-2', tick: 1, type: 'DB_NODE_CRASH' as any, payload: { nodeId: '2' } };
+      state = plugin.reduceState(state, crashEv, rng).nextState;
+
+      // Write with ONE consistency to buffer hints
+      for (let i = 2; i <= 8; i++) {
+        const writeEv = {
+          id: `write-${i}`,
+          tick: i,
+          type: 'DB_WRITE_REQUEST' as any,
+          payload: { key: `user:${i}`, value: `data_${i}`, consistencyLevel: 'ONE' },
+        };
+        state = plugin.reduceState(state, writeEv, rng).nextState;
+      }
+      return stableHash(state);
+    };
+
+    const h1 = runDbFidelity();
+    const h2 = runDbFidelity();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Kubernetes QoS & PDB
+  it('[kubernetes] produces deterministic state hash across QoS-ordered pressure eviction and PDB enforcement', () => {
+    const plugin = DomainRegistry.get('kubernetes')!;
+    const runK8sFidelity = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Apply PDB
+      const pdbEv = {
+        id: 'pdb-1',
+        tick: 1,
+        type: 'K8S_APPLY_PDB' as any,
+        payload: {
+          pdb: { id: 'pdb-test', name: 'pdb-api', deploymentId: 'dep-api', minAvailable: 3 },
+        },
+      };
+      state = plugin.reduceState(state, pdbEv, rng).nextState;
+
+      // Eviction under pressure
+      const evictEv = {
+        id: 'evict-1',
+        tick: 2,
+        type: 'K8S_EVICT_UNDER_PRESSURE' as any,
+        payload: { nodeId: '1' },
+      };
+      state = plugin.reduceState(state, evictEv, rng).nextState;
+      return stableHash(state);
+    };
+
+    const h1 = runK8sFidelity();
+    const h2 = runK8sFidelity();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
 });

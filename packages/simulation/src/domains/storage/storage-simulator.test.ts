@@ -38,7 +38,7 @@ describe('Storage Engine Domain Simulation (B+ Tree vs. LSM-Tree)', () => {
 
     const sstable = lsm.levels['0']![0]!;
     expect(sstable.entries.length).toBe(4);
-    expect(sstable.bloomFilterBitset.length).toBe(16);
+    expect(sstable.bloomFilterBitset.length).toBe(40); // 4 keys * 10 bits/key
 
     const readResult = readLSM(lsm, 30);
     expect(readResult.value).toBe('val_30');
