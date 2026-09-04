@@ -1,14 +1,14 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { getClusterSlot } from './crc16.js';
 import { evictUntilMemoryAvailable } from './redis-eviction.js';
 import type {
   EvictionPolicy,
   RedisCacheEntry,
   RedisClusterState,
-  RedisNode,
-  RedisSetPayload,
   RedisGetPayload,
+  RedisNode,
   RedisReshardPayload,
+  RedisSetPayload,
   RedisSimEvent,
 } from './redis-types.js';
 
@@ -23,6 +23,8 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
       id: '1',
       host: '127.0.0.1',
       port: 7000,
+      clusterBusPort: 17000,
+      configEpoch: 1,
       role: 'MASTER',
       masterId: null,
       status: 'ALIVE',
@@ -38,6 +40,8 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
       id: '2',
       host: '127.0.0.1',
       port: 7001,
+      clusterBusPort: 17001,
+      configEpoch: 1,
       role: 'MASTER',
       masterId: null,
       status: 'ALIVE',
@@ -53,6 +57,8 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
       id: '3',
       host: '127.0.0.1',
       port: 7002,
+      clusterBusPort: 17002,
+      configEpoch: 1,
       role: 'MASTER',
       masterId: null,
       status: 'ALIVE',
@@ -68,6 +74,8 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
       id: '4',
       host: '127.0.0.1',
       port: 7003,
+      clusterBusPort: 17003,
+      configEpoch: 1,
       role: 'REPLICA',
       masterId: '1',
       status: 'ALIVE',
@@ -83,6 +91,8 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
       id: '5',
       host: '127.0.0.1',
       port: 7004,
+      clusterBusPort: 17004,
+      configEpoch: 1,
       role: 'REPLICA',
       masterId: '2',
       status: 'ALIVE',
@@ -98,6 +108,8 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
       id: '6',
       host: '127.0.0.1',
       port: 7005,
+      clusterBusPort: 17005,
+      configEpoch: 1,
       role: 'REPLICA',
       masterId: '3',
       status: 'ALIVE',
@@ -115,8 +127,11 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
     clusterId,
     tick: 0,
     rngState: 42,
+    currentEpoch: 1,
+    maxmemorySamples: 5,
     evictionPolicy: 'allkeys-lru',
     nodes,
+    clientSlotCache: {},
     totalHits: 0,
     totalMisses: 0,
     totalEvictions: 0,
@@ -126,11 +141,12 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
 }
 
 export function findMasterForSlot(state: RedisClusterState, slot: number): RedisNode | undefined {
-  const nodes = Object.values(state.nodes) as RedisNode[];
-  return nodes.find((n) =>
-    n.role === 'MASTER' &&
-    n.status === 'ALIVE' &&
-    n.slotRanges.some((r) => slot >= r.startSlot && slot <= r.endSlot),
+  const nodes = Object.values(state.nodes);
+  return nodes.find(
+    (n) =>
+      n.role === 'MASTER' &&
+      n.status === 'ALIVE' &&
+      n.slotRanges.some((r) => slot >= r.startSlot && slot <= r.endSlot),
   );
 }
 
@@ -202,21 +218,41 @@ function handleSet(
         id: `ask-${key}-${String(state.tick)}`,
         tick: state.tick + 1,
         type: 'REDIS_ASK_REDIRECT',
-        payload: { key, slot, targetMasterId: targetMaster.id, targetHost: targetMaster.host, targetPort: targetMaster.port },
+        payload: {
+          key,
+          slot,
+          targetMasterId: targetMaster.id,
+          targetHost: targetMaster.host,
+          targetPort: targetMaster.port,
+        },
       });
+      // ASK redirection does NOT update clientSlotCache (single request redirect)
     } else {
       state.totalMovedRedirects++;
+      state.clientSlotCache[slot] = targetMaster.id; // MOVED permanently updates client route cache
       emittedEvents.push({
         id: `moved-${key}-${String(state.tick)}`,
         tick: state.tick + 1,
         type: 'REDIS_MOVED_REDIRECT',
-        payload: { key, slot, targetMasterId: targetMaster.id, targetHost: targetMaster.host, targetPort: targetMaster.port },
+        payload: {
+          key,
+          slot,
+          targetMasterId: targetMaster.id,
+          targetHost: targetMaster.host,
+          targetPort: targetMaster.port,
+        },
       });
     }
   }
 
-  // Execute on target master
-  const eviction = evictUntilMemoryAvailable(targetMaster, sizeBytes, state.evictionPolicy, rng);
+  // Execute on target master with approximate sampling
+  const eviction = evictUntilMemoryAvailable(
+    targetMaster,
+    sizeBytes,
+    state.evictionPolicy,
+    rng,
+    state.maxmemorySamples ?? 5,
+  );
   if (eviction.evictedKeys.length > 0) {
     state.totalEvictions += eviction.evictedKeys.length;
   }
@@ -234,8 +270,10 @@ function handleSet(
     targetMaster.memoryUsedBytes += sizeBytes;
 
     // Replicate to replica
-    const nodes = Object.values(state.nodes) as RedisNode[];
-    const replica = nodes.find((n) => n.role === 'REPLICA' && n.masterId === targetMaster.id && n.status === 'ALIVE');
+    const nodes = Object.values(state.nodes);
+    const replica = nodes.find(
+      (n) => n.role === 'REPLICA' && n.masterId === targetMaster.id && n.status === 'ALIVE',
+    );
     if (replica) {
       replica.storage[key] = JSON.parse(JSON.stringify(entry)) as RedisCacheEntry;
       replica.memoryUsedBytes = targetMaster.memoryUsedBytes;
@@ -264,7 +302,13 @@ function handleGet(
       id: `moved-${key}-${String(state.tick)}`,
       tick: state.tick + 1,
       type: 'REDIS_MOVED_REDIRECT',
-      payload: { key, slot, targetMasterId: targetMaster.id, targetHost: targetMaster.host, targetPort: targetMaster.port },
+      payload: {
+        key,
+        slot,
+        targetMasterId: targetMaster.id,
+        targetHost: targetMaster.host,
+        targetPort: targetMaster.port,
+      },
     });
   }
 
@@ -289,7 +333,7 @@ function handleDel(state: RedisClusterState, event: RedisSimEvent): void {
     targetMaster.memoryUsedBytes = Math.max(0, targetMaster.memoryUsedBytes - entry.sizeBytes);
     delete targetMaster.storage[key];
 
-    const nodes = Object.values(state.nodes) as RedisNode[];
+    const nodes = Object.values(state.nodes);
     const replica = nodes.find((n) => n.role === 'REPLICA' && n.masterId === targetMaster.id);
     if (replica) {
       delete replica.storage[key];
@@ -300,12 +344,14 @@ function handleDel(state: RedisClusterState, event: RedisSimEvent): void {
 
 function handleReshard(state: RedisClusterState, event: RedisSimEvent): void {
   const p = event.payload as unknown as RedisReshardPayload;
-  const src = state.nodes[p.sourceMasterId];
-  const dst = state.nodes[p.targetMasterId];
+  const srcId = p.sourceMasterId ?? p.sourceNodeId ?? '';
+  const dstId = p.targetMasterId ?? p.targetNodeId ?? '';
+  const src = state.nodes[srcId];
+  const dst = state.nodes[dstId];
   if (!src || !dst) return;
 
-  const start = p.startSlot;
-  const end = p.endSlot;
+  const start = p.startSlot ?? p.slot ?? 0;
+  const end = p.endSlot ?? p.slot ?? 0;
 
   // Truncate from src slotRanges
   const newSrcRanges: { startSlot: number; endSlot: number }[] = [];
@@ -325,10 +371,13 @@ function handleReshard(state: RedisClusterState, event: RedisSimEvent): void {
 
   // Add to dst slotRanges
   dst.slotRanges.push({ startSlot: start, endSlot: end });
-  dst.slotRanges.sort((a, b) => a.startSlot - b.startSlot);
+  dst.slotRanges.sort(
+    (a: { startSlot: number }, b: { startSlot: number }) => a.startSlot - b.startSlot,
+  );
 
   // Migrate matching keys
-  for (const [key, entry] of Object.entries(src.storage)) {
+  for (const [key, rawEntry] of Object.entries(src.storage)) {
+    const entry = rawEntry;
     const slot = getClusterSlot(key);
     if (slot >= start && slot <= end) {
       dst.storage[key] = JSON.parse(JSON.stringify(entry)) as RedisCacheEntry;
@@ -347,13 +396,20 @@ function handleFailover(state: RedisClusterState, event: RedisSimEvent): void {
 
   master.status = 'FAIL';
 
+  // Increment cluster current epoch
+  state.currentEpoch += 1;
+
   // Find replica
-  const nodes = Object.values(state.nodes) as RedisNode[];
-  const replica = nodes.find((n) => n.role === 'REPLICA' && n.masterId === masterId && n.status === 'ALIVE');
+  const nodes = Object.values(state.nodes);
+  const replica = nodes.find(
+    (n) => n.role === 'REPLICA' && n.masterId === masterId && n.status === 'ALIVE',
+  );
   if (replica) {
     replica.role = 'MASTER';
     replica.masterId = null;
     replica.color = master.color; // Adopt primary color
+    replica.configEpoch = state.currentEpoch;
+    replica.slotRanges = JSON.parse(JSON.stringify(master.slotRanges)) as typeof master.slotRanges;
   }
 }
 
@@ -391,7 +447,7 @@ function handleSetEvictionPolicy(state: RedisClusterState, event: RedisSimEvent)
 }
 
 function handleTick(state: RedisClusterState): void {
-  const nodes = Object.values(state.nodes) as RedisNode[];
+  const nodes = Object.values(state.nodes);
   for (const node of nodes) {
     for (const [key, entry] of Object.entries(node.storage)) {
       if (entry.ttl !== null) {

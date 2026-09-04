@@ -1,9 +1,18 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import { createInitialBTree, insertBTree, searchBTree } from './btree.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import {
+  createInitialBTree,
+  deleteBTree,
+  deriveBTreeOrder,
+  insertBTree,
+  searchBTree,
+} from './btree.js';
+import {
+  calculateTheoreticalBloomFpRate,
   compactLevel,
   createInitialLSMTree,
+  deleteLSM,
   flushMemTable,
+  optimalHashCount,
   readLSM,
   writeLSM,
 } from './lsm-tree.js';
@@ -11,6 +20,7 @@ import type {
   StorageEngineClusterState,
   StorageEngineType,
   StorageSimEvent,
+  WALSyncPolicy,
 } from './storage-types.js';
 
 export interface StorageTransitionResult {
@@ -18,14 +28,17 @@ export interface StorageTransitionResult {
   emittedEvents: StorageSimEvent[];
 }
 
-export function createDefaultStorageCluster(clusterId = 'storage-cluster-1'): StorageEngineClusterState {
+export function createDefaultStorageCluster(
+  clusterId = 'storage-cluster-1',
+): StorageEngineClusterState {
   return {
     clusterId,
     tick: 0,
     rngState: 42,
     activeEngine: 'B_TREE',
-    btree: createInitialBTree(4),
-    lsm: createInitialLSMTree(4),
+    fidelityMode: 'TEXTBOOK',
+    btree: createInitialBTree(4, 4096, 16, 8),
+    lsm: createInitialLSMTree(4, 10, 'ALWAYS', 10),
     totalWrites: 0,
     totalReads: 0,
   };
@@ -36,7 +49,9 @@ export function pureStorageTransition(
   event: StorageSimEvent,
   rng: DeterministicRNG,
 ): StorageTransitionResult {
-  const nextState: StorageEngineClusterState = JSON.parse(JSON.stringify(state)) as StorageEngineClusterState;
+  const nextState: StorageEngineClusterState = JSON.parse(
+    JSON.stringify(state),
+  ) as StorageEngineClusterState;
   const emittedEvents: StorageSimEvent[] = [];
 
   nextState.tick = event.tick;
@@ -51,6 +66,16 @@ export function pureStorageTransition(
         insertBTree(nextState.btree, key, value);
       } else {
         writeLSM(nextState.lsm, key, value, nextState.tick);
+      }
+      break;
+    }
+
+    case 'STORAGE_DELETE': {
+      const key = Number(event.payload['key']);
+      if (nextState.activeEngine === 'B_TREE') {
+        deleteBTree(nextState.btree, key);
+      } else {
+        deleteLSM(nextState.lsm, key, nextState.tick);
       }
       break;
     }
@@ -83,6 +108,35 @@ export function pureStorageTransition(
     case 'STORAGE_TRIGGER_COMPACTION': {
       const level = Number(event.payload['level'] ?? 0);
       compactLevel(nextState.lsm, level, nextState.tick);
+      break;
+    }
+
+    case 'STORAGE_CONFIGURE_FIDELITY': {
+      const mode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
+      if (mode) nextState.fidelityMode = mode;
+
+      if (mode === 'REALISTIC') {
+        const pageSize = Number(event.payload['pageSizeBytes'] ?? 4096);
+        nextState.btree.pageSizeBytes = pageSize;
+        nextState.btree.maxDegree = deriveBTreeOrder(
+          pageSize,
+          nextState.btree.keySizeBytes,
+          nextState.btree.pointerSizeBytes,
+        );
+
+        const bitsPerKey = Number(event.payload['bitsPerKey'] ?? 10);
+        nextState.lsm.bitsPerKey = bitsPerKey;
+        nextState.lsm.hashCount = optimalHashCount(bitsPerKey);
+        nextState.lsm.theoreticalFpRate = calculateTheoreticalBloomFpRate(
+          bitsPerKey,
+          nextState.lsm.hashCount,
+        );
+
+        const walPolicy = event.payload['walSyncPolicy'] as WALSyncPolicy;
+        if (walPolicy) nextState.lsm.walSyncPolicy = walPolicy;
+      } else if (mode === 'TEXTBOOK') {
+        nextState.btree.maxDegree = 4;
+      }
       break;
     }
   }

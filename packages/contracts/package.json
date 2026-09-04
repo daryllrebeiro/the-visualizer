@@ -8,20 +8,20 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./domain": {
-      "import": "./dist/domain/index.js",
-      "types": "./dist/domain/index.d.ts"
+      "types": "./dist/domain/index.d.ts",
+      "import": "./dist/domain/index.js"
     },
     "./websocket": {
-      "import": "./dist/websocket/index.js",
-      "types": "./dist/websocket/index.d.ts"
+      "types": "./dist/websocket/index.d.ts",
+      "import": "./dist/websocket/index.js"
     },
     "./api": {
-      "import": "./dist/api/index.js",
-      "types": "./dist/api/index.d.ts"
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.js"
     }
   },
   "scripts": {

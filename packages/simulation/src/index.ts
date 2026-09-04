@@ -23,17 +23,32 @@ export { PartitionLog } from './domain/partition-log.js';
 export { InMemoryStorageAdapter } from './domain/storage-adapter.js';
 export { KafkaOracleHarness, type OracleScenarioResult } from './oracle/oracle-harness.js';
 export { kafkaMurmur2, partitionForKey, toPositive } from './partitioners/murmur2.js';
-export { PartitionLogStorage, type PhysicalLogRecord, type LogSegmentSummary } from './storage/log-segment.js';
-export { TransactionCoordinatorManager, type ActiveTxnSession, type TransactionState } from './transactions/txn-coordinator.js';
+export {
+  PartitionLogStorage,
+  type PhysicalLogRecord,
+  type LogSegmentSummary,
+} from './storage/log-segment.js';
+export {
+  TransactionCoordinatorManager,
+  type ActiveTxnSession,
+  type TransactionState,
+} from './transactions/txn-coordinator.js';
 
-export { EventLogParser, createDefaultBaselineState, type ParsedTraceResult } from './reconstitution/event-log-parser.js';
+export {
+  EventLogParser,
+  createDefaultBaselineState,
+  type ParsedTraceResult,
+} from './reconstitution/event-log-parser.js';
 export {
   SimulationReconstitutor,
   type ReconstitutedStepMetadata,
   type ReconstitutionPatch,
   type StepResult,
 } from './reconstitution/simulation-reconstitutor.js';
-export { ScenarioGenerator, type ScenarioGeneratorOptions } from './reconstitution/scenario-generator.js';
+export {
+  ScenarioGenerator,
+  type ScenarioGeneratorOptions,
+} from './reconstitution/scenario-generator.js';
 
 export {
   DomainRegistry,
@@ -114,10 +129,7 @@ export type {
   RabbitSimEvent,
   RabbitPublishPayload,
 } from './domains/rabbitmq/rabbitmq-types.js';
-export {
-  K8sScheduler,
-  type SchedulingDecision,
-} from './domains/kubernetes/k8s-scheduler.js';
+export { K8sScheduler, type SchedulingDecision } from './domains/kubernetes/k8s-scheduler.js';
 export {
   createDefaultK8sCluster,
   pureK8sTransition,
@@ -170,20 +182,13 @@ export type {
   RedisGetPayload,
   RedisReshardPayload,
 } from './domains/redis/redis-types.js';
-export {
-  ConsistentHashRing,
-  hashToToken,
-  type RingToken,
-} from './domains/database/hash-ring.js';
+export { ConsistentHashRing, hashToToken, type RingToken } from './domains/database/hash-ring.js';
 export {
   createDefaultDBCluster,
   pureDBTransition,
   type DBTransitionResult,
 } from './domains/database/db-state-transitions.js';
-export {
-  DBInvariantChecker,
-  type DBInvariantViolation,
-} from './domains/database/db-invariants.js';
+export { DBInvariantChecker, type DBInvariantViolation } from './domains/database/db-invariants.js';
 export { DB_SCENARIOS } from './domains/database/db-scenarios.js';
 export type {
   ConsistencyLevel,
@@ -237,3 +242,34 @@ export type {
   KafkaClusterState,
 } from './engine/types.js';
 export type { StorageAdapter } from './domain/storage-adapter.js';
+
+// Domain: Rate Limiter
+export * from './domains/rate-limiter/rate-limiter-types.js';
+export * from './domains/rate-limiter/rate-limiter-state-transitions.js';
+export * from './domains/rate-limiter/rate-limiter-invariants.js';
+export * from './domains/rate-limiter/rate-limiter-algorithms.js';
+
+// Domain: Distributed Lock Manager
+export * from './domains/distributed-lock/distributed-lock-types.js';
+export * from './domains/distributed-lock/distributed-lock-state-transitions.js';
+export * from './domains/distributed-lock/distributed-lock-invariants.js';
+export * from './domains/distributed-lock/distributed-lock-algorithms.js';
+
+// Domain: CDN & Multi-Tier Caching
+export * from './domains/cdn-cache/cdn-cache-types.js';
+export * from './domains/cdn-cache/cdn-cache-state-transitions.js';
+export * from './domains/cdn-cache/cdn-cache-invariants.js';
+export * from './domains/cdn-cache/http-cache-semantics.js';
+
+// Domain: Distributed ID Generation
+export * from './domains/id-gen/id-gen-types.js';
+export * from './domains/id-gen/id-gen-state-transitions.js';
+export * from './domains/id-gen/id-gen-invariants.js';
+export * from './domains/id-gen/snowflake-generator.js';
+
+// Domain: Distributed Transactions
+export * from './domains/transactions/transactions-types.js';
+export * from './domains/transactions/transactions-state-transitions.js';
+export * from './domains/transactions/transactions-invariants.js';
+export * from './domains/transactions/two-phase-commit.js';
+export * from './domains/transactions/saga-orchestrator.js';

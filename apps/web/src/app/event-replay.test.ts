@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 describe('Event Log Timeline Replay Controller Suite', () => {
@@ -9,12 +10,22 @@ describe('Event Log Timeline Replay Controller Suite', () => {
     brokers: {},
     topics: {},
     consumerGroups: {},
-    kraft: { activeControllerId: '1', controllerEpoch: 1, voters: ['1', '2', '3'] },
+    kraft: {
+      activeControllerId: '1' as any,
+      controllerEpoch: 1,
+      voters: ['1' as any, '2' as any, '3' as any],
+      metadataOffset: 0,
+    },
     transactions: {},
   });
 
   it('should step through recorded frames sequentially during replay', () => {
-    const history: KafkaClusterState[] = [dummyState(0), dummyState(1), dummyState(2), dummyState(3)];
+    const history: KafkaClusterState[] = [
+      dummyState(0),
+      dummyState(1),
+      dummyState(2),
+      dummyState(3),
+    ];
     let currentIndex = 0;
 
     const stepReplay = () => {

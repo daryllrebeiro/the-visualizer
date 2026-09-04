@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { KafkaClusterStateSchema } from './kafka.js';
 
 export const SimEventTypeSchema = z.enum([

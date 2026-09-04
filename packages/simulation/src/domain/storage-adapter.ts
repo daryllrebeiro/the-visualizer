@@ -4,7 +4,6 @@
  * In-memory persistence adapter interface for partition logs.
  * Zero external I/O dependencies.
  */
-
 import { PartitionLog, type PartitionLogOptions } from './partition-log.js';
 
 export interface StorageAdapter {

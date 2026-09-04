@@ -1,4 +1,4 @@
-import { applyPatch, compare, type Operation } from 'fast-json-patch';
+import { type Operation, applyPatch, compare } from 'fast-json-patch';
 
 import { pureStateTransition } from '../engine/state-transitions.js';
 import type {
@@ -85,7 +85,9 @@ export class SimulationReconstitutor {
     const rng = new DeterministicRNG(this.initialState.rngState ?? 42);
     const invariantChecker = new InvariantChecker();
 
-    let state: KafkaClusterState = JSON.parse(JSON.stringify(this.initialState)) as KafkaClusterState;
+    let state: KafkaClusterState = JSON.parse(
+      JSON.stringify(this.initialState),
+    ) as KafkaClusterState;
 
     // Step 0 represents the initial state snapshot
     this.keyframes.set(0, JSON.parse(JSON.stringify(state)) as KafkaClusterState);
@@ -122,7 +124,7 @@ export class SimulationReconstitutor {
       const simEvent: SimEvent = {
         id: eventLog.id,
         tick: eventLog.tick,
-        type: eventLog.type as SimEvent['type'],
+        type: eventLog.type,
         payload: eventLog.payload,
       };
 

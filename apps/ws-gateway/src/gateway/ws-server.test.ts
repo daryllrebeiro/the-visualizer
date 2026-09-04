@@ -3,6 +3,8 @@ import { pack, unpack } from 'msgpackr';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
+import { tokenRevocationStore } from '@the-visualizer/contracts';
+
 import { JWT_SECRET } from '../config.js';
 import { server } from '../index.js';
 import { roomManager } from './room-manager.js';
@@ -48,6 +50,25 @@ describe('WebSocket Gateway Integration Tests', () => {
       const client = new WebSocket(`ws://localhost:${String(port)}`);
       client.on('error', (err: any) => {
         // Upgrade failed (e.g. returned 401)
+        expect(err.message).toContain('Unexpected server response: 401');
+        resolve();
+      });
+    });
+  });
+
+  it('should reject connection upgrade with 401 if token is revoked', async () => {
+    const revokedPayload = {
+      id: 'revoked-ws-user',
+      email: 'revoked-ws@gateway.com',
+      name: 'Revoked WS Client',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    };
+    const revokedToken = await sign(revokedPayload, JWT_SECRET);
+    await tokenRevocationStore.revoke(revokedToken, 3600);
+
+    return new Promise<void>((resolve) => {
+      const client = new WebSocket(`ws://localhost:${String(port)}?token=${revokedToken}`);
+      client.on('error', (err: any) => {
         expect(err.message).toContain('Unexpected server response: 401');
         resolve();
       });
@@ -152,7 +173,12 @@ describe('WebSocket Gateway Integration Tests', () => {
           client.send(
             pack({
               type: 'INTENT_PRODUCE',
-              payload: { topic: 'orders', partition: 0, key: `k-${String(i)}`, value: `v-${String(i)}` },
+              payload: {
+                topic: 'orders',
+                partition: 0,
+                key: `k-${String(i)}`,
+                value: `v-${String(i)}`,
+              },
             }),
           );
         }

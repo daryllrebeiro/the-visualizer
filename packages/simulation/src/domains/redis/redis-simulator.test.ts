@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { extractHashTag, getClusterSlot } from './crc16.js';
 import { RedisInvariantChecker } from './redis-invariants.js';
-import {
-  createDefaultRedisCluster,
-  pureRedisTransition,
-} from './redis-state-transitions.js';
-import type { RedisNode, RedisSimEvent } from './redis-types.js';
+import { createDefaultRedisCluster, pureRedisTransition } from './redis-state-transitions.js';
+import type { RedisSimEvent } from './redis-types.js';
 
 describe('Redis Cluster Simulation (16,384 Slots & Eviction Engine)', () => {
   it('should compute cluster slots and parse hashtags accurately', () => {
@@ -126,7 +124,7 @@ describe('Redis Cluster Simulation (16,384 Slots & Eviction Engine)', () => {
     res = pureRedisTransition(res.nextState, failoverEv, rng);
 
     // Replica 4 should now be MASTER
-    const nodes = Object.values(res.nextState.nodes) as RedisNode[];
+    const nodes = Object.values(res.nextState.nodes);
     const node4 = nodes.find((n) => n.id === '4');
     expect(node4?.role).toBe('MASTER');
     expect(node4?.masterId).toBeNull();

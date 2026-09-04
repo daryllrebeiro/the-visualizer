@@ -2,9 +2,11 @@
 # Produces an optimized, secure production container for Google Cloud Run
 
 # Stage 1: Base & Dependencies
-FROM node:22-alpine AS base
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
 WORKDIR /app
-RUN npm install -g pnpm@9.15.4
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
 # Stage 2: Dependencies Cache
 FROM base AS deps
@@ -19,7 +21,7 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/api/package.json ./apps/api/
 COPY apps/ws-gateway/package.json ./apps/ws-gateway/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Stage 3: Builder
 FROM base AS builder
@@ -36,7 +38,7 @@ RUN mkdir -p /app/apps/web/public
 RUN pnpm build
 
 # Stage 4: Production Runner
-FROM node:22-alpine AS runner
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

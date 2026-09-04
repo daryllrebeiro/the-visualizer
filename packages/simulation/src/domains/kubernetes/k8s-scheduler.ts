@@ -81,8 +81,10 @@ export class K8sScheduler {
     let bestScore = -1;
 
     for (const node of candidateNodes) {
-      const cpuFreeFraction = (node.capacity.cpuMillis - node.allocated.cpuMillis) / node.capacity.cpuMillis;
-      const memFreeFraction = (node.capacity.memoryMb - node.allocated.memoryMb) / node.capacity.memoryMb;
+      const cpuFreeFraction =
+        (node.capacity.cpuMillis - node.allocated.cpuMillis) / node.capacity.cpuMillis;
+      const memFreeFraction =
+        (node.capacity.memoryMb - node.allocated.memoryMb) / node.capacity.memoryMb;
       const score = cpuFreeFraction * 50 + memFreeFraction * 50;
 
       if (score > bestScore) {

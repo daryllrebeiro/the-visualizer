@@ -2,8 +2,11 @@ export type EvictionPolicy =
   | 'noeviction'
   | 'allkeys-lru'
   | 'allkeys-lfu'
-  | 'volatile-ttl'
-  | 'allkeys-random';
+  | 'allkeys-random'
+  | 'volatile-lru'
+  | 'volatile-lfu'
+  | 'volatile-random'
+  | 'volatile-ttl';
 
 export type RedisRole = 'MASTER' | 'REPLICA';
 export type RedisNodeStatus = 'ALIVE' | 'FAIL';
@@ -26,6 +29,8 @@ export interface RedisNode {
   id: string;
   host: string;
   port: number;
+  clusterBusPort: number; // port + 10000 per Redis Cluster Spec
+  configEpoch: number; // incremented on failover
   role: RedisRole;
   masterId: string | null;
   status: RedisNodeStatus;
@@ -42,8 +47,11 @@ export interface RedisClusterState {
   clusterId: string;
   tick: number;
   rngState: number;
+  currentEpoch: number;
+  maxmemorySamples: number; // default: 5 (maxmemory-samples in redis.conf)
   evictionPolicy: EvictionPolicy;
   nodes: Record<string, RedisNode>;
+  clientSlotCache: Record<number, string>; // client routing cache: slot -> masterId
   totalHits: number;
   totalMisses: number;
   totalEvictions: number;
@@ -74,19 +82,24 @@ export interface RedisSimEvent {
 export interface RedisSetPayload {
   key: string;
   value: string;
-  ttl?: number | null | undefined;
-  sizeBytes?: number | undefined;
+  targetNodeId?: string | undefined;
   clientTargetNodeId?: string | undefined;
+  ttl?: number | undefined;
+  sizeBytes?: number | undefined;
 }
 
 export interface RedisGetPayload {
   key: string;
+  targetNodeId?: string | undefined;
   clientTargetNodeId?: string | undefined;
 }
 
 export interface RedisReshardPayload {
-  sourceMasterId: string;
-  targetMasterId: string;
-  startSlot: number;
-  endSlot: number;
+  slot?: number | undefined;
+  startSlot?: number | undefined;
+  endSlot?: number | undefined;
+  sourceNodeId?: string | undefined;
+  targetNodeId?: string | undefined;
+  sourceMasterId?: string | undefined;
+  targetMasterId?: string | undefined;
 }

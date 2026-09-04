@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+
 import { EventLogParser, type ParsedTraceResult } from '@the-visualizer/simulation';
 
 interface TraceImportModalProps {
@@ -120,7 +121,13 @@ export function TraceImportModal({
           id: 'e-1',
           tick: 5,
           type: 'RECORD_PRODUCED',
-          payload: { topic: 'orders', partition: 0, key: 'order-101', value: 'item_payload', acks: 1 },
+          payload: {
+            topic: 'orders',
+            partition: 0,
+            key: 'order-101',
+            value: 'item_payload',
+            acks: 1,
+          },
         },
         {
           id: 'e-2',
@@ -132,7 +139,13 @@ export function TraceImportModal({
           id: 'e-3',
           tick: 25,
           type: 'RECORD_PRODUCED',
-          payload: { topic: 'orders', partition: 0, key: 'order-102', value: 'item_payload_2', acks: 1 },
+          payload: {
+            topic: 'orders',
+            partition: 0,
+            key: 'order-102',
+            value: 'item_payload_2',
+            acks: 1,
+          },
         },
       ],
       metadata: {
@@ -147,7 +160,11 @@ export function TraceImportModal({
 
   return (
     <div className="inspector-backdrop" onClick={onClose}>
-      <div className="scenario-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px' }}>
+      <div
+        className="scenario-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '640px' }}
+      >
         <header className="scenario-modal__header">
           <div>
             <span className="inspector-badge inspector-badge--primary">RECONSTITUTION ENGINE</span>
@@ -160,9 +177,10 @@ export function TraceImportModal({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px 0' }}>
           <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8', lineHeight: 1.5 }}>
-            Ingest a serialized JSON event log (<code>SimTraceBundle</code> or <code>SimEventLog[]</code>) to
-            deterministically reconstitute cluster topology, partition offsets, ISR history, and packet flows
-            without requiring a live gateway connection.
+            Ingest a serialized JSON event log (<code>SimTraceBundle</code> or{' '}
+            <code>SimEventLog[]</code>) to deterministically reconstitute cluster topology,
+            partition offsets, ISR history, and packet flows without requiring a live gateway
+            connection.
           </p>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -234,13 +252,16 @@ export function TraceImportModal({
               </div>
               <div style={{ color: '#cbd5e1' }}>
                 <strong>Total Events:</strong> {parsedPreview.events.length} &nbsp;|&nbsp;{' '}
-                <strong>Total Ticks:</strong> {parsedPreview.metadata?.totalTicks ?? 0} &nbsp;|&nbsp;{' '}
-                <strong>Brokers:</strong> {Object.keys(parsedPreview.initialState.brokers).length}
+                <strong>Total Ticks:</strong> {parsedPreview.metadata?.totalTicks ?? 0}{' '}
+                &nbsp;|&nbsp; <strong>Brokers:</strong>{' '}
+                {Object.keys(parsedPreview.initialState.brokers).length}
               </div>
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+          <div
+            style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}
+          >
             <button type="button" onClick={onClose} className="btn btn--outline">
               Cancel
             </button>

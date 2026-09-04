@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const ResourceRequirementsSchema = z.object({
   cpuMillis: z.number().int().nonnegative(), // e.g. 250 = 0.25 core
-  memoryMb: z.number().int().nonnegative(),  // e.g. 256 = 256 MiB
+  memoryMb: z.number().int().nonnegative(), // e.g. 256 = 256 MiB
 });
 export type ResourceRequirements = z.infer<typeof ResourceRequirementsSchema>;
 

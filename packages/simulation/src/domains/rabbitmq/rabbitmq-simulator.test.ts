@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { RabbitInvariantChecker } from './rabbitmq-invariants.js';
-import {
-  createDefaultRabbitCluster,
-  pureRabbitTransition,
-} from './rabbitmq-state-transitions.js';
+import { createDefaultRabbitCluster, pureRabbitTransition } from './rabbitmq-state-transitions.js';
 import type { RabbitSimEvent } from './rabbitmq-types.js';
 import { matchTopicPattern } from './topic-matcher.js';
 
@@ -73,7 +71,7 @@ describe('RabbitMQ AMQP 0-9-1 Exchanges & Queues Simulation', () => {
     };
     state = pureRabbitTransition(state, pubEv, rng).nextState;
 
-    const activeMsg = state.consumers['worker-eu-1']?.activeMessages[0]!;
+    const activeMsg = state.consumers['worker-eu-1']!.activeMessages[0]!;
     expect(activeMsg).toBeDefined();
 
     // Acknowledge message
@@ -110,7 +108,7 @@ describe('RabbitMQ AMQP 0-9-1 Exchanges & Queues Simulation', () => {
     };
     state = pureRabbitTransition(state, pubEv, rng).nextState;
 
-    const activeMsg = state.consumers['worker-eu-1']?.activeMessages[0]!;
+    const activeMsg = state.consumers['worker-eu-1']!.activeMessages[0]!;
     expect(activeMsg).toBeDefined();
 
     // Reject without requeue

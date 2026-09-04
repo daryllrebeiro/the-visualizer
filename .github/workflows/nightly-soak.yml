@@ -1,0 +1,68 @@
+name: Nightly Soak & Longevity Gate
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # 03:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      soak_duration_minutes:
+        description: 'Soak Duration in Minutes'
+        required: false
+        default: '30'
+      soak_clients:
+        description: 'Number of Concurrent Soak Clients'
+        required: false
+        default: '50'
+
+env:
+  NODE_VERSION: '24'
+  PNPM_VERSION: '11.22.0'
+
+jobs:
+  websocket-soak-test:
+    name: Sustained WebSocket Soak (30m)
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Launch WS Gateway Instance
+        run: |
+          node apps/ws-gateway/dist/index.js &
+          sleep 4
+        env:
+          WS_GATEWAY_PORT: 4001
+          REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: 01234567890123456789012345678901
+          JWT_SECRET: 01234567890123456789012345678901
+          NODE_ENV: production
+
+      - name: Run Sustained Soak Test
+        run: node scripts/ws-soak-test.mjs
+        env:
+          WS_GATEWAY_URL: ws://localhost:4001
+          SOAK_DURATION_MINUTES: ${{ github.event.inputs.soak_duration_minutes || '30' }}
+          SOAK_CLIENTS: ${{ github.event.inputs.soak_clients || '50' }}
+          SESSION_SECRET: 01234567890123456789012345678901

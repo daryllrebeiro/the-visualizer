@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { NetworkInvariantChecker } from './networking-invariants.js';
 import {

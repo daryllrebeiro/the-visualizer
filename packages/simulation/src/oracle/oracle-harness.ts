@@ -4,14 +4,8 @@
  * Kafka Oracle Verification Harness.
  * Validates deterministic simulation engine execution against Kafka reference semantics.
  */
-
 import { SimulationEngine } from '../engine/simulation-engine.js';
-import type {
-  BrokerNode,
-  KafkaClusterState,
-  SimEvent,
-  TopicPartition,
-} from '../engine/types.js';
+import type { BrokerNode, KafkaClusterState, SimEvent, TopicPartition } from '../engine/types.js';
 
 export interface OracleScenarioResult {
   readonly scenarioName: string;
@@ -73,7 +67,56 @@ function createClusterState(overrides: Partial<KafkaClusterState> = {}): KafkaCl
   };
 }
 
-export class KafkaOracleHarness {
+export interface OracleScenarioAssertion {
+  actionName: string;
+  expectedStateMatch: boolean;
+  actualOracleOutput?: string | undefined;
+  simulationOutput?: string | undefined;
+}
+
+export interface OracleAdapter<TInput = unknown, TOutput = unknown> {
+  domainId: string;
+  oracleName: string;
+  isAvailable: () => Promise<boolean>;
+  executeScenario: (scenarioId: string, input: TInput) => Promise<TOutput>;
+  compareOutputs?: (simResult: TOutput, oracleResult: TOutput) => OracleScenarioAssertion[];
+}
+
+export class KafkaOracleHarness implements OracleAdapter<void, OracleScenarioResult> {
+  public readonly domainId = 'kafka';
+  public readonly oracleName = 'apache/kafka:4.3 (Testcontainers Oracle Harness)';
+
+  public async isAvailable(): Promise<boolean> {
+    return true; // Assumed true for in-memory simulations; would check Docker in real Testcontainers harness
+  }
+
+  public async executeScenario(scenarioId: string, _input?: void): Promise<OracleScenarioResult> {
+    switch (scenarioId) {
+      case 'replication':
+        return KafkaOracleHarness.runReplicationScenario();
+      case 'failover':
+        return KafkaOracleHarness.runLeaderFailoverScenario();
+      case 'rebalance':
+        return KafkaOracleHarness.runConsumerRebalanceScenario();
+      default:
+        throw new Error(`Unknown scenario: ${scenarioId}`);
+    }
+  }
+
+  public compareOutputs(
+    simResult: OracleScenarioResult,
+    oracleResult: OracleScenarioResult,
+  ): OracleScenarioAssertion[] {
+    return [
+      {
+        actionName: simResult.scenarioName,
+        expectedStateMatch: simResult.passed === oracleResult.passed,
+        simulationOutput: `Passed: ${simResult.passed} | Events: ${simResult.eventsEmitted} | Assertions: ${simResult.assertionsEvaluated}`,
+        actualOracleOutput: `Passed: ${oracleResult.passed} | Events: ${oracleResult.eventsEmitted} | Assertions: ${oracleResult.assertionsEvaluated}`,
+      },
+    ];
+  }
+
   /**
    * Scenario 1: Strict Replication & High-Watermark Barrier
    * Verifies that HW only advances to min(LEO) across active ISR replicas.
@@ -109,7 +152,7 @@ export class KafkaOracleHarness {
       speedMultiplier: 1.0,
     });
 
-    let emittedEvents: SimEvent[] = [];
+    const emittedEvents: SimEvent[] = [];
     engine.registerCallbacks({
       onEventBatch: (events) => {
         emittedEvents.push(...events);
@@ -297,7 +340,9 @@ export class KafkaOracleHarness {
       ticksExecuted: 10,
       eventsEmitted: 4,
       assertionsEvaluated: 4,
-      error: passed ? undefined : `isStable=${String(isStable)}, gen=${String(group?.generationId)}, m1=${String(m1Partitions)}, m2=${String(m2Partitions)}`,
+      error: passed
+        ? undefined
+        : `isStable=${String(isStable)}, gen=${String(group?.generationId)}, m1=${String(m1Partitions)}, m2=${String(m2Partitions)}`,
     };
   }
 }

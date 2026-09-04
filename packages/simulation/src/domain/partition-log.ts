@@ -84,10 +84,7 @@ export class PartitionLog {
       let activeSegment = this.activeSegment;
 
       // Calculate approximate record binary size (key + value + header overhead)
-      const recordBytes =
-        (input.key?.length ?? 0) +
-        input.value.length +
-        32; // 32 bytes metadata overhead (offset, epoch, timestamp, crc)
+      const recordBytes = (input.key?.length ?? 0) + input.value.length + 32; // 32 bytes metadata overhead (offset, epoch, timestamp, crc)
 
       // Roll active segment if size limit exceeded
       if (
@@ -193,9 +190,7 @@ export class PartitionLog {
     }
     const maxLeo = this.logEndOffset;
     if (hw > maxLeo) {
-      throw new Error(
-        `High-watermark cannot exceed logEndOffset: HW=${hw}, LEO=${maxLeo}`,
-      );
+      throw new Error(`High-watermark cannot exceed logEndOffset: HW=${hw}, LEO=${maxLeo}`);
     }
     this._highWatermark = hw;
   }

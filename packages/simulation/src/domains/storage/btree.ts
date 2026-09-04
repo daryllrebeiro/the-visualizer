@@ -1,6 +1,19 @@
 import type { BTreeNode, BTreeState } from './storage-types.js';
 
-export function createInitialBTree(maxDegree = 4): BTreeState {
+export function deriveBTreeOrder(
+  pageSizeBytes = 4096,
+  keySizeBytes = 16,
+  pointerSizeBytes = 8,
+): number {
+  return Math.max(3, Math.floor(pageSizeBytes / (keySizeBytes + pointerSizeBytes)));
+}
+
+export function createInitialBTree(
+  maxDegree = 4,
+  pageSizeBytes = 4096,
+  keySizeBytes = 16,
+  pointerSizeBytes = 8,
+): BTreeState {
   const rootNode: BTreeNode = {
     id: 'node-root',
     keys: [10, 20, 30],
@@ -13,13 +26,21 @@ export function createInitialBTree(maxDegree = 4): BTreeState {
   return {
     rootId: 'node-root',
     maxDegree,
+    pageSizeBytes,
+    keySizeBytes,
+    pointerSizeBytes,
     nodes: { 'node-root': rootNode },
     totalPageSplits: 0,
+    totalMerges: 0,
+    totalRedistributions: 0,
     traversalPath: [],
   };
 }
 
-export function searchBTree(state: BTreeState, key: number): { value: string | null; path: string[] } {
+export function searchBTree(
+  state: BTreeState,
+  key: number,
+): { value: string | null; path: string[] } {
   const path: string[] = [];
   let currId = state.rootId;
 
@@ -96,7 +117,7 @@ function splitNode(state: BTreeState, nodeId: string): void {
   const promotedKey = node.keys[mid]!;
   const promotedValue = node.values[mid]!;
 
-  const newNodeId = `node-${String(Date.now())}-${Math.random().toString(36).substring(2, 5)}`;
+  const newNodeId = `node-split-${String(state.totalPageSplits)}-${node.id}-r`;
   const rightNode: BTreeNode = {
     id: newNodeId,
     keys: node.keys.slice(mid + (node.isLeaf ? 0 : 1)),
@@ -108,7 +129,7 @@ function splitNode(state: BTreeState, nodeId: string): void {
 
   // Update children parentIds if internal
   for (const cId of rightNode.childrenIds) {
-    if (state.nodes[cId]) state.nodes[cId]!.parentId = newNodeId;
+    if (state.nodes[cId]) state.nodes[cId].parentId = newNodeId;
   }
 
   node.keys = node.keys.slice(0, mid);
@@ -121,7 +142,7 @@ function splitNode(state: BTreeState, nodeId: string): void {
 
   if (!node.parentId) {
     // Creating new root
-    const newRootId = `node-root-${String(Date.now())}`;
+    const newRootId = `node-root-${String(state.totalPageSplits)}`;
     const newRoot: BTreeNode = {
       id: newRootId,
       keys: [promotedKey],
@@ -149,5 +170,143 @@ function splitNode(state: BTreeState, nodeId: string): void {
         splitNode(state, parent.id);
       }
     }
+  }
+}
+
+/**
+ * Real B+Tree Deletion:
+ * Removes key, then handles underflow (< ceil(M/2) - 1 keys) via:
+ * 1. Key redistribution from left or right sibling
+ * 2. Node merging if siblings cannot lend, cascading upward to root
+ */
+export function deleteBTree(state: BTreeState, key: number): boolean {
+  const { path } = searchBTree(state, key);
+  state.traversalPath = path;
+
+  const leafId = path[path.length - 1];
+  if (!leafId) return false;
+
+  const leaf = state.nodes[leafId];
+  if (!leaf?.isLeaf) return false;
+
+  const idx = leaf.keys.indexOf(key);
+  if (idx === -1) return false;
+
+  leaf.keys.splice(idx, 1);
+  leaf.values.splice(idx, 1);
+
+  // If root, simple underflow check
+  if (!leaf.parentId) {
+    return true;
+  }
+
+  const minKeys = Math.max(1, Math.ceil(state.maxDegree / 2) - 1);
+  if (leaf.keys.length < minKeys) {
+    handleUnderflow(state, leaf.id, minKeys);
+  }
+
+  return true;
+}
+
+function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): void {
+  const node = state.nodes[nodeId];
+  if (!node?.parentId) return;
+
+  const parent = state.nodes[node.parentId];
+  if (!parent) return;
+
+  const childIndex = parent.childrenIds.indexOf(nodeId);
+  if (childIndex === -1) return;
+
+  const leftSiblingId = childIndex > 0 ? parent.childrenIds[childIndex - 1] : null;
+  const rightSiblingId =
+    childIndex < parent.childrenIds.length - 1 ? parent.childrenIds[childIndex + 1] : null;
+
+  const leftSibling = leftSiblingId ? state.nodes[leftSiblingId] : null;
+  const rightSibling = rightSiblingId ? state.nodes[rightSiblingId] : null;
+
+  // 1. Try borrowing from left sibling (redistribution)
+  if (leftSibling && leftSibling.keys.length > minKeys) {
+    state.totalRedistributions++;
+    const borrowedKey = leftSibling.keys.pop()!;
+    const borrowedVal = leftSibling.values.pop()!;
+    node.keys.unshift(borrowedKey);
+    node.values.unshift(borrowedVal);
+
+    if (!node.isLeaf && leftSibling.childrenIds.length > 0) {
+      const borrowedChild = leftSibling.childrenIds.pop()!;
+      node.childrenIds.unshift(borrowedChild);
+      if (state.nodes[borrowedChild]) state.nodes[borrowedChild].parentId = node.id;
+    }
+
+    // Update parent separator
+    parent.keys[childIndex - 1] = node.keys[0]!;
+    return;
+  }
+
+  // 2. Try borrowing from right sibling (redistribution)
+  if (rightSibling && rightSibling.keys.length > minKeys) {
+    state.totalRedistributions++;
+    const borrowedKey = rightSibling.keys.shift()!;
+    const borrowedVal = rightSibling.values.shift()!;
+    node.keys.push(borrowedKey);
+    node.values.push(borrowedVal);
+
+    if (!node.isLeaf && rightSibling.childrenIds.length > 0) {
+      const borrowedChild = rightSibling.childrenIds.shift()!;
+      node.childrenIds.push(borrowedChild);
+      if (state.nodes[borrowedChild]) state.nodes[borrowedChild].parentId = node.id;
+    }
+
+    // Update parent separator
+    parent.keys[childIndex] = rightSibling.keys[0]!;
+    return;
+  }
+
+  // 3. Sibling cannot lend -> Merge with sibling
+  state.totalMerges++;
+  if (leftSibling && leftSiblingId) {
+    // Merge node into leftSibling
+    leftSibling.keys.push(...node.keys);
+    leftSibling.values.push(...node.values);
+    if (!node.isLeaf) {
+      for (const cId of node.childrenIds) {
+        if (state.nodes[cId]) state.nodes[cId].parentId = leftSibling.id;
+      }
+      leftSibling.childrenIds.push(...node.childrenIds);
+    }
+
+    // Remove separator and child pointer from parent
+    parent.keys.splice(childIndex - 1, 1);
+    parent.childrenIds.splice(childIndex, 1);
+    delete state.nodes[node.id];
+  } else if (rightSibling && rightSiblingId) {
+    // Merge rightSibling into node
+    node.keys.push(...rightSibling.keys);
+    node.values.push(...rightSibling.values);
+    if (!node.isLeaf) {
+      for (const cId of rightSibling.childrenIds) {
+        if (state.nodes[cId]) state.nodes[cId].parentId = node.id;
+      }
+      node.childrenIds.push(...rightSibling.childrenIds);
+    }
+
+    // Remove separator and child pointer from parent
+    parent.keys.splice(childIndex, 1);
+    parent.childrenIds.splice(childIndex + 1, 1);
+    delete state.nodes[rightSibling.id];
+  }
+
+  // 4. Check if parent now underflows
+  if (!parent.parentId) {
+    // Parent is root; if root has 0 keys and 1 child, make child root
+    if (parent.keys.length === 0 && parent.childrenIds.length === 1) {
+      const newRootId = parent.childrenIds[0]!;
+      state.rootId = newRootId;
+      if (state.nodes[newRootId]) state.nodes[newRootId].parentId = null;
+      delete state.nodes[parent.id];
+    }
+  } else if (parent.keys.length < minKeys) {
+    handleUnderflow(state, parent.id, minKeys);
   }
 }

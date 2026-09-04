@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+
 import type { RaftClusterState, RaftNode } from '@the-visualizer/simulation';
 
 interface RaftVisualizerProps {
@@ -22,7 +23,9 @@ export function RaftVisualizer({
 
   const nodes = Object.values(state.nodes);
 
-  const getRoleBadgeStyle = (role: RaftNode['role']): { bg: string; color: string; label: string } => {
+  const getRoleBadgeStyle = (
+    role: RaftNode['role'],
+  ): { bg: string; color: string; label: string } => {
     switch (role) {
       case 'LEADER':
         return { bg: 'rgba(234, 179, 8, 0.15)', color: '#fbbf24', label: '👑 LEADER' };
@@ -35,7 +38,15 @@ export function RaftVisualizer({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', gap: '16px' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        padding: '16px',
+        gap: '16px',
+      }}
+    >
       {/* Top Banner & Command Bar */}
       <div
         style={{
@@ -55,43 +66,72 @@ export function RaftVisualizer({
               Raft Consensus Quorum (5-Node Replicated State Machine)
             </h2>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Active Leader: <strong>{state.activeLeaderId ? `Node #${state.activeLeaderId}` : 'ELECTION IN PROGRESS'}</strong> · Highest Term: <strong>{state.highestTerm}</strong> · Isolated Nodes: <strong>{state.isolatedNodeIds.length > 0 ? state.isolatedNodeIds.join(', ') : 'None'}</strong>
+              Active Leader:{' '}
+              <strong>
+                {state.activeLeaderId ? `Node #${state.activeLeaderId}` : 'ELECTION IN PROGRESS'}
+              </strong>{' '}
+              · Highest Term: <strong>{state.highestTerm}</strong> · Isolated Nodes:{' '}
+              <strong>
+                {state.isolatedNodeIds.length > 0 ? state.isolatedNodeIds.join(', ') : 'None'}
+              </strong>
             </span>
           </div>
         </div>
 
-        {/* Client Propose Form */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (commandInput.trim()) onProposeCommand(commandInput.trim());
-          }}
-          style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
-        >
-          <input
-            type="text"
-            value={commandInput}
-            onChange={(e) => setCommandInput(e.target.value)}
-            placeholder="e.g. SET balance = 500"
-            style={{
-              padding: '6px 12px',
-              fontSize: '0.8rem',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '4px',
-              color: '#f8fafc',
-              width: '200px',
+        {/* Client Propose Form & Split-Brain Lab */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (commandInput.trim()) onProposeCommand(commandInput.trim());
             }}
-          />
-          <button
-            type="submit"
-            disabled={!state.activeLeaderId}
-            className="btn btn--primary"
-            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+            style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
           >
-            ✍️ Propose Write
+            <input
+              type="text"
+              value={commandInput}
+              onChange={(e) => setCommandInput(e.target.value)}
+              placeholder="e.g. SET balance = 500"
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                backgroundColor: '#1e293b',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+                color: '#f8fafc',
+                width: '180px',
+              }}
+            />
+            <button
+              type="submit"
+              disabled={!state.activeLeaderId}
+              className="btn btn--primary"
+              style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+            >
+              ✍️ Propose Write
+            </button>
+          </form>
+
+          {/* Quick Partition Lab */}
+          <button
+            onClick={() => {
+              // Isolate minority {1, 2}
+              if (!state.isolatedNodeIds.includes('1')) onTogglePartition('1');
+              if (!state.isolatedNodeIds.includes('2')) onTogglePartition('2');
+            }}
+            className="btn btn--secondary"
+            style={{
+              fontSize: '0.75rem',
+              padding: '6px 10px',
+              background: 'rgba(234, 179, 8, 0.1)',
+              color: '#fbbf24',
+              border: '1px solid #eab308',
+            }}
+            title="Isolate minority nodes {1, 2} to demonstrate majority quorum survival on {3, 4, 5}"
+          >
+            ⚡ Split-Brain Minority {`{1,2}`}
           </button>
-        </form>
+        </div>
       </div>
 
       {/* Nodes Quorum Grid */}
@@ -134,7 +174,9 @@ export function RaftVisualizer({
               }}
             >
               {/* Node Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontWeight: 700, fontSize: '1rem', color: '#f8fafc' }}>
                     Node #{node.id}
@@ -159,19 +201,46 @@ export function RaftVisualizer({
               </div>
 
               {/* Status Row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#cbd5e1' }}>
-                <span>Voted For: <strong>{node.votedFor ? `#${node.votedFor}` : 'None'}</strong></span>
-                <span>Commit Index: <strong style={{ color: '#4ade80' }}>{node.commitIndex}</strong></span>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.75rem',
+                  color: '#cbd5e1',
+                }}
+              >
+                <span>
+                  Voted For: <strong>{node.votedFor ? `#${node.votedFor}` : 'None'}</strong>
+                </span>
+                <span>
+                  Commit Index: <strong style={{ color: '#4ade80' }}>{node.commitIndex}</strong>
+                </span>
               </div>
 
               {/* Election Countdown Gauge */}
               {node.role !== 'LEADER' && node.status === 'ALIVE' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94a3b8' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.7rem',
+                      color: '#94a3b8',
+                    }}
+                  >
                     <span>Election Countdown</span>
-                    <span>{node.currentElectionCountdown} / {node.electionTimeoutTicks} ticks</span>
+                    <span>
+                      {node.currentElectionCountdown} / {node.electionTimeoutTicks} ticks
+                    </span>
                   </div>
-                  <div style={{ height: '4px', backgroundColor: '#1e293b', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '4px',
+                      backgroundColor: '#1e293b',
+                      borderRadius: '2px',
+                      overflow: 'hidden',
+                    }}
+                  >
                     <div
                       style={{
                         height: '100%',
@@ -185,11 +254,34 @@ export function RaftVisualizer({
               )}
 
               {/* Log Timeline Container */}
-              <div style={{ flex: 1, minHeight: '80px', backgroundColor: '#020617', borderRadius: '6px', padding: '8px' }}>
-                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: '80px',
+                  backgroundColor: '#020617',
+                  borderRadius: '6px',
+                  padding: '8px',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.7rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginBottom: '6px',
+                  }}
+                >
                   REPLICATED LOG ({node.log.length} entries)
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    maxHeight: '120px',
+                    overflowY: 'auto',
+                  }}
+                >
                   {node.log.length === 0 ? (
                     <span style={{ fontSize: '0.75rem', color: '#475569', fontStyle: 'italic' }}>
                       (log is empty)
@@ -207,14 +299,27 @@ export function RaftVisualizer({
                             fontSize: '0.75rem',
                             padding: '3px 6px',
                             borderRadius: '4px',
-                            backgroundColor: isCommitted ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 179, 8, 0.1)',
+                            backgroundColor: isCommitted
+                              ? 'rgba(34, 197, 94, 0.1)'
+                              : 'rgba(234, 179, 8, 0.1)',
                             borderLeft: isCommitted ? '3px solid #22c55e' : '3px solid #eab308',
                           }}
                         >
-                          <span style={{ fontFamily: 'monospace', color: isCommitted ? '#4ade80' : '#fde047' }}>
+                          <span
+                            style={{
+                              fontFamily: 'monospace',
+                              color: isCommitted ? '#4ade80' : '#fde047',
+                            }}
+                          >
                             [idx:{entry.index} t:{entry.term}] {entry.command}
                           </span>
-                          <span style={{ fontSize: '0.65rem', fontWeight: 600, color: isCommitted ? '#22c55e' : '#ca8a04' }}>
+                          <span
+                            style={{
+                              fontSize: '0.65rem',
+                              fontWeight: 600,
+                              color: isCommitted ? '#22c55e' : '#ca8a04',
+                            }}
+                          >
                             {isCommitted ? 'COMMITTED' : 'PENDING'}
                           </span>
                         </div>

@@ -1,4 +1,4 @@
-import type { K8sClusterState, K8sNode, PodSpec } from './k8s-types.js';
+import type { K8sClusterState } from './k8s-types.js';
 
 export interface K8sInvariantViolation {
   ruleId: string;
@@ -9,8 +9,8 @@ export interface K8sInvariantViolation {
 
 export class K8sInvariantChecker {
   public check(state: K8sClusterState): K8sInvariantViolation | undefined {
-    const nodes = Object.values(state.nodes) as K8sNode[];
-    const pods = Object.values(state.pods) as PodSpec[];
+    const nodes = Object.values(state.nodes);
+    const pods = Object.values(state.pods);
 
     // 1. Check Node Resource Limits
     for (const node of nodes) {

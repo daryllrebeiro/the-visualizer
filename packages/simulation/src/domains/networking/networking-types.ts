@@ -14,6 +14,13 @@ export type TCPConnectionState =
 
 export type CongestionPhase = 'SlowStart' | 'CongestionAvoidance' | 'FastRecovery';
 
+export type TCPCongestionAlgorithm = 'CUBIC' | 'RENO';
+
+export interface SackBlock {
+  leftEdge: number;
+  rightEdge: number;
+}
+
 export interface TCPPacket {
   id: string;
   source: 'CLIENT' | 'SERVER';
@@ -26,14 +33,23 @@ export interface TCPPacket {
   payload: string;
   sentAtTick: number;
   state: 'InFlight' | 'Delivered' | 'Dropped';
+  sackBlocks?: SackBlock[] | undefined;
 }
 
 export interface CongestionControlState {
+  algorithm: TCPCongestionAlgorithm;
   cwnd: number; // in packets/MSS
   ssthresh: number;
   phase: CongestionPhase;
   rttTicks: number;
   duplicateAckCount: number;
+  lastLossTick: number;
+  wMax: number;
+  k: number; // CUBIC inflection point time
+  srttTicks: number; // RFC 6298 smoothed RTT
+  rttvarTicks: number; // RFC 6298 RTT variance
+  rtoTicks: number; // RFC 6298 retransmission timeout
+  fastRecovery: boolean;
   history: Array<{ tick: number; cwnd: number; phase: CongestionPhase }>;
 }
 
@@ -42,12 +58,14 @@ export interface TCPSlidingWindowSlot {
   payload: string;
   state: 'SentAndAcked' | 'SentUnacked' | 'UsableNotSent' | 'NotUsable';
   sentTick: number | null;
+  isSacked?: boolean;
 }
 
 export interface NetworkingClusterState {
   clusterId: string;
   tick: number;
   rngState: number;
+  fidelityMode: 'TEXTBOOK' | 'REALISTIC';
   clientState: TCPConnectionState;
   serverState: TCPConnectionState;
   clientSeqNumber: number;
@@ -55,6 +73,11 @@ export interface NetworkingClusterState {
   clientAckNumber: number;
   serverAckNumber: number;
   windowSize: number;
+  windowScaleShift: number; // RFC 7323 window scale (0 - 14)
+  effectiveWindowSize: number; // windowSize << windowScaleShift
+  sackEnabled: boolean; // RFC 2018 SACK toggle
+  nagleEnabled: boolean; // RFC 896 Nagle toggle
+  nagleBuffer: string;
   inFlightPackets: TCPPacket[];
   deliveredPackets: TCPPacket[];
   slidingWindow: TCPSlidingWindowSlot[];
@@ -62,6 +85,8 @@ export interface NetworkingClusterState {
   totalPacketsSent: number;
   totalPacketsDropped: number;
   totalRetransmissions: number;
+  totalFastRetransmissions: number;
+  totalTimeoutRetransmissions: number;
 }
 
 export type NetworkEventType =
@@ -69,7 +94,8 @@ export type NetworkEventType =
   | 'TCP_SEND_DATA'
   | 'TCP_DROP_PACKET'
   | 'TCP_TICK'
-  | 'TCP_CLOSE_CONNECTION';
+  | 'TCP_CLOSE_CONNECTION'
+  | 'TCP_CONFIGURE_FIDELITY';
 
 export interface NetworkSimEvent {
   id: string;

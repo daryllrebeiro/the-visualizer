@@ -1,15 +1,25 @@
-import './otel-init.js';
-
 import * as http from 'http';
+import { Redis } from 'ioredis';
 
+import { tokenRevocationStore } from '@the-visualizer/contracts';
 import { initGlobalExceptionHandling, logger, register } from '@the-visualizer/logging';
-
-initGlobalExceptionHandling('ws-gateway');
 
 import { config } from './config.js';
 import { roomManager } from './gateway/room-manager.js';
 import { simulationRunner } from './gateway/runner.js';
 import { createWebSocketServer } from './gateway/ws-server.js';
+import './otel-init.js';
+
+initGlobalExceptionHandling('ws-gateway');
+
+const revocationRedis = new Redis(config.REDIS_URL, {
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+});
+revocationRedis.on('error', (err) =>
+  logger.warn({ err: String(err) }, 'Revocation Redis connection error'),
+);
+tokenRevocationStore.setBackend(revocationRedis);
 
 const server = http.createServer((req, res) => {
   if (req.url === '/metrics') {
@@ -22,7 +32,7 @@ const server = http.createServer((req, res) => {
     });
     register
       .metrics()
-      .then((metricsText) => {
+      .then((metricsText: string) => {
         res.end(metricsText);
       })
       .catch((err: unknown) => {
@@ -42,6 +52,11 @@ const server = http.createServer((req, res) => {
   res.end('WebSocket Gateway Health OK\n');
 });
 
+// Explicit HTTP server hardening timeouts (prevent slowloris and idle socket exhaustion)
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+server.requestTimeout = 30000;
+server.maxHeadersCount = 100;
 
 // Bind ws.Server upgrade handlers to HTTP server
 const wss = createWebSocketServer(server);
@@ -56,12 +71,21 @@ if (process.env.NODE_ENV !== 'test') {
 async function handleShutdown(signal: string): Promise<void> {
   logger.info(`Received ${signal}. Shutting down WebSocket gateway gracefully...`);
 
-  // Close HTTP Server (drains upgrades)
+  // 1. Close HTTP Server (stop accepting new connections/upgrades)
   server.close(() => {
-    logger.info('HTTP server closed.');
+    logger.info('HTTP server closed to new connections.');
   });
 
-  // Close all WebSocket client sockets
+  // 2. Notify and drain all WebSocket client sockets with close code 1001 (Going Away)
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1 /* OPEN */) {
+      client.close(1001, 'Server shutting down gracefully');
+    }
+  });
+
+  // 3. Allow 500ms drain window before forceful termination
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
   wss.clients.forEach((client) => {
     client.terminate();
   });
@@ -69,9 +93,9 @@ async function handleShutdown(signal: string): Promise<void> {
     logger.info('WebSocket Server closed.');
   });
 
-  // Close simulation runner tick loops and Redis connection
+  // 4. Close simulation runner tick loops and Redis connection
   await simulationRunner.close();
-  // Quit Redis client pools
+  // 5. Quit Redis client pools
   await roomManager.close();
   logger.info('Redis connections closed.');
 

@@ -9,30 +9,34 @@ The Visualizer makes invisible distributed system behaviors visible, allowing de
 ## 🌟 Key Features
 
 ### 1. Exact Kafka Protocol & Storage Engines (`packages/simulation`)
-* **Byte-Level Murmur2 Partitioner**: Exact port of Kafka's Java `Utils.murmur2(key)` and `toPositive(hash) % numPartitions`, ensuring 100% deterministic key-to-partition routing.
-* **Physical Disk Log Segments & Compaction**: Simulates on-disk `.log` files (`00000000000000000000.log`), sparse offset indexing (`.index`), segment rolling (`segment.bytes`), and background log compaction deduplicating superseded keys.
-* **Two-Phase Commit (2PC) Transactions & LSO**: Monotonic `producerId` and `producerEpoch` fencing against zombie writers, 2PC control markers (`COMMIT`/`ABORT`), and Last Stable Offset (LSO) calculations for `read_committed` consumers.
-* **KRaft Metadata Quorum**: Controller elections, voter heartbeats, metadata log replication, and zero-Zookeeper failovers.
-* **Deterministic Virtual Timeline**: Built on a seeded pseudo-random number generator (SplitMix32) and discrete event loop. Identical inputs guarantee identical execution across runs.
+
+- **Byte-Level Murmur2 Partitioner**: Exact port of Kafka's Java `Utils.murmur2(key)` and `toPositive(hash) % numPartitions`, ensuring 100% deterministic key-to-partition routing.
+- **Physical Disk Log Segments & Compaction**: Simulates on-disk `.log` files (`00000000000000000000.log`), sparse offset indexing (`.index`), segment rolling (`segment.bytes`), and background log compaction deduplicating superseded keys.
+- **Two-Phase Commit (2PC) Transactions & LSO**: Monotonic `producerId` and `producerEpoch` fencing against zombie writers, 2PC control markers (`COMMIT`/`ABORT`), and Last Stable Offset (LSO) calculations for `read_committed` consumers.
+- **KRaft Metadata Quorum**: Controller elections, voter heartbeats, metadata log replication, and zero-Zookeeper failovers.
+- **Deterministic Virtual Timeline**: Built on a seeded pseudo-random number generator (SplitMix32) and discrete event loop. Identical inputs guarantee identical execution across runs.
 
 ### 2. Deep-Dive Inspection & Interactive Scenarios
-* **Click-to-Inspect Drawer**: Click any node on the canvas to open the inspection drawer:
-  * **Partitions**: View on-disk `.log` segments, High-Watermark (HW), Log End Offset (LEO), and live ISR matrix.
-  * **Brokers**: Monitor live disk IO, KRaft role, and trigger targeted single-node crash/recovery.
-  * **Consumers**: Inspect member IDs, rebalance generation IDs, assigned topic-partitions, and committed offset lag.
-  * **Producers & Murmur2 Playground**: Real-time hash calculation sandbox with direct keyed message dispatching.
-* **Educational Scenarios & Playbooks**: One-click interactive demonstrations:
-  1. *Leader Failover & ISR Shrink / Recovery*
-  2. *Consumer Group Cooperative Sticky Rebalance*
-  3. *KRaft Metadata Quorum Controller Failover*
+
+- **Click-to-Inspect Drawer**: Click any node on the canvas to open the inspection drawer:
+  - **Partitions**: View on-disk `.log` segments, High-Watermark (HW), Log End Offset (LEO), and live ISR matrix.
+  - **Brokers**: Monitor live disk IO, KRaft role, and trigger targeted single-node crash/recovery.
+  - **Consumers**: Inspect member IDs, rebalance generation IDs, assigned topic-partitions, and committed offset lag.
+  - **Producers & Murmur2 Playground**: Real-time hash calculation sandbox with direct keyed message dispatching.
+- **Educational Scenarios & Playbooks**: One-click interactive demonstrations:
+  1. _Leader Failover & ISR Shrink / Recovery_
+  2. _Consumer Group Cooperative Sticky Rebalance_
+  3. _KRaft Metadata Quorum Controller Failover_
 
 ### 3. Infinite Canvas Navigation & Deterministic Time-Travel
-* **Infinite Canvas**: Smooth mouse wheel zoom ($0.3\times \to 2.5\times$), middle-click/Alt-drag camera panning, and screen-space radar minimap.
-* **Deterministic Trace Export & Offline Replay**: Export multi-tick cluster timeline history as downloadable `.json` traces (`💾 Export Trace`) and replay offline runs with the playback scrubber (`📂 Import Trace`).
+
+- **Infinite Canvas**: Smooth mouse wheel zoom ($0.3\times \to 2.5\times$), middle-click/Alt-drag camera panning, and screen-space radar minimap.
+- **Deterministic Trace Export & Offline Replay**: Export multi-tick cluster timeline history as downloadable `.json` traces (`💾 Export Trace`) and replay offline runs with the playback scrubber (`📂 Import Trace`).
 
 ### 4. Zero-Trust Security & Multi-Tenancy
-* **SSRF Protection & Token Auth**: Gateway-level SSRF subnet validation and JWT authentication.
-* **Multi-Tier Rate Limiting**: Free-tier rate limiting (20 msgs/sec) with automatic socket backpressure.
+
+- **SSRF Protection & Token Auth**: Gateway-level SSRF subnet validation and JWT authentication.
+- **Multi-Tier Rate Limiting**: Free-tier rate limiting (20 msgs/sec) with automatic socket backpressure.
 
 ---
 
@@ -60,16 +64,20 @@ the-visualizer/
 ## 🚦 Quick Start
 
 ### 1. Single-Command Docker Deployment (Recommended)
+
 ```bash
 # Start full stack: Postgres, Redis, API, Gateway, and Web
 docker compose up --build -d
 ```
+
 Access the application:
-* **Web UI**: `http://localhost:3002`
-* **REST API**: `http://localhost:3000`
-* **WebSocket Gateway**: `ws://localhost:3001`
+
+- **Web UI**: `http://localhost:3002`
+- **REST API**: `http://localhost:3000`
+- **WebSocket Gateway**: `ws://localhost:3001`
 
 ### 2. Local Development Setup
+
 ```bash
 # Install dependencies
 pnpm install
@@ -103,7 +111,8 @@ pnpm build
 
 ## 📖 Operational Documentation
 
-* [**Production Hosting Guide**](docs/deployment/HOSTING_GUIDE.md): AWS ECS, GCP Cloud Run, Kubernetes, and Bare-Metal Docker hosting architecture.
-* [**How to Run Guide**](HOW_TO_RUN.md): Local development, database migrations, and testing scripts.
-* [**How to Use Guide**](HOW_TO_USE.md): Entity inspection, scenario playbooks, canvas controls, and chaos experiments.
-* [**Features & Functionalities**](features_and_functionalities.md): Feature matrix and Apache Kafka protocol compliance.
+- [**13-Domain Feature Explainer**](docs/FEATURE_EXPLAINER.md): Complete navigation matrix and protocol breakdowns for all 13 interactive visualizers (`/kafka`, `/raft`, `/database`, `/redis`, `/kubernetes`, `/rabbitmq`, `/storage`, `/networking`, `/rate-limiter`, `/distributed-lock`, `/cdn-cache`, `/id-gen`, `/transactions`).
+- [**Production Hosting Guide**](docs/deployment/HOSTING_GUIDE.md): AWS ECS, GCP Cloud Run, Kubernetes, and Bare-Metal Docker hosting architecture.
+- [**How to Run Guide**](HOW_TO_RUN.md): Local development, database migrations, and testing scripts.
+- [**How to Use Guide**](HOW_TO_USE.md): Entity inspection, scenario playbooks, canvas controls, and chaos experiments.
+- [**Features & Functionalities**](features_and_functionalities.md): Feature matrix and Apache Kafka protocol compliance.

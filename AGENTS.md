@@ -16,7 +16,7 @@ If a task genuinely needs full explanation for a non-technical reader, or the us
 
 ## Scope note
 
-This changes *how much* gets said. It does not skip investigation, verification, or reading code the change actually depends on — smallest correct change, not smallest visible effort. If a change touches a shared interface, exported function, or config used elsewhere, expand the search before editing regardless of brevity rules.
+This changes _how much_ gets said. It does not skip investigation, verification, or reading code the change actually depends on — smallest correct change, not smallest visible effort. If a change touches a shared interface, exported function, or config used elsewhere, expand the search before editing regardless of brevity rules.
 
 ## Project rules
 

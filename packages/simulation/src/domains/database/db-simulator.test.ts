@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { DBInvariantChecker } from './db-invariants.js';
+import { createDefaultDBCluster, pureDBTransition } from './db-state-transitions.js';
+import type { DBSimEvent } from './db-types.js';
 import { ConsistentHashRing } from './hash-ring.js';
-import {
-  createDefaultDBCluster,
-  pureDBTransition,
-} from './db-state-transitions.js';
-import type { DBSimEvent, DBNode } from './db-types.js';
 
 describe('Distributed Database (Consistent Hash Ring & Quorum)', () => {
   it('should initialize 4-node cluster with 12 vnodes distributed monotonically across ring', () => {
@@ -38,7 +36,7 @@ describe('Distributed Database (Consistent Hash Ring & Quorum)', () => {
 
     // Verify key replicated on exactly 3 nodes
     let storedNodes = 0;
-    const nodes = Object.values(res.nextState.nodes) as DBNode[];
+    const nodes = Object.values(res.nextState.nodes);
     for (const node of nodes) {
       if (node.storage['account:101']) storedNodes++;
     }
@@ -116,7 +114,7 @@ describe('Distributed Database (Consistent Hash Ring & Quorum)', () => {
     const writeRes = pureDBTransition(state, writeEv, rng);
     // Find coordinator with stored hint
     let hintStored = false;
-    const writeNodes = Object.values(writeRes.nextState.nodes) as DBNode[];
+    const writeNodes = Object.values(writeRes.nextState.nodes);
     for (const node of writeNodes) {
       if (node.hints.some((h) => h.key === 'order:555' && h.targetNodeId === '3')) {
         hintStored = true;

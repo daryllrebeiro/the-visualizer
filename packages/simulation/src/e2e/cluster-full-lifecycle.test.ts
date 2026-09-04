@@ -7,7 +7,7 @@ import {
   resetFactoryCounters,
 } from '@the-visualizer/test-utils';
 
-import { SimulationEngine, type SimulationConfig } from '../engine/simulation-engine.js';
+import { type SimulationConfig, SimulationEngine } from '../engine/simulation-engine.js';
 import type { KafkaClusterState, SimEvent } from '../engine/types.js';
 import { partitionForKey } from '../partitioners/murmur2.js';
 import { PartitionLogStorage } from '../storage/log-segment.js';
@@ -36,7 +36,9 @@ describe('Comprehensive Kafka Simulation Full Lifecycle E2E Integration Suite', 
         recordedEvents.push(...events);
       },
       onInvariantViolation: (violation) => {
-        throw new Error(`Invariant Violation Detected: ${violation.invariantName} - ${violation.description}`);
+        throw new Error(
+          `Invariant Violation Detected: ${violation.invariantName} - ${violation.description}`,
+        );
       },
       onResourceLimitExceeded: (reason) => {
         throw new Error(`Resource limit exceeded: ${reason}`);
@@ -121,7 +123,7 @@ describe('Comprehensive Kafka Simulation Full Lifecycle E2E Integration Suite', 
     // PHASE 1: Topic Creation & Murmur2 Key Partitioner Routing
     // ═════════════════════════════════════════════════════════════════════════
     // Create new topic 'payments' with 2 partitions
-    engine.scheduleEvent(5, 'create-topic-payments', 'TOPIC_CREATED' as any, {
+    engine.scheduleEvent(5, 'create-topic-payments', 'TOPIC_CREATED', {
       topic: 'payments',
       partitions: 2,
     });
@@ -202,7 +204,7 @@ describe('Comprehensive Kafka Simulation Full Lifecycle E2E Integration Suite', 
     // ═════════════════════════════════════════════════════════════════════════
     // PHASE 3: Consumer Polling & Committed Offsets Advancement
     // ═════════════════════════════════════════════════════════════════════════
-    engine.scheduleEvent(35, 'commit-c1', 'RECORD_CONSUMED' as any, {
+    engine.scheduleEvent(35, 'commit-c1', 'RECORD_CONSUMED', {
       groupId: 'order-processors',
       topic: 'orders',
       partition: targetP1,
@@ -211,12 +213,14 @@ describe('Comprehensive Kafka Simulation Full Lifecycle E2E Integration Suite', 
 
     engine.step(40);
 
-    expect(engine.state?.consumerGroups['order-processors']?.committedOffsets['orders']?.[targetP1]).toBe(1);
+    expect(
+      engine.state?.consumerGroups['order-processors']?.committedOffsets['orders']?.[targetP1],
+    ).toBe(1);
 
     // ═════════════════════════════════════════════════════════════════════════
     // PHASE 4: Dynamic Broker Addition
     // ═════════════════════════════════════════════════════════════════════════
-    engine.scheduleEvent(45, 'add-b4', 'BROKER_ADDED' as any, {
+    engine.scheduleEvent(45, 'add-b4', 'BROKER_ADDED', {
       brokerId: '4',
       rack: 'rack-d',
     });
@@ -271,11 +275,15 @@ describe('Comprehensive Kafka Simulation Full Lifecycle E2E Integration Suite', 
 
     engine.step(95);
 
-    const remainingMembers = Object.keys(engine.state?.consumerGroups['order-processors']?.members ?? {});
+    const remainingMembers = Object.keys(
+      engine.state?.consumerGroups['order-processors']?.members ?? {},
+    );
     expect(remainingMembers).toEqual(['consumer-1']);
 
     // Single surviving consumer now holds all 3 partitions
-    const updatedC1Assigned = engine.state?.consumerGroups['order-processors']?.members['consumer-1']?.assignedPartitions ?? [];
+    const updatedC1Assigned =
+      engine.state?.consumerGroups['order-processors']?.members['consumer-1']?.assignedPartitions ??
+      [];
     expect(updatedC1Assigned.length).toBe(3);
 
     // ═════════════════════════════════════════════════════════════════════════

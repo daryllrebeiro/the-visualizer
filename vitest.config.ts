@@ -9,6 +9,17 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    env: {
+      NODE_ENV: 'test',
+      DATABASE_URL:
+        process.env['DATABASE_URL'] ||
+        'postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test',
+      SESSION_SECRET: 'test_session_secret_at_least_32_characters_long_123456',
+      REDIS_URL: process.env['REDIS_URL'] || 'redis://localhost:6379',
+      REDIS_PASSWORD: process.env['REDIS_PASSWORD'] || '',
+      JWT_SECRET: 'test_jwt_secret_at_least_32_characters_long_123456',
+      PORT: '3000',
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

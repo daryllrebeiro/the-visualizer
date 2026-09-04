@@ -38,6 +38,7 @@ describe('RoomManager Lifecycle & Idle TTL Reaper Tests', () => {
     expect(roomManager.getRoomState(testRoomId)).toBe('ACTIVE');
 
     // 4. Force reaper with ttlMs = 0 (simulating TTL expiration past inactivity threshold)
+    await new Promise((resolve) => setTimeout(resolve, 10));
     const expiredEvictions = await roomManager.reapIdleRooms(0);
     expect(expiredEvictions).toContain(testRoomId);
     expect(roomManager.getRoomState(testRoomId)).toBe('RECLAIMED');

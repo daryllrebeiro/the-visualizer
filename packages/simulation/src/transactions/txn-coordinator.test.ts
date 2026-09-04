@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { TransactionCoordinatorManager } from './txn-coordinator.js';
 
 describe('Kafka Transaction Coordinator & 2PC Tests', () => {
@@ -55,7 +56,9 @@ describe('Kafka Transaction Coordinator & 2PC Tests', () => {
 
     // Transaction abort isolation:
     const { producerId, producerEpoch } = mgr.initProducerId('txn-checkout', 'broker-1', 5);
-    mgr.addPartitionsToTxn('txn-checkout', producerId, producerEpoch, [{ topic: 'orders', partition: 0 }]);
+    mgr.addPartitionsToTxn('txn-checkout', producerId, producerEpoch, [
+      { topic: 'orders', partition: 0 },
+    ]);
 
     const abortResult = mgr.endTxn('txn-checkout', producerId, producerEpoch, 'ABORT');
     expect(abortResult.success).toBe(true);

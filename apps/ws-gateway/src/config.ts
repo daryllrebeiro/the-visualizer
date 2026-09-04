@@ -2,13 +2,15 @@ import { z } from 'zod';
 
 import { BaseEnvSchema, RedisEnvSchema, parseEnv } from '@the-visualizer/config';
 
-const WsGatewayEnvSchema = BaseEnvSchema.merge(RedisEnvSchema).merge(
-  z.object({
-    PORT: z.coerce.number().int().positive().default(3001),
-    SESSION_SECRET: z.string().min(32),
-    JWT_SECRET: z.string().min(32).optional(),
-  }),
-).passthrough();
+const WsGatewayEnvSchema = BaseEnvSchema.merge(RedisEnvSchema)
+  .merge(
+    z.object({
+      PORT: z.coerce.number().int().positive().default(3001),
+      SESSION_SECRET: z.string().min(32),
+      JWT_SECRET: z.string().min(32).optional(),
+    }),
+  )
+  .passthrough();
 
 export type WsGatewayEnv = z.infer<typeof WsGatewayEnvSchema>;
 

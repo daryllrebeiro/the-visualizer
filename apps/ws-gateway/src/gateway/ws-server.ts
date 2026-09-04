@@ -4,7 +4,12 @@ import { pack, unpack } from 'msgpackr';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 
-import { ClientIntentSchema, type KafkaClusterState } from '@the-visualizer/contracts';
+import {
+  ClientIntentSchema,
+  IntentGapRecoverySchema,
+  IntentJoinRoomSchema,
+  type KafkaClusterState,
+} from '@the-visualizer/contracts';
 import {
   captureException,
   logger,
@@ -13,6 +18,7 @@ import {
   wsMessagesSentTotal,
   wsRateLimitedMessagesTotal,
 } from '@the-visualizer/logging';
+import { DomainRegistry } from '@the-visualizer/simulation';
 
 import { authenticateConnection } from './auth.js';
 import { roomManager } from './room-manager.js';
@@ -32,7 +38,10 @@ interface ExtendedWebSocket extends WebSocket {
   };
 }
 
-function checkConnectionRateLimit(ws: ExtendedWebSocket): { allowed: boolean; terminate: boolean } {
+export function checkConnectionRateLimit(ws: ExtendedWebSocket): {
+  allowed: boolean;
+  terminate: boolean;
+} {
   const now = Date.now();
 
   // 1. Hard system limit (250 msgs/s)
@@ -175,7 +184,7 @@ export const DEFAULT_TOPOLOGY: KafkaClusterState = {
 };
 
 export function createWebSocketServer(server: http.Server): WebSocketServer {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
   // 1. Handle upgrade requests with authentication validation
   server.on('upgrade', (request, socket, head) => {
@@ -215,6 +224,12 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
     ws.on('pong', () => {
       ws.isAlive = true;
+    });
+
+    ws.on('error', (err) => {
+      // Handle protocol-level errors (e.g. maxPayload exceeded) gracefully.
+      // The 'close' event will fire after this, triggering room cleanup.
+      logger.warn({ err, userId: ws.userId }, 'WebSocket connection error');
     });
 
     ws.on('message', (data: Buffer, isBinary: boolean) => {
@@ -273,50 +288,84 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
           // A. Handle JOIN_ROOM intent
           if (type === 'JOIN_ROOM') {
-            const targetRoomId = payload?.roomId as unknown;
-            if (typeof targetRoomId === 'string') {
-              await roomManager.joinRoom(targetRoomId, ws.userId ?? '', ws);
+            const result = IntentJoinRoomSchema.safeParse({
+              id: payload?.id || crypto.randomUUID(),
+              type: 'JOIN_ROOM',
+              roomId: payload?.roomId,
+              domainId: payload?.domainId,
+            });
 
-              // Fetch cached topology or use default
-              const cachedTopologyStr = await roomManager.getCachedTopology(targetRoomId);
-              let topology = DEFAULT_TOPOLOGY;
-              if (cachedTopologyStr) {
-                try {
-                  topology = JSON.parse(cachedTopologyStr) as KafkaClusterState;
-                } catch {
-                  // Ignore JSON parse errors
-                }
-              }
-
-              // Start simulation runner session
-              simulationRunner.startSession(targetRoomId, topology);
-
-              // Fetch current engine state if session exists
-              const session = simulationRunner.getSession(targetRoomId);
-              const currentState = session ? session.engine.state : topology;
-
-              // Confirm join
+            if (!result.success) {
               ws.send(
                 pack({
-                  type: 'ROOM_JOINED',
-                  payload: { roomId: targetRoomId },
-                }),
-              );
-              wsMessagesSentTotal.inc({ type: 'ROOM_JOINED' });
-
-              // Send full initial state snapshot
-              ws.send(
-                pack({
-                  type: 'INIT_SNAPSHOT',
+                  type: 'MSG_SESSION_ERROR',
                   payload: {
-                    roomId: targetRoomId,
-                    state: currentState,
-                    tick: currentState ? currentState.tick : 0,
+                    code: 'ERR_BAD_REQUEST',
+                    message: 'Invalid JOIN_ROOM payload',
+                    fatal: true,
                   },
                 }),
               );
-              wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT' });
+              return;
             }
+
+            const targetRoomId = result.data.roomId;
+            const domainId = result.data.domainId;
+
+            try {
+              await roomManager.joinRoom(targetRoomId, domainId, ws.userId ?? '', ws);
+            } catch (err: any) {
+              ws.send(
+                pack({
+                  type: 'MSG_SESSION_ERROR',
+                  payload: { code: 'ERR_DOMAIN_LOCKED', message: err.message, fatal: true },
+                }),
+              );
+              return;
+            }
+
+            // Fetch cached topology or use default
+            const cachedTopologyStr = await roomManager.getCachedTopology(targetRoomId);
+
+            const domainPlugin = DomainRegistry.get(domainId);
+            let topology = domainPlugin ? domainPlugin.createDefaultState() : DEFAULT_TOPOLOGY;
+
+            if (cachedTopologyStr) {
+              try {
+                topology = JSON.parse(cachedTopologyStr);
+              } catch {
+                // Ignore JSON parse errors
+              }
+            }
+
+            // Start simulation runner session
+            simulationRunner.startSession(targetRoomId, domainId, topology);
+
+            // Fetch current engine state if session exists
+            const session = simulationRunner.getSession(targetRoomId);
+            const currentState = session ? session.engine.state : topology;
+
+            // Confirm join
+            ws.send(
+              pack({
+                type: 'ROOM_JOINED',
+                payload: { roomId: targetRoomId },
+              }),
+            );
+            wsMessagesSentTotal.inc({ type: 'ROOM_JOINED' });
+
+            // Send full initial state snapshot
+            ws.send(
+              pack({
+                type: 'INIT_SNAPSHOT',
+                payload: {
+                  roomId: targetRoomId,
+                  state: currentState,
+                  tick: currentState ? currentState.tick : 0,
+                },
+              }),
+            );
+            wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT' });
             return;
           }
 
@@ -325,25 +374,43 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
           // B. Handle GAP_RECOVERY request
           if (type === 'GAP_RECOVERY') {
-            const fromSeq = payload?.fromSequence as number | undefined;
-            if (typeof fromSeq === 'number') {
-              const recoveredPayloads = sequenceReconciler.recoverGap(roomId, fromSeq);
-              if (recoveredPayloads) {
-                // Send back buffered updates sequentially
-                for (const recoveredPayload of recoveredPayloads) {
-                  ws.send(pack(recoveredPayload));
-                  wsMessagesSentTotal.inc({ type: recoveredPayload.type });
-                }
-              } else {
-                // Missing messages evicted -> notify client a full snapshot refresh is required
-                ws.send(
-                  pack({
-                    type: 'INIT_SNAPSHOT_REQUIRED',
-                    payload: { roomId },
-                  }),
-                );
-                wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT_REQUIRED' });
+            const result = IntentGapRecoverySchema.safeParse({
+              id: payload?.id || crypto.randomUUID(),
+              type: 'GAP_RECOVERY',
+              fromSequence: payload?.fromSequence,
+            });
+
+            if (!result.success) {
+              ws.send(
+                pack({
+                  type: 'MSG_SESSION_ERROR',
+                  payload: {
+                    code: 'ERR_BAD_REQUEST',
+                    message: 'Invalid GAP_RECOVERY payload',
+                    fatal: false,
+                  },
+                }),
+              );
+              return;
+            }
+
+            const fromSeq = result.data.fromSequence;
+            const recoveredPayloads = sequenceReconciler.recoverGap(roomId, fromSeq);
+            if (recoveredPayloads) {
+              // Send back buffered updates sequentially
+              for (const recoveredPayload of recoveredPayloads) {
+                ws.send(pack(recoveredPayload));
+                wsMessagesSentTotal.inc({ type: recoveredPayload.type });
               }
+            } else {
+              // Missing messages evicted -> notify client a full snapshot refresh is required
+              ws.send(
+                pack({
+                  type: 'INIT_SNAPSHOT_REQUIRED',
+                  payload: { roomId },
+                }),
+              );
+              wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT_REQUIRED' });
             }
             return;
           }
@@ -385,7 +452,10 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             payload: parseResult.data,
           });
         } catch (err) {
-          logger.warn({ err, userId: ws.userId }, 'Failed to parse incoming WebSocket message frame');
+          logger.warn(
+            { err, userId: ws.userId },
+            'Failed to parse incoming WebSocket message frame',
+          );
           captureException(err, { service: 'ws-gateway', userId: ws.userId });
         }
       })();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BrokerNode, KafkaClusterState } from '@the-visualizer/contracts';
+
+import type { BrokerNode } from '@the-visualizer/contracts';
 
 describe('Broker Reconnection Animation & Pulse Trigger Suite', () => {
   const createMockBroker = (id: string, status: 'ALIVE' | 'CRASHED'): BrokerNode => ({
@@ -8,7 +9,8 @@ describe('Broker Reconnection Animation & Pulse Trigger Suite', () => {
     port: 9092,
     status,
     diskUsageBytes: 1024,
-    metrics: { messagesInPerSec: 10, bytesInPerSec: 1024, isrShrinkCount: 0, isrExpandCount: 0 },
+    maxDiskSizeBytes: 10240,
+    lastHeartbeatTick: 0,
   });
 
   it('should detect when a broker transitions from CRASHED to ALIVE and trigger pulse', () => {

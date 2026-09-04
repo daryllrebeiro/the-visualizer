@@ -1,4 +1,4 @@
-import type { BindingSpec, RabbitClusterState, RabbitConsumer, RabbitQueue } from './rabbitmq-types.js';
+import type { RabbitClusterState } from './rabbitmq-types.js';
 
 export interface RabbitInvariantViolation {
   ruleId: string;
@@ -9,9 +9,9 @@ export interface RabbitInvariantViolation {
 
 export class RabbitInvariantChecker {
   public check(state: RabbitClusterState): RabbitInvariantViolation | undefined {
-    const consumers = Object.values(state.consumers) as RabbitConsumer[];
-    const queues = Object.values(state.queues) as RabbitQueue[];
-    const bindings = Object.values(state.bindings) as BindingSpec[];
+    const consumers = Object.values(state.consumers);
+    const queues = Object.values(state.queues);
+    const bindings = Object.values(state.bindings);
 
     // 1. Check Prefetch Limit Safety
     for (const c of consumers) {

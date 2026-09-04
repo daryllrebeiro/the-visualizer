@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { K8sInvariantChecker } from './k8s-invariants.js';
 import { K8sScheduler } from './k8s-scheduler.js';
-import {
-  createDefaultK8sCluster,
-  pureK8sTransition,
-} from './k8s-state-transitions.js';
+import { createDefaultK8sCluster, pureK8sTransition } from './k8s-state-transitions.js';
 import type { K8sNode, K8sSimEvent, PodSpec } from './k8s-types.js';
 
 describe('Kubernetes Scheduler & Reconciliation Engine', () => {
@@ -16,7 +14,7 @@ describe('Kubernetes Scheduler & Reconciliation Engine', () => {
     expect(Object.keys(cluster.nodes).length).toBe(3);
     expect(Object.keys(cluster.pods).length).toBe(3);
 
-    const pods = Object.values(cluster.pods) as PodSpec[];
+    const pods = Object.values(cluster.pods);
     expect(pods.every((p) => p.status === 'Running' && p.nodeName !== null)).toBe(true);
     expect(checker.check(cluster)).toBeUndefined();
   });
@@ -144,7 +142,7 @@ describe('Kubernetes Scheduler & Reconciliation Engine', () => {
     expect(res.nextState.nodes['2']?.podIds.length).toBe(0);
 
     // All pods should still be running across nodes 1 and 3
-    const pods = Object.values(res.nextState.pods) as PodSpec[];
+    const pods = Object.values(res.nextState.pods);
     expect(pods.every((p) => p.status === 'Running' && p.nodeName !== 'worker-node-2')).toBe(true);
   });
 });

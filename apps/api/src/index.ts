@@ -1,12 +1,11 @@
-import './otel-init.js';
-
 import { serve } from '@hono/node-server';
-import { captureException, initGlobalExceptionHandling, register } from '@the-visualizer/logging';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
+import type { Server as HttpServer } from 'node:http';
 
-initGlobalExceptionHandling('api');
+import { tokenRevocationStore } from '@the-visualizer/contracts';
+import { captureException, initGlobalExceptionHandling, register } from '@the-visualizer/logging';
 
 import { config } from './config.js';
 import { pool } from './db/index.js';
@@ -14,40 +13,66 @@ import { redis } from './db/redis.js';
 import { authenticate } from './middleware/auth.middleware.js';
 import { requestLogger } from './middleware/logging.middleware.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
+import './otel-init.js';
 import { authRouter } from './routes/auth.routes.js';
 import { orgRouter } from './routes/org.routes.js';
 import { topologyRouter } from './routes/topology.routes.js';
+
+initGlobalExceptionHandling('api');
+
+tokenRevocationStore.setBackend(redis);
 
 const app = new Hono();
 
 // Centralized error handler
 app.onError((err, c) => {
   const userId = c.get('userId' as never) as string | undefined;
-  captureException(err, { service: 'api', userId, extra: { path: c.req.path, method: c.req.method } });
-  return c.json({
-    success: false,
-    error: {
-      code: 'INTERNAL_SERVER_ERROR',
-      message: process.env.NODE_ENV === 'production' ? 'An internal error occurred' : err.message,
+  captureException(err, {
+    service: 'api',
+    userId,
+    extra: { path: c.req.path, method: c.req.method },
+  });
+  return c.json(
+    {
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'An internal error occurred' : err.message,
+      },
     },
-  }, 500);
+    500,
+  );
 });
 
 // 1. Global Middlewares
 app.use('*', secureHeaders());
-app.use('*', rateLimiter({ limit: 60, refillRate: 1 }));
+if (process.env.NODE_ENV !== 'test' && process.env.ENABLE_RATE_LIMITER !== 'false') {
+  app.use('*', rateLimiter({ limit: 60, refillRate: 1 }));
+}
 app.use('*', requestLogger());
 
 app.use(
   '*',
   cors({
     origin: (origin) => {
-      // Allow local development ports or any configured origin
-      if (!origin) return '*';
-      if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:')) {
+      if (!origin) return undefined;
+      // Allow localhost dev ports
+      if (
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('https://localhost:') ||
+        origin.startsWith('http://127.0.0.1:')
+      ) {
         return origin;
       }
-      return '*';
+      // Allow Cloud Run and configured production domains
+      const allowedEnv = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
+        : [];
+      if (allowedEnv.includes(origin) || origin.endsWith('.run.app')) {
+        return origin;
+      }
+      // Reject any unlisted/arbitrary origin
+      return null;
     },
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -87,8 +112,15 @@ if (process.env.NODE_ENV !== 'test') {
     },
     (info) => {
       console.log(`🚀 Stateless REST API listening on port ${info.port}`);
-    }
+    },
   );
+
+  // Explicit HTTP transport timeouts (prevent slowloris and resource starvation)
+  const httpServer = server as HttpServer;
+  httpServer.keepAliveTimeout = 65000;
+  httpServer.headersTimeout = 66000;
+  httpServer.requestTimeout = 30000;
+  httpServer.maxHeadersCount = 100;
 
   const handleShutdown = (signal: string) => {
     console.log(`Received ${signal}. Shutting down API server gracefully...`);

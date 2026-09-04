@@ -1,4 +1,4 @@
-import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
+import { DiagConsoleLogger, DiagLogLevel, diag } from '@opentelemetry/api';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 
@@ -29,11 +29,9 @@ export function initTelemetry(serviceName: string): void {
 
   process.on('SIGTERM', () => {
     if (sdk) {
-      sdk
-        .shutdown()
-        .catch(() => {
-          // Silent shutdown error
-        });
+      sdk.shutdown().catch(() => {
+        // Silent shutdown error
+      });
     }
   });
 }

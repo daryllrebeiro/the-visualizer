@@ -1,5 +1,4 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import { matchTopicPattern } from './topic-matcher.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import type {
   AMQPMessage,
   BindingSpec,
@@ -10,6 +9,7 @@ import type {
   RabbitQueue,
   RabbitSimEvent,
 } from './rabbitmq-types.js';
+import { matchTopicPattern } from './topic-matcher.js';
 
 export interface RabbitTransitionResult {
   nextState: RabbitClusterState;
@@ -77,7 +77,7 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
       consumerCount: 1,
       color: '#818cf8',
     },
-    'notifications': {
+    notifications: {
       id: 'q-notif',
       name: 'notifications',
       durable: true,
@@ -161,11 +161,15 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     clusterId,
     tick: 0,
     rngState: 42,
+    fidelityMode: 'TEXTBOOK',
+    publisherConfirmsEnabled: false,
     exchanges,
     queues,
     bindings,
     consumers,
     totalPublished: 0,
+    totalConfirmed: 0,
+    totalUnroutableToAlternate: 0,
     totalAcked: 0,
     totalNacked: 0,
     totalDeadLettered: 0,
@@ -196,6 +200,15 @@ export function pureRabbitTransition(
     case 'RABBIT_TICK':
       handleTick(nextState, emittedEvents);
       break;
+    case 'RABBIT_CONFIGURE_FIDELITY': {
+      if (event.payload['fidelityMode'] !== undefined) {
+        nextState.fidelityMode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
+      }
+      if (event.payload['publisherConfirmsEnabled'] !== undefined) {
+        nextState.publisherConfirmsEnabled = Boolean(event.payload['publisherConfirmsEnabled']);
+      }
+      break;
+    }
   }
 
   // Dispatch queued messages to waiting consumers
@@ -214,7 +227,7 @@ function handlePublish(
   const exchange = state.exchanges[p.exchangeName];
   if (!exchange) return;
 
-  const msgId = `msg-${String(state.tick)}-${Math.random().toString(36).substring(2, 6)}`;
+  const msgId = `msg-${String(state.tick)}-${String(state.totalPublished + 1)}`;
   const message: AMQPMessage = {
     id: msgId,
     payload: p.payload,
@@ -230,8 +243,20 @@ function handlePublish(
   state.totalPublished++;
 
   // Find matching queues
-  const matchingQueueNames = findMatchingQueues(state, exchange, p.routingKey);
+  let matchingQueueNames = findMatchingQueues(state, exchange, p.routingKey);
 
+  // Alternate Exchange handling (AMQP 0-9-1)
+  if (
+    matchingQueueNames.length === 0 &&
+    exchange.alternateExchange &&
+    state.exchanges[exchange.alternateExchange]
+  ) {
+    const altEx = state.exchanges[exchange.alternateExchange]!;
+    matchingQueueNames = findMatchingQueues(state, altEx, p.routingKey);
+    state.totalUnroutableToAlternate++;
+  }
+
+  let routedCount = 0;
   for (const qName of matchingQueueNames) {
     const q = state.queues[qName];
     if (q) {
@@ -242,6 +267,7 @@ function handlePublish(
       };
       if (q.messages.length < q.maxQueueLength) {
         q.messages.push(qMsg);
+        routedCount++;
         emittedEvents.push({
           id: `deliv-${qMsg.id}`,
           tick: state.tick,
@@ -254,6 +280,17 @@ function handlePublish(
       }
     }
   }
+
+  // Publisher Confirms
+  if (state.publisherConfirmsEnabled && routedCount > 0) {
+    state.totalConfirmed++;
+    emittedEvents.push({
+      id: `confirm-${msgId}`,
+      tick: state.tick + 1,
+      type: 'RABBIT_BASIC_ACK',
+      payload: { deliveryTag: state.totalPublished, multiple: false },
+    });
+  }
 }
 
 function findMatchingQueues(
@@ -262,7 +299,7 @@ function findMatchingQueues(
   routingKey: string,
 ): string[] {
   const matchedQueues: string[] = [];
-  const bindings = Object.values(state.bindings) as BindingSpec[];
+  const bindings = Object.values(state.bindings);
 
   for (const b of bindings) {
     if (b.exchangeName !== exchange.name) continue;
@@ -350,7 +387,11 @@ function routeToDLX(
 
   state.totalDeadLettered++;
 
-  const dlxMatchingQueues = findMatchingQueues(state, dlx, sourceQueue.deadLetterRoutingKey ?? msg.routingKey);
+  const dlxMatchingQueues = findMatchingQueues(
+    state,
+    dlx,
+    sourceQueue.deadLetterRoutingKey ?? msg.routingKey,
+  );
   for (const qName of dlxMatchingQueues) {
     const targetQ = state.queues[qName];
     if (targetQ) {
@@ -391,7 +432,7 @@ function handleTick(state: RabbitClusterState, emittedEvents: RabbitSimEvent[]):
 }
 
 function dispatchMessagesToConsumers(state: RabbitClusterState): void {
-  const consumers = Object.values(state.consumers) as RabbitConsumer[];
+  const consumers = Object.values(state.consumers);
 
   for (const consumer of consumers) {
     if (consumer.status !== 'Active') continue;
@@ -399,7 +440,9 @@ function dispatchMessagesToConsumers(state: RabbitClusterState): void {
     if (!q) continue;
 
     while (consumer.activeMessages.length < consumer.prefetchCount) {
-      const nextMsg = q.messages.find((m) => m.state === 'InQueue' && m.assignedConsumerId === null);
+      const nextMsg = q.messages.find(
+        (m) => m.state === 'InQueue' && m.assignedConsumerId === null,
+      );
       if (!nextMsg) break;
 
       nextMsg.state = 'Delivered';

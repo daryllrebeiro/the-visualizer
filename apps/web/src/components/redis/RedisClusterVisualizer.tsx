@@ -1,15 +1,21 @@
 'use client';
 
 import React, { useState } from 'react';
+
 import type { EvictionPolicy, RedisClusterState, RedisNode } from '@the-visualizer/simulation';
-import { getClusterSlot, extractHashTag } from '@the-visualizer/simulation';
+import { extractHashTag, getClusterSlot } from '@the-visualizer/simulation';
 
 interface RedisClusterVisualizerProps {
   state: RedisClusterState;
   onSetKey: (key: string, value: string, ttl: number | null, targetNodeId?: string) => void;
   onGetKey: (key: string, targetNodeId?: string) => void;
   onDelKey: (key: string) => void;
-  onReshard: (sourceMasterId: string, targetMasterId: string, startSlot: number, endSlot: number) => void;
+  onReshard: (
+    sourceMasterId: string,
+    targetMasterId: string,
+    startSlot: number,
+    endSlot: number,
+  ) => void;
   onCrashNode: (nodeId: string) => void;
   onRecoverNode: (nodeId: string) => void;
   onSetEvictionPolicy: (policy: EvictionPolicy) => void;
@@ -54,7 +60,15 @@ export function RedisClusterVisualizer({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', gap: '16px' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        padding: '16px',
+        gap: '16px',
+      }}
+    >
       {/* Top Banner: Metrics & Eviction Policy Selector */}
       <div
         style={{
@@ -76,7 +90,11 @@ export function RedisClusterVisualizer({
               Redis Cluster (16,384 Hash Slots & Multi-Policy Eviction)
             </h2>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Hit Rate: <strong style={{ color: '#4ade80' }}>{hitRate}%</strong> ({state.totalHits} hits / {state.totalMisses} misses) · Evictions: <strong style={{ color: '#f43f5e' }}>{state.totalEvictions}</strong> · MOVED Redirects: <strong style={{ color: '#38bdf8' }}>{state.totalMovedRedirects}</strong> · ASK Redirects: <strong style={{ color: '#fbbf24' }}>{state.totalAskRedirects}</strong>
+              Hit Rate: <strong style={{ color: '#4ade80' }}>{hitRate}%</strong> ({state.totalHits}{' '}
+              hits / {state.totalMisses} misses) · Evictions:{' '}
+              <strong style={{ color: '#f43f5e' }}>{state.totalEvictions}</strong> · MOVED
+              Redirects: <strong style={{ color: '#38bdf8' }}>{state.totalMovedRedirects}</strong> ·
+              ASK Redirects: <strong style={{ color: '#fbbf24' }}>{state.totalAskRedirects}</strong>
             </span>
           </div>
         </div>
@@ -87,6 +105,7 @@ export function RedisClusterVisualizer({
           <select
             value={state.evictionPolicy}
             onChange={(e) => onSetEvictionPolicy(e.target.value as EvictionPolicy)}
+            aria-label="Redis cache eviction policy"
             style={{
               backgroundColor: '#1e293b',
               color: '#f8fafc',
@@ -114,18 +133,46 @@ export function RedisClusterVisualizer({
       </div>
 
       {/* 16,384 Slot Allocation Bar */}
-      <div style={{ backgroundColor: '#0f172a', borderRadius: '8px', padding: '12px', border: '1px solid #1e293b' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>
+      <div
+        style={{
+          backgroundColor: '#0f172a',
+          borderRadius: '8px',
+          padding: '12px',
+          border: '1px solid #1e293b',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '0.75rem',
+            color: '#94a3b8',
+            marginBottom: '6px',
+          }}
+        >
           <span>16,384 HASH SLOTS DISTRIBUTION [0 → 16383]</span>
           <span>
-            Key <code>{keyInput}</code> {hashtag !== keyInput ? `(hashtag: {${hashtag}})` : ''} → Slot <strong style={{ color: '#ec4899' }}>{computedSlot}</strong>
+            Key <code>{keyInput}</code> {hashtag !== keyInput ? `(hashtag: {${hashtag}})` : ''} →
+            Slot <strong style={{ color: '#ec4899' }}>{computedSlot}</strong>
           </span>
         </div>
 
         {/* Multi-Segment Color Bar */}
-        <div style={{ height: '14px', borderRadius: '4px', display: 'flex', overflow: 'hidden', position: 'relative', backgroundColor: '#020617' }}>
+        <div
+          style={{
+            height: '14px',
+            borderRadius: '4px',
+            display: 'flex',
+            overflow: 'hidden',
+            position: 'relative',
+            backgroundColor: '#020617',
+          }}
+        >
           {masters.map((m) => {
-            const totalSlots = m.slotRanges.reduce((acc, r) => acc + (r.endSlot - r.startSlot + 1), 0);
+            const totalSlots = m.slotRanges.reduce(
+              (acc, r) => acc + (r.endSlot - r.startSlot + 1),
+              0,
+            );
             const pct = (totalSlots / 16384) * 100;
             return (
               <div
@@ -160,7 +207,15 @@ export function RedisClusterVisualizer({
       </div>
 
       {/* Operations & Master/Replica Shard Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 340px) 1fr', gap: '16px', flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(300px, 340px) 1fr',
+          gap: '16px',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {/* Left Form: SET / GET */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* SET Command Form */}
@@ -184,14 +239,28 @@ export function RedisClusterVisualizer({
               value={keyInput}
               onChange={(e) => setKeyInput(e.target.value)}
               placeholder="Key e.g. {user:100}:token"
-              style={{ padding: '5px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
+              style={{
+                padding: '5px 8px',
+                fontSize: '0.75rem',
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+              }}
             />
             <input
               type="text"
               value={valInput}
               onChange={(e) => setValInput(e.target.value)}
               placeholder="Value"
-              style={{ padding: '5px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
+              style={{
+                padding: '5px 8px',
+                fontSize: '0.75rem',
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+              }}
             />
             <div style={{ display: 'flex', gap: '6px' }}>
               <input
@@ -199,12 +268,29 @@ export function RedisClusterVisualizer({
                 value={ttlInput}
                 onChange={(e) => setTtlInput(e.target.value)}
                 placeholder="TTL (ticks, optional)"
-                style={{ flex: 1, padding: '5px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
+                style={{
+                  flex: 1,
+                  padding: '5px 8px',
+                  fontSize: '0.75rem',
+                  backgroundColor: '#1e293b',
+                  color: '#f8fafc',
+                  border: '1px solid #334155',
+                  borderRadius: '4px',
+                }}
               />
               <select
                 value={targetNodeInput}
                 onChange={(e) => setTargetNodeInput(e.target.value)}
-                style={{ flex: 1, padding: '5px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
+                aria-label="Target Redis contact node"
+                style={{
+                  flex: 1,
+                  padding: '5px 8px',
+                  fontSize: '0.75rem',
+                  backgroundColor: '#1e293b',
+                  color: '#f8fafc',
+                  border: '1px solid #334155',
+                  borderRadius: '4px',
+                }}
               >
                 <option value="">Auto-Route</option>
                 <option value="1">Contact Node 1</option>
@@ -212,7 +298,11 @@ export function RedisClusterVisualizer({
                 <option value="3">Contact Node 3</option>
               </select>
             </div>
-            <button type="submit" className="btn btn--primary" style={{ fontSize: '0.75rem', padding: '6px' }}>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              style={{ fontSize: '0.75rem', padding: '6px' }}
+            >
               Execute SET
             </button>
           </form>
@@ -239,9 +329,21 @@ export function RedisClusterVisualizer({
                 value={readKeyInput}
                 onChange={(e) => setReadKeyInput(e.target.value)}
                 placeholder="Key to fetch"
-                style={{ flex: 1, padding: '5px 8px', fontSize: '0.75rem', backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px' }}
+                style={{
+                  flex: 1,
+                  padding: '5px 8px',
+                  fontSize: '0.75rem',
+                  backgroundColor: '#1e293b',
+                  color: '#f8fafc',
+                  border: '1px solid #334155',
+                  borderRadius: '4px',
+                }}
               />
-              <button type="submit" className="btn btn--indigo" style={{ fontSize: '0.75rem', padding: '5px 10px' }}>
+              <button
+                type="submit"
+                className="btn btn--indigo"
+                style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+              >
                 GET
               </button>
               <button
@@ -254,10 +356,46 @@ export function RedisClusterVisualizer({
               </button>
             </div>
           </form>
+
+          {/* Resharding & Slot Migration Card */}
+          <div
+            style={{
+              backgroundColor: '#0f172a',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #1e293b',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc' }}>
+              🔄 Slot Migration & Resharding (ASK vs MOVED)
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              Migrate slot range to test transient <code>ASK</code> vs permanent <code>MOVED</code>{' '}
+              redirects.
+            </div>
+            <button
+              type="button"
+              onClick={() => onReshard('1', '2', 0, 500)}
+              className="btn btn--secondary"
+              style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+            >
+              ⚡ Reshard Slots 0-500 (Master 1 → 2)
+            </button>
+          </div>
         </div>
 
         {/* Right: Master / Replica Shard Pairs Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', overflowY: 'auto' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '12px',
+            overflowY: 'auto',
+          }}
+        >
           {masters.map((master) => {
             const replica = nodes.find((n) => n.role === 'REPLICA' && n.masterId === master.id);
             const isMasterDown = master.status === 'FAIL';
@@ -268,7 +406,9 @@ export function RedisClusterVisualizer({
                 key={master.id}
                 style={{
                   backgroundColor: isMasterDown ? 'rgba(244, 63, 94, 0.05)' : '#0f172a',
-                  border: isMasterDown ? '1px solid rgba(244, 63, 94, 0.4)' : `1px solid ${master.color}60`,
+                  border: isMasterDown
+                    ? '1px solid rgba(244, 63, 94, 0.4)'
+                    : `1px solid ${master.color}60`,
                   borderRadius: '8px',
                   padding: '12px',
                   display: 'flex',
@@ -277,9 +417,18 @@ export function RedisClusterVisualizer({
                 }}
               >
                 {/* Master Node Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: master.color }} />
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: master.color,
+                      }}
+                    />
                     <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#f8fafc' }}>
                       Master #{master.id} ({master.port})
                     </span>
@@ -300,20 +449,42 @@ export function RedisClusterVisualizer({
 
                 {/* Slots & Memory Gauge */}
                 <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                  Slots: <strong>{master.slotRanges.map((r) => `${r.startSlot}-${r.endSlot}`).join(', ')}</strong>
+                  Slots:{' '}
+                  <strong>
+                    {master.slotRanges.map((r) => `${r.startSlot}-${r.endSlot}`).join(', ')}
+                  </strong>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#cbd5e1' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.7rem',
+                      color: '#cbd5e1',
+                    }}
+                  >
                     <span>Memory Usage</span>
-                    <span>{master.memoryUsedBytes} / {master.maxMemoryBytes} B</span>
+                    <span>
+                      {master.memoryUsedBytes} / {master.maxMemoryBytes} B
+                    </span>
                   </div>
-                  <div style={{ height: '4px', backgroundColor: '#1e293b', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '4px',
+                      backgroundColor: '#1e293b',
+                      borderRadius: '2px',
+                      overflow: 'hidden',
+                    }}
+                  >
                     <div
                       style={{
                         height: '100%',
                         width: `${Math.min(100, (master.memoryUsedBytes / master.maxMemoryBytes) * 100)}%`,
-                        backgroundColor: master.memoryUsedBytes > master.maxMemoryBytes * 0.8 ? '#f43f5e' : '#38bdf8',
+                        backgroundColor:
+                          master.memoryUsedBytes > master.maxMemoryBytes * 0.8
+                            ? '#f43f5e'
+                            : '#38bdf8',
                         transition: 'width 0.2s linear',
                       }}
                     />
@@ -321,9 +492,19 @@ export function RedisClusterVisualizer({
                 </div>
 
                 {/* Stored Keys List */}
-                <div style={{ maxHeight: '100px', overflowY: 'auto', backgroundColor: '#020617', padding: '6px', borderRadius: '4px' }}>
+                <div
+                  style={{
+                    maxHeight: '100px',
+                    overflowY: 'auto',
+                    backgroundColor: '#020617',
+                    padding: '6px',
+                    borderRadius: '4px',
+                  }}
+                >
                   {entries.length === 0 ? (
-                    <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>(cache empty)</span>
+                    <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>
+                      (cache empty)
+                    </span>
                   ) : (
                     entries.map((entry) => (
                       <div
@@ -337,7 +518,9 @@ export function RedisClusterVisualizer({
                           padding: '2px 0',
                         }}
                       >
-                        <span style={{ color: '#38bdf8' }}>{entry.key}: &quot;{entry.value}&quot;</span>
+                        <span style={{ color: '#38bdf8' }}>
+                          {entry.key}: &quot;{entry.value}&quot;
+                        </span>
                         <span style={{ color: '#94a3b8' }}>
                           freq:{entry.accessCount} {entry.ttl !== null ? `ttl:${entry.ttl}` : ''}
                         </span>
@@ -348,8 +531,16 @@ export function RedisClusterVisualizer({
 
                 {/* Replica Shadow Info */}
                 {replica && (
-                  <div style={{ fontSize: '0.65rem', color: '#64748b', borderTop: '1px solid #1e293b', paddingTop: '4px' }}>
-                    Replica #{replica.id} ({replica.status}) · Sync: {Object.keys(replica.storage).length} keys
+                  <div
+                    style={{
+                      fontSize: '0.65rem',
+                      color: '#64748b',
+                      borderTop: '1px solid #1e293b',
+                      paddingTop: '4px',
+                    }}
+                  >
+                    Replica #{replica.id} ({replica.status}) · Sync:{' '}
+                    {Object.keys(replica.storage).length} keys
                   </div>
                 )}
 

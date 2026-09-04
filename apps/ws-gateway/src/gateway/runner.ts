@@ -1,6 +1,4 @@
 import jsonpatch from 'fast-json-patch';
-
-const compare = (jsonpatch.compare || (jsonpatch as any).default?.compare) as typeof jsonpatch.compare;
 import { Redis } from 'ioredis';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
@@ -20,6 +18,9 @@ import { config } from '../config.js';
 import { roomManager } from './room-manager.js';
 import { DEFAULT_TOPOLOGY } from './ws-server.js';
 
+const compare = (jsonpatch.compare ||
+  (jsonpatch as any).default?.compare) as typeof jsonpatch.compare;
+
 export interface AutoProducerSchedule {
   producerId: string;
   topic: string;
@@ -31,6 +32,7 @@ export interface AutoProducerSchedule {
 
 export interface RoomSession {
   roomId: string;
+  domainId: string;
   engine: SimulationEngine;
   tickCount: number;
   timer: NodeJS.Timeout | null;
@@ -55,7 +57,7 @@ export class SimulationRunner {
   /**
    * Starts a simulation session for a room if not already running.
    */
-  public startSession(roomId: string, initialTopology: KafkaClusterState): void {
+  public startSession(roomId: string, domainId: string, initialTopology: any): void {
     if (this.activeSessions.has(roomId)) {
       return;
     }
@@ -94,6 +96,7 @@ export class SimulationRunner {
 
     const session: RoomSession = {
       roomId,
+      domainId,
       engine,
       tickCount: 0,
       timer: null,
@@ -157,7 +160,8 @@ export class SimulationRunner {
               engineEventPayload = {
                 groupId: intent.payload.groupId,
                 clientId: intent.payload.clientId,
-                memberId: intent.payload.memberId || `member-${Math.random().toString(36).substring(7)}`,
+                memberId:
+                  intent.payload.memberId || `member-${Math.random().toString(36).substring(7)}`,
                 topics: intent.payload.topics || ['orders'],
               };
             } else if (normalizedType === 'INTENT_CONSUMER_LEAVE') {
@@ -306,7 +310,10 @@ export class SimulationRunner {
             }
           }
         } catch (err) {
-          logger.warn({ err, roomId, rawSnippet: raw.substring(0, 100) }, 'Failed to parse or execute client intent');
+          logger.warn(
+            { err, roomId, rawSnippet: raw.substring(0, 100) },
+            'Failed to parse or execute client intent',
+          );
           captureException(err, { service: 'ws-gateway', roomId });
         }
       }
@@ -359,12 +366,15 @@ export class SimulationRunner {
             entry.nextFireTick = session.tickCount + entry.intervalTicks;
 
             const partitions = engine.state.topics[entry.topic] ?? [];
-            const activePartitions = partitions.filter(
-              (p) => p.leaderBrokerId && engine.state?.brokers[p.leaderBrokerId]?.status === 'ALIVE',
+            const activePartitions = partitions.filter((p: (typeof partitions)[number]) =>
+              Boolean(
+                p.leaderBrokerId && engine.state?.brokers[p.leaderBrokerId]?.status === 'ALIVE',
+              ),
             );
 
             if (activePartitions.length > 0) {
-              const targetPart = activePartitions[Math.floor(Math.random() * activePartitions.length)]!;
+              const targetPart =
+                activePartitions[Math.floor(Math.random() * activePartitions.length)]!;
               engine.scheduleEvent(
                 engine.currentTick,
                 `auto-${entry.producerId}-${String(session.tickCount)}`,

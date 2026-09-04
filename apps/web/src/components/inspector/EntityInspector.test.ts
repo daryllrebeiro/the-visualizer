@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { getEntityEventLog, type InspectableEntity } from './EntityInspector';
+
 import type { EventLogItem } from '../../app/ws-client';
+import { type InspectableEntity, getEntityEventLog } from './EntityInspector';
 
 describe('Per-Entity Event Log Filtering (getEntityEventLog)', () => {
   const sampleLogs: EventLogItem[] = [
@@ -36,7 +37,8 @@ describe('Per-Entity Event Log Filtering (getEntityEventLog)', () => {
       id: 'evt-3',
       timestamp: 3000,
       tick: 30,
-      message: '[consumer-1] Dispatched: CONSUMER_JOIN on topic "orders" (group "order-processors")',
+      message:
+        '[consumer-1] Dispatched: CONSUMER_JOIN on topic "orders" (group "order-processors")',
       type: 'INFO',
       eventType: 'CONSUMER_JOINED',
       involvedEntities: [
@@ -63,7 +65,11 @@ describe('Per-Entity Event Log Filtering (getEntityEventLog)', () => {
   ];
 
   it('should correctly filter logs for a specific producer', () => {
-    const producerEntity: InspectableEntity = { type: 'producer', producerId: 'producer-1', topic: 'orders' };
+    const producerEntity: InspectableEntity = {
+      type: 'producer',
+      producerId: 'producer-1',
+      topic: 'orders',
+    };
     const filtered = getEntityEventLog(sampleLogs, producerEntity);
 
     // Should include evt-1 (produced by producer-1) and evt-3 (matches topic orders), but not producer-2 events
@@ -122,7 +128,11 @@ describe('Per-Entity Event Log Filtering (getEntityEventLog)', () => {
     const broker3Entity: InspectableEntity = { type: 'broker', brokerId: '3' };
     expect(getEntityEventLog(unannotatedLogs, broker3Entity).length).toBe(1);
 
-    const producerEntity: InspectableEntity = { type: 'producer', producerId: 'producer-1', topic: 'orders' };
+    const producerEntity: InspectableEntity = {
+      type: 'producer',
+      producerId: 'producer-1',
+      topic: 'orders',
+    };
     expect(getEntityEventLog(unannotatedLogs, producerEntity).length).toBe(1);
   });
 });

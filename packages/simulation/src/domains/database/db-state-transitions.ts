@@ -1,5 +1,4 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
-import { ConsistentHashRing, type RingToken } from './hash-ring.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import type {
   ConsistencyLevel,
   DBClusterState,
@@ -8,6 +7,7 @@ import type {
   DBValueRecord,
   HintedHandoffRecord,
 } from './db-types.js';
+import { ConsistentHashRing, type RingToken } from './hash-ring.js';
 
 export interface DBTransitionResult {
   nextState: DBClusterState;
@@ -47,6 +47,9 @@ export function createDefaultDBCluster(
     clusterId,
     tick: 0,
     rngState: 42,
+    fidelityMode: 'TEXTBOOK',
+    vnodesPerNode: 3,
+    hintedHandoffEnabled: true,
     replicationFactor,
     writeConsistency: 'QUORUM',
     readConsistency: 'QUORUM',
@@ -96,6 +99,30 @@ export function pureDBTransition(
     case 'DB_UPDATE_CONSISTENCY':
       handleUpdateConsistency(nextState, event);
       break;
+    case 'DB_CONFIGURE_FIDELITY': {
+      if (event.payload['fidelityMode'] !== undefined) {
+        nextState.fidelityMode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
+      }
+      if (event.payload['hintedHandoffEnabled'] !== undefined) {
+        nextState.hintedHandoffEnabled = Boolean(event.payload['hintedHandoffEnabled']);
+      }
+      if (event.payload['vnodesPerNode'] !== undefined) {
+        const vnodes = Number(event.payload['vnodesPerNode']);
+        nextState.vnodesPerNode = vnodes;
+        const ring = new ConsistentHashRing(vnodes);
+        for (const nId of Object.keys(nextState.nodes)) {
+          ring.addNode(nId);
+        }
+        nextState.ringTokens = [...ring.getRingTokens()];
+        for (const n of Object.values(nextState.nodes)) {
+          n.tokens = [];
+        }
+        for (const token of nextState.ringTokens) {
+          nextState.nodes[token.nodeId]?.tokens.push(token.token);
+        }
+      }
+      break;
+    }
   }
 
   nextState.rngState = rng.getState();
@@ -106,10 +133,15 @@ function getRequiredCount(level: ConsistencyLevel, replicationFactor: number): n
   switch (level) {
     case 'ONE':
       return 1;
+    case 'TWO':
+      return Math.min(2, replicationFactor);
+    case 'THREE':
+      return Math.min(3, replicationFactor);
     case 'ALL':
       return replicationFactor;
     case 'QUORUM':
     case 'LOCAL_QUORUM':
+    case 'EACH_QUORUM':
     default:
       return Math.floor(replicationFactor / 2) + 1;
   }
@@ -122,7 +154,8 @@ function handleWriteRequest(
 ): void {
   const key = String(event.payload['key'] ?? '');
   const value = String(event.payload['value'] ?? '');
-  const consistency = (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.writeConsistency;
+  const consistency =
+    (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.writeConsistency;
 
   if (!key) return;
 
@@ -160,7 +193,7 @@ function handleWriteRequest(
     if (node && node.status === 'ALIVE') {
       node.storage[key] = JSON.parse(JSON.stringify(newRecord)) as DBValueRecord;
       ackCount++;
-    } else if (coordinator && node && node.status === 'DOWN') {
+    } else if (state.hintedHandoffEnabled && coordinator && node && node.status === 'DOWN') {
       // Store hinted handoff on coordinator
       const hint: HintedHandoffRecord = {
         targetNodeId: nId,
@@ -190,7 +223,8 @@ function handleReadRequest(
   emittedEvents: DBSimEvent[],
 ): void {
   const key = String(event.payload['key'] ?? '');
-  const consistency = (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.readConsistency;
+  const consistency =
+    (event.payload['consistencyLevel'] as ConsistencyLevel | undefined) ?? state.readConsistency;
 
   if (!key) return;
 
@@ -303,7 +337,7 @@ function handleNodeJoin(state: DBClusterState, event: DBSimEvent): void {
   state.ringTokens = [...ring.getRingTokens()];
 
   // Rebalance: copy keys responsible under new tokens
-  const existingNodes = Object.values(state.nodes) as DBNode[];
+  const existingNodes = Object.values(state.nodes);
   for (const existingNode of existingNodes) {
     if (existingNode.id === nodeId) continue;
     for (const [key, record] of Object.entries(existingNode.storage)) {
@@ -360,7 +394,7 @@ function handleHintDeliver(state: DBClusterState, event: DBSimEvent): void {
   const targetNode = state.nodes[targetNodeId];
   if (!targetNode || targetNode.status !== 'ALIVE') return;
 
-  const sourceNodes = Object.values(state.nodes) as DBNode[];
+  const sourceNodes = Object.values(state.nodes);
   for (const sourceNode of sourceNodes) {
     if (sourceNode.id === targetNodeId) continue;
     const remainingHints: HintedHandoffRecord[] = [];

@@ -1,15 +1,10 @@
 import { K8sScheduler } from './k8s-scheduler.js';
-import type {
-  K8sClusterState,
-  K8sNode,
-  PodSpec,
-  ReplicaSetSpec,
-} from './k8s-types.js';
+import type { K8sClusterState } from './k8s-types.js';
 
 export function reconcileCluster(state: K8sClusterState): void {
   state.totalReconciliations++;
   const scheduler = new K8sScheduler();
-  const nodes = Object.values(state.nodes) as K8sNode[];
+  const nodes = Object.values(state.nodes);
 
   // 1. Deployment Controller: Reconcile Deployments -> ReplicaSets
   for (const dep of Object.values(state.deployments)) {
@@ -29,14 +24,14 @@ export function reconcileCluster(state: K8sClusterState): void {
     }
 
     // Handle Rolling Updates if older ReplicaSets exist
-    const depReplicaSets = (Object.values(state.replicaSets) as ReplicaSetSpec[]).filter(
+    const depReplicaSets = Object.values(state.replicaSets).filter(
       (rs) => rs.deploymentId === dep.id,
     );
 
     const oldRSs = depReplicaSets.filter((rs) => rs.revision < dep.currentRevision);
     if (oldRSs.length > 0) {
       // Rolling update progression: scale down old RSs, scale up new RS
-      const newRS = state.replicaSets[activeRSId]!;
+      const newRS = state.replicaSets[activeRSId];
       newRS.replicas = dep.replicas;
 
       for (const oldRS of oldRSs) {
@@ -49,7 +44,7 @@ export function reconcileCluster(state: K8sClusterState): void {
 
   // 2. ReplicaSet Controller: Reconcile ReplicaSets -> Pods
   for (const rs of Object.values(state.replicaSets)) {
-    const existingPods = (Object.values(state.pods) as PodSpec[]).filter(
+    const existingPods = Object.values(state.pods).filter(
       (p) => p.replicaSetId === rs.id && p.status !== 'Terminating' && p.status !== 'Failed',
     );
 
@@ -61,7 +56,7 @@ export function reconcileCluster(state: K8sClusterState): void {
         const podId = `pod-${rs.id}-${String(state.tick)}-${String(i + 1)}`;
         state.pods[podId] = {
           id: podId,
-          name: `${rs.name}-${String(Math.random().toString(36).substring(2, 6))}`,
+          name: `${rs.name}-${String(state.tick)}-${String(i + 1)}`,
           namespace: 'default',
           deploymentId: rs.deploymentId,
           replicaSetId: rs.id,
@@ -83,7 +78,10 @@ export function reconcileCluster(state: K8sClusterState): void {
         if (pod.nodeName) {
           const node = nodes.find((n) => n.name === pod.nodeName);
           if (node) {
-            node.allocated.cpuMillis = Math.max(0, node.allocated.cpuMillis - pod.resources.cpuMillis);
+            node.allocated.cpuMillis = Math.max(
+              0,
+              node.allocated.cpuMillis - pod.resources.cpuMillis,
+            );
             node.allocated.memoryMb = Math.max(0, node.allocated.memoryMb - pod.resources.memoryMb);
             node.podIds = node.podIds.filter((id) => id !== pod.id);
           }
@@ -94,7 +92,7 @@ export function reconcileCluster(state: K8sClusterState): void {
   }
 
   // 3. Scheduler Loop: Schedule Pending Pods onto available Nodes
-  const pendingPods = (Object.values(state.pods) as PodSpec[]).filter((p) => p.status === 'Pending');
+  const pendingPods = Object.values(state.pods).filter((p) => p.status === 'Pending');
 
   for (const pod of pendingPods) {
     const decision = scheduler.schedule(pod, nodes);

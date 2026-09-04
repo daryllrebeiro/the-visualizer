@@ -240,7 +240,7 @@ describe('SimulationEngine state transitions & snapshots', () => {
     });
 
     // Create a second topic "payments"
-    engine.scheduleEvent(5, 'topic-evt', 'TOPIC_CREATED' as any, {
+    engine.scheduleEvent(5, 'topic-evt', 'TOPIC_CREATED', {
       topic: 'payments',
       partitions: 1,
     });
@@ -293,9 +293,18 @@ describe('SimulationEngine state transitions & snapshots', () => {
     });
 
     // Crash all 3 brokers in the cluster
-    engine.scheduleEvent(10, 'crash-1', 'BROKER_STATUS_CHANGED', { brokerId: 'broker-1', status: 'CRASHED' });
-    engine.scheduleEvent(11, 'crash-2', 'BROKER_STATUS_CHANGED', { brokerId: 'broker-2', status: 'CRASHED' });
-    engine.scheduleEvent(12, 'crash-3', 'BROKER_STATUS_CHANGED', { brokerId: 'broker-3', status: 'CRASHED' });
+    engine.scheduleEvent(10, 'crash-1', 'BROKER_STATUS_CHANGED', {
+      brokerId: 'broker-1',
+      status: 'CRASHED',
+    });
+    engine.scheduleEvent(11, 'crash-2', 'BROKER_STATUS_CHANGED', {
+      brokerId: 'broker-2',
+      status: 'CRASHED',
+    });
+    engine.scheduleEvent(12, 'crash-3', 'BROKER_STATUS_CHANGED', {
+      brokerId: 'broker-3',
+      status: 'CRASHED',
+    });
 
     engine.step(20);
 
@@ -309,7 +318,7 @@ describe('SimulationEngine state transitions & snapshots', () => {
   });
 
   it('should support dynamic broker addition', () => {
-    engine.scheduleEvent(10, 'add-b4', 'BROKER_ADDED' as any, {
+    engine.scheduleEvent(10, 'add-b4', 'BROKER_ADDED', {
       brokerId: 'broker-4',
       rack: 'rack-a',
     });

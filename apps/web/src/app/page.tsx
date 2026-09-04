@@ -3,75 +3,116 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
-
 import {
-  Visualizer,
-  type ProducerConfig,
+  type CdnCacheClusterState,
+  CdnCacheInvariantChecker,
+  type CdnCacheSimEvent,
+  type ConsistencyLevel,
+  type DBClusterState,
+  DBInvariantChecker,
+  type DBSimEvent,
+  DeterministicRNG,
+  type DistributedLockClusterState,
+  DistributedLockInvariantChecker,
+  type DistributedLockSimEvent,
+  type EvictionPolicy,
+  type IdGenClusterState,
+  IdGenInvariantChecker,
+  type IdGenSimEvent,
+  type IdGeneratorType,
+  InvariantChecker,
+  type InvariantViolationReport,
+  type K8sClusterState,
+  K8sInvariantChecker,
+  type K8sSimEvent,
+  NetworkInvariantChecker,
+  type NetworkSimEvent,
+  type NetworkingClusterState,
+  type ParsedTraceResult,
+  type RabbitClusterState,
+  RabbitInvariantChecker,
+  type RabbitSimEvent,
+  type RaftClusterState,
+  RaftInvariantChecker,
+  type RaftSimEvent,
+  type RateLimiterAlgorithm,
+  type RateLimiterBackendMode,
+  type RateLimiterClusterState,
+  RateLimiterInvariantChecker,
+  type RateLimiterSimEvent,
+  type ReconstitutedStepMetadata,
+  type RedisClusterState,
+  RedisInvariantChecker,
+  type RedisSimEvent,
+  type SimEvent,
+  SimulationReconstitutor,
+  type StorageEngineClusterState,
+  type StorageEngineType,
+  StorageInvariantChecker,
+  type StorageSimEvent,
+  type TransactionProtocol,
+  type TransactionsClusterState,
+  TransactionsInvariantChecker,
+  type TransactionsSimEvent,
+  createDefaultBaselineState,
+  createDefaultCdnCacheCluster,
+  createDefaultDBCluster,
+  createDefaultDistributedLockCluster,
+  createDefaultIdGenCluster,
+  createDefaultK8sCluster,
+  createDefaultNetworkingCluster,
+  createDefaultRabbitCluster,
+  createDefaultRaftCluster,
+  createDefaultRateLimiterCluster,
+  createDefaultRedisCluster,
+  createDefaultStorageCluster,
+  createDefaultTransactionsCluster,
+  pureCdnCacheTransition,
+  pureDBTransition,
+  pureDistributedLockTransition,
+  pureIdGenTransition,
+  pureK8sTransition,
+  pureNetworkingTransition,
+  pureRabbitTransition,
+  pureRaftTransition,
+  pureRateLimiterTransition,
+  pureRedisTransition,
+  pureStateTransition,
+  pureStorageTransition,
+  pureTransactionsTransition,
+} from '@the-visualizer/simulation';
+import { DataTableModal, OnboardingTour } from '@the-visualizer/ui';
+
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { CdnCacheVisualizer } from '../components/cdn-cache/CdnCacheVisualizer';
+import { HashRingVisualizer } from '../components/database/HashRingVisualizer';
+import { DistributedLockVisualizer } from '../components/distributed-lock/DistributedLockVisualizer';
+import { DomainDirectoryModal } from '../components/domains/DomainDirectoryModal';
+import { IdGenVisualizer } from '../components/id-gen/IdGenVisualizer';
+import { EntityInspector, type InspectableEntity } from '../components/inspector/EntityInspector';
+import { K8sClusterVisualizer } from '../components/kubernetes/K8sClusterVisualizer';
+import { NetworkingVisualizer } from '../components/networking/NetworkingVisualizer';
+import { RabbitMQVisualizer } from '../components/rabbitmq/RabbitMQVisualizer';
+import { RaftVisualizer } from '../components/raft/RaftVisualizer';
+import { RateLimiterVisualizer } from '../components/rate-limiter/RateLimiterVisualizer';
+import { RedisClusterVisualizer } from '../components/redis/RedisClusterVisualizer';
+import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
+import { TraceImportModal } from '../components/scenarios/TraceImportModal';
+import { StorageEngineVisualizer } from '../components/storage/StorageEngineVisualizer';
+import { TransactionsVisualizer } from '../components/transactions/TransactionsVisualizer';
+import {
   type ConsumerConfig,
   type HoverDetails,
   type ProduceTrigger,
+  type ProducerConfig,
+  Visualizer,
 } from './visualizer';
-import { type ConnectionStatus, type EntityRef, type EventLogItem, WebSocketClient } from './ws-client';
-import { EntityInspector, type InspectableEntity } from '../components/inspector/EntityInspector';
-import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
-import { TraceImportModal } from '../components/scenarios/TraceImportModal';
-import { RaftVisualizer } from '../components/raft/RaftVisualizer';
-import { HashRingVisualizer } from '../components/database/HashRingVisualizer';
-import { RedisClusterVisualizer } from '../components/redis/RedisClusterVisualizer';
-import { K8sClusterVisualizer } from '../components/kubernetes/K8sClusterVisualizer';
-import { RabbitMQVisualizer } from '../components/rabbitmq/RabbitMQVisualizer';
-import { StorageEngineVisualizer } from '../components/storage/StorageEngineVisualizer';
-import { NetworkingVisualizer } from '../components/networking/NetworkingVisualizer';
-import { DomainDirectoryModal } from '../components/domains/DomainDirectoryModal';
 import {
-  SimulationReconstitutor,
-  type ReconstitutedStepMetadata,
-  type ParsedTraceResult,
-  type InvariantViolationReport,
-  createDefaultRaftCluster,
-  pureRaftTransition,
-  RaftInvariantChecker,
-  type RaftClusterState,
-  type RaftSimEvent,
-  createDefaultDBCluster,
-  pureDBTransition,
-  DBInvariantChecker,
-  type DBClusterState,
-  type DBSimEvent,
-  type ConsistencyLevel,
-  createDefaultRedisCluster,
-  pureRedisTransition,
-  RedisInvariantChecker,
-  type RedisClusterState,
-  type RedisSimEvent,
-  type EvictionPolicy,
-  createDefaultK8sCluster,
-  pureK8sTransition,
-  K8sInvariantChecker,
-  type K8sClusterState,
-  type K8sSimEvent,
-  createDefaultBaselineState,
-  pureStateTransition,
-  InvariantChecker,
-  type SimEvent,
-  createDefaultRabbitCluster,
-  pureRabbitTransition,
-  RabbitInvariantChecker,
-  type RabbitClusterState,
-  type RabbitSimEvent,
-  createDefaultStorageCluster,
-  pureStorageTransition,
-  StorageInvariantChecker,
-  type StorageEngineClusterState,
-  type StorageSimEvent,
-  type StorageEngineType,
-  createDefaultNetworkingCluster,
-  pureNetworkingTransition,
-  NetworkInvariantChecker,
-  type NetworkingClusterState,
-  type NetworkSimEvent,
-  DeterministicRNG,
-} from '@the-visualizer/simulation';
+  type ConnectionStatus,
+  type EntityRef,
+  type EventLogItem,
+  WebSocketClient,
+} from './ws-client';
 
 /* ─── helpers ─── */
 function statusDotClass(s: ConnectionStatus): string {
@@ -96,14 +137,47 @@ function logBadgeClass(type: EventLogItem['type']): string {
 
 /* ─── stat tile config ─── */
 const STAT_TILES = [
-  { key: 'tick', label: 'Live Tick', tile: 'stat-tile stat-tile--amber', value: 'stat-tile__value stat-tile__value--amber' },
-  { key: 'ctrl', label: 'Controller', tile: 'stat-tile stat-tile--amber', value: 'stat-tile__value stat-tile__value--brown' },
-  { key: 'alive', label: 'Alive Brokers', tile: 'stat-tile stat-tile--green', value: 'stat-tile__value stat-tile__value--green' },
-  { key: 'crashed', label: 'Crashed Nodes', tile: 'stat-tile stat-tile--rose', value: 'stat-tile__value stat-tile__value--rose' },
+  {
+    key: 'tick',
+    label: 'Live Tick',
+    tile: 'stat-tile stat-tile--amber',
+    value: 'stat-tile__value stat-tile__value--amber',
+  },
+  {
+    key: 'ctrl',
+    label: 'Controller',
+    tile: 'stat-tile stat-tile--amber',
+    value: 'stat-tile__value stat-tile__value--brown',
+  },
+  {
+    key: 'alive',
+    label: 'Alive Brokers',
+    tile: 'stat-tile stat-tile--green',
+    value: 'stat-tile__value stat-tile__value--green',
+  },
+  {
+    key: 'crashed',
+    label: 'Crashed Nodes',
+    tile: 'stat-tile stat-tile--rose',
+    value: 'stat-tile__value stat-tile__value--rose',
+  },
 ] as const;
 
 /* ─── Domain configuration ─── */
-export type DomainKey = 'kafka' | 'raft' | 'database' | 'redis' | 'kubernetes' | 'rabbitmq' | 'storage' | 'networking';
+export type DomainKey =
+  | 'kafka'
+  | 'raft'
+  | 'database'
+  | 'redis'
+  | 'kubernetes'
+  | 'rabbitmq'
+  | 'storage'
+  | 'networking'
+  | 'rate-limiter'
+  | 'distributed-lock'
+  | 'cdn-cache'
+  | 'id-gen'
+  | 'transactions';
 
 export const DOMAIN_OPTIONS: ReadonlyArray<{
   id: DomainKey;
@@ -113,17 +187,117 @@ export const DOMAIN_OPTIONS: ReadonlyArray<{
   path: string;
   color: string;
 }> = [
-  { id: 'kafka', name: 'Apache Kafka', icon: '⚡', category: 'Streaming & KRaft', path: '/kafka', color: '#6366f1' },
-  { id: 'raft', name: 'Raft Consensus', icon: '🛡️', category: 'Leader Election & Quorum', path: '/raft', color: '#eab308' },
-  { id: 'database', name: 'Distributed DB', icon: '🗄️', category: 'Consistent Hashing & Dynamo', path: '/database', color: '#10b981' },
-  { id: 'redis', name: 'Redis Cluster', icon: '⚡', category: 'CRC16 Slots & Evictions', path: '/redis', color: '#ef4444' },
-  { id: 'kubernetes', name: 'Kubernetes', icon: '☸️', category: 'Reconciliation & Scheduling', path: '/kubernetes', color: '#3b82f6' },
-  { id: 'rabbitmq', name: 'RabbitMQ', icon: '🐇', category: 'AMQP & Dead Letter Queues', path: '/rabbitmq', color: '#f97316' },
-  { id: 'storage', name: 'Storage Engine', icon: '💾', category: 'B+ Tree vs LSM Compaction', path: '/storage', color: '#14b8a6' },
-  { id: 'networking', name: 'TCP Networking', icon: '🌐', category: '3-Way Handshake & AIMD', path: '/networking', color: '#06b6d4' },
-] as const;
+  {
+    id: 'kafka',
+    name: 'Apache Kafka',
+    icon: '⚡',
+    category: 'Streaming & KRaft',
+    path: '/kafka',
+    color: '#6366f1',
+  },
+  {
+    id: 'raft',
+    name: 'Raft Consensus',
+    icon: '🛡️',
+    category: 'Leader Election & Quorum',
+    path: '/raft',
+    color: '#eab308',
+  },
+  {
+    id: 'database',
+    name: 'Distributed DB',
+    icon: '🗄️',
+    category: 'Consistent Hashing & Dynamo',
+    path: '/database',
+    color: '#10b981',
+  },
+  {
+    id: 'redis',
+    name: 'Redis Cluster',
+    icon: '⚡',
+    category: 'CRC16 Slots & Evictions',
+    path: '/redis',
+    color: '#ef4444',
+  },
+  {
+    id: 'kubernetes',
+    name: 'Kubernetes',
+    icon: '☸️',
+    category: 'Reconciliation & Scheduling',
+    path: '/kubernetes',
+    color: '#3b82f6',
+  },
+  {
+    id: 'rabbitmq',
+    name: 'RabbitMQ',
+    icon: '🐇',
+    category: 'AMQP & Dead Letter Queues',
+    path: '/rabbitmq',
+    color: '#f97316',
+  },
+  {
+    id: 'storage',
+    name: 'Storage Engine',
+    icon: '💾',
+    category: 'B+ Tree vs LSM Compaction',
+    path: '/storage',
+    color: '#14b8a6',
+  },
+  {
+    id: 'networking',
+    name: 'TCP Networking',
+    icon: '🌐',
+    category: '3-Way Handshake & AIMD',
+    path: '/networking',
+    color: '#06b6d4',
+  },
+  {
+    id: 'rate-limiter',
+    name: 'Rate Limiter',
+    icon: '⏱️',
+    category: 'Token Bucket & Sliding Log',
+    path: '/rate-limiter',
+    color: '#0ea5e9',
+  },
+  {
+    id: 'distributed-lock',
+    name: 'Distributed Lock',
+    icon: '🔒',
+    category: 'Redlock Quorum & Fencing',
+    path: '/distributed-lock',
+    color: '#f59e0b',
+  },
+  {
+    id: 'cdn-cache',
+    name: 'CDN Cache',
+    icon: '🌍',
+    category: 'Edge PoPs & HTTP Caching',
+    path: '/cdn-cache',
+    color: '#10b981',
+  },
+  {
+    id: 'id-gen',
+    name: 'ID Generation',
+    icon: '🔢',
+    category: 'Snowflake & Monotonic UUID',
+    path: '/id-gen',
+    color: '#8b5cf6',
+  },
+  {
+    id: 'transactions',
+    name: 'Distributed Txns',
+    icon: '🔄',
+    category: '2PC Hazard vs Saga Orchestration',
+    path: '/transactions',
+    color: '#ec4899',
+  },
+];
 
-export default function Page({ initialDomain = 'kafka' }: { initialDomain?: DomainKey }): React.JSX.Element {
+export default function Page({
+  initialDomain = 'kafka',
+}: {
+  initialDomain?: DomainKey;
+}): React.JSX.Element {
   const [restUrl, setRestUrl] = useState('http://localhost:3000');
   const [wsUrl, setWsUrl] = useState('ws://localhost:3001');
   const [roomId, setRoomId] = useState('room-1');
@@ -131,8 +305,12 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
   const [status, setStatus] = useState<ConnectionStatus>('DISCONNECTED');
   const connected = status === 'CONNECTED';
-  const [liveState, setLiveState] = useState<KafkaClusterState | null>(() => createDefaultBaselineState() as unknown as KafkaClusterState);
-  const [renderedState, setRenderedState] = useState<KafkaClusterState | null>(() => createDefaultBaselineState() as unknown as KafkaClusterState);
+  const [liveState, setLiveState] = useState<KafkaClusterState | null>(
+    () => createDefaultBaselineState() as unknown as KafkaClusterState,
+  );
+  const [renderedState, setRenderedState] = useState<KafkaClusterState | null>(
+    () => createDefaultBaselineState() as unknown as KafkaClusterState,
+  );
   const [eventLogs, setEventLogs] = useState<EventLogItem[]>([]);
   const [hoverDetails, setHoverDetails] = useState<HoverDetails | null>(null);
 
@@ -172,7 +350,13 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
   const [customConsumerGroup, setCustomConsumerGroup] = useState('');
 
   const [consumers, setConsumers] = useState<ConsumerConfig[]>([
-    { id: 'consumer-1', topic: 'orders', groupId: 'order-processors', joined: false, memberId: null },
+    {
+      id: 'consumer-1',
+      topic: 'orders',
+      groupId: 'order-processors',
+      joined: false,
+      memberId: null,
+    },
   ]);
 
   const [inspectEntity, setInspectEntity] = useState<InspectableEntity | null>(null);
@@ -186,15 +370,21 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
   const kafkaRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const kafkaInvariantCheckerRef = useRef<InvariantChecker>(new InvariantChecker());
 
-  const [raftState, setRaftState] = useState<RaftClusterState>(() => createDefaultRaftCluster('raft-1', 5, 42));
+  const [raftState, setRaftState] = useState<RaftClusterState>(() =>
+    createDefaultRaftCluster('raft-1', 5, 42),
+  );
   const raftRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const raftInvariantCheckerRef = useRef<RaftInvariantChecker>(new RaftInvariantChecker());
 
-  const [dbState, setDbState] = useState<DBClusterState>(() => createDefaultDBCluster('db-1', 4, 3));
+  const [dbState, setDbState] = useState<DBClusterState>(() =>
+    createDefaultDBCluster('db-1', 4, 3),
+  );
   const dbRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const dbInvariantCheckerRef = useRef<DBInvariantChecker>(new DBInvariantChecker());
 
-  const [redisState, setRedisState] = useState<RedisClusterState>(() => createDefaultRedisCluster());
+  const [redisState, setRedisState] = useState<RedisClusterState>(() =>
+    createDefaultRedisCluster(),
+  );
   const redisRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const redisInvariantCheckerRef = useRef<RedisInvariantChecker>(new RedisInvariantChecker());
 
@@ -202,28 +392,80 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
   const k8sRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const k8sInvariantCheckerRef = useRef<K8sInvariantChecker>(new K8sInvariantChecker());
 
-  const [rabbitState, setRabbitState] = useState<RabbitClusterState>(() => createDefaultRabbitCluster());
+  const [rabbitState, setRabbitState] = useState<RabbitClusterState>(() =>
+    createDefaultRabbitCluster(),
+  );
   const rabbitRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const rabbitInvariantCheckerRef = useRef<RabbitInvariantChecker>(new RabbitInvariantChecker());
 
-  const [storageState, setStorageState] = useState<StorageEngineClusterState>(() => createDefaultStorageCluster());
+  const [storageState, setStorageState] = useState<StorageEngineClusterState>(() =>
+    createDefaultStorageCluster(),
+  );
   const storageRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const storageInvariantCheckerRef = useRef<StorageInvariantChecker>(new StorageInvariantChecker());
 
-  const [networkingState, setNetworkingState] = useState<NetworkingClusterState>(() => createDefaultNetworkingCluster());
+  const [networkingState, setNetworkingState] = useState<NetworkingClusterState>(() =>
+    createDefaultNetworkingCluster(),
+  );
   const networkingRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
-  const networkingInvariantCheckerRef = useRef<NetworkInvariantChecker>(new NetworkInvariantChecker());
+  const networkingInvariantCheckerRef = useRef<NetworkInvariantChecker>(
+    new NetworkInvariantChecker(),
+  );
+
+  const [rateLimiterState, setRateLimiterState] = useState<RateLimiterClusterState>(() =>
+    createDefaultRateLimiterCluster(),
+  );
+  const rateLimiterRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const rateLimiterInvariantCheckerRef = useRef<RateLimiterInvariantChecker>(
+    new RateLimiterInvariantChecker(),
+  );
+
+  const [distLockState, setDistLockState] = useState<DistributedLockClusterState>(() =>
+    createDefaultDistributedLockCluster(),
+  );
+  const distLockRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const distLockInvariantCheckerRef = useRef<DistributedLockInvariantChecker>(
+    new DistributedLockInvariantChecker(),
+  );
+
+  const [cdnCacheState, setCdnCacheState] = useState<CdnCacheClusterState>(() =>
+    createDefaultCdnCacheCluster(),
+  );
+  const cdnCacheRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const cdnCacheInvariantCheckerRef = useRef<CdnCacheInvariantChecker>(
+    new CdnCacheInvariantChecker(),
+  );
+
+  const [idGenState, setIdGenState] = useState<IdGenClusterState>(() =>
+    createDefaultIdGenCluster(),
+  );
+  const idGenRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const idGenInvariantCheckerRef = useRef<IdGenInvariantChecker>(new IdGenInvariantChecker());
+
+  const [txnState, setTxnState] = useState<TransactionsClusterState>(() =>
+    createDefaultTransactionsCluster(),
+  );
+  const txnRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const txnInvariantCheckerRef = useRef<TransactionsInvariantChecker>(
+    new TransactionsInvariantChecker(),
+  );
 
   // Offline Reconstitution State
   const [isOfflineReconstituted, setIsOfflineReconstituted] = useState(false);
-  const [reconstitutedTimeline, setReconstitutedTimeline] = useState<readonly ReconstitutedStepMetadata[]>([]);
-  const [reconstitutedViolations, setReconstitutedViolations] = useState<readonly InvariantViolationReport[]>([]);
+  const [reconstitutedTimeline, setReconstitutedTimeline] = useState<
+    readonly ReconstitutedStepMetadata[]
+  >([]);
+  const [reconstitutedViolations, setReconstitutedViolations] = useState<
+    readonly InvariantViolationReport[]
+  >([]);
   const [currentReconstitutedStep, setCurrentReconstitutedStep] = useState(0);
   const reconstitutorRef = useRef<SimulationReconstitutor | null>(null);
 
   const clientRef = useRef<WebSocketClient | null>(null);
 
-  useEffect(() => { void handleSandboxLogin(); }, []);
+  useEffect(() => {
+    void handleSandboxLogin();
+  }, []);
 
   // Raft Consensus Simulation Loop
   useEffect(() => {
@@ -310,6 +552,121 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     return () => clearInterval(interval);
   }, [selectedDomain, isPaused]);
 
+  // Rate Limiter Simulation Loop (Refill tokens / Advance time)
+  useEffect(() => {
+    if (selectedDomain !== 'rate-limiter' || isPaused) return;
+    const interval = setInterval(() => {
+      setRateLimiterState((prev) => {
+        const ev: RateLimiterSimEvent = {
+          id: `rl-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'RATE_LIMITER_TICK',
+          payload: {},
+        };
+        const res = pureRateLimiterTransition(prev, ev, rateLimiterRngRef.current);
+        const violation = rateLimiterInvariantCheckerRef.current.check(res.nextState);
+        if (violation && !violation.isPedagogicalFlaw) {
+          setIsHalted(true);
+          setHaltError(`[RateLimiter ${violation.ruleId}] ${violation.description}`);
+        }
+        return res.nextState;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // Distributed Lock Simulation Loop (Expire Lock TTLs / Advance time)
+  useEffect(() => {
+    if (selectedDomain !== 'distributed-lock' || isPaused) return;
+    const interval = setInterval(() => {
+      setDistLockState((prev) => {
+        const ev: DistributedLockSimEvent = {
+          id: `lock-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'LOCK_TICK',
+          payload: {},
+        };
+        const res = pureDistributedLockTransition(prev, ev, distLockRngRef.current);
+        const violation = distLockInvariantCheckerRef.current.check(res.nextState);
+        if (violation && !violation.isPedagogicalFlaw) {
+          setIsHalted(true);
+          setHaltError(`[DistLock ${violation.ruleId}] ${violation.description}`);
+        }
+        return res.nextState;
+      });
+    }, 500);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // CDN Cache Simulation Loop (Age Cache Entries / Invalidate TTLs)
+  useEffect(() => {
+    if (selectedDomain !== 'cdn-cache' || isPaused) return;
+    const interval = setInterval(() => {
+      setCdnCacheState((prev) => {
+        const ev: CdnCacheSimEvent = {
+          id: `cdn-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'CDN_TICK',
+          payload: {},
+        };
+        const res = pureCdnCacheTransition(prev, ev, cdnCacheRngRef.current);
+        const violation = cdnCacheInvariantCheckerRef.current.check(res.nextState);
+        if (violation && !violation.isPedagogicalFlaw) {
+          setIsHalted(true);
+          setHaltError(`[CDN ${violation.ruleId}] ${violation.description}`);
+        }
+        return res.nextState;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // ID Generation Simulation Loop (Clock sync / Tick)
+  useEffect(() => {
+    if (selectedDomain !== 'id-gen' || isPaused) return;
+    const interval = setInterval(() => {
+      setIdGenState((prev) => {
+        const ev: IdGenSimEvent = {
+          id: `id-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'ID_GEN_TICK',
+          payload: {},
+        };
+        const res = pureIdGenTransition(prev, ev, idGenRngRef.current);
+        const violation = idGenInvariantCheckerRef.current.check(res.nextState);
+        if (violation && !violation.isPedagogicalFlaw) {
+          setIsHalted(true);
+          setHaltError(`[IdGen ${violation.ruleId}] ${violation.description}`);
+        }
+        return res.nextState;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // Transactions Simulation Loop (2PC Coordinator Timeout Checks)
+  useEffect(() => {
+    if (selectedDomain !== 'transactions' || isPaused) return;
+    const interval = setInterval(() => {
+      setTxnState((prev) => {
+        const ev: TransactionsSimEvent = {
+          id: `txn-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'TXN_TICK',
+          payload: {},
+        };
+        const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+        const violation = txnInvariantCheckerRef.current.check(res.nextState);
+        if (violation && !violation.isPedagogicalFlaw) {
+          setIsHalted(true);
+          setHaltError(`[Txn ${violation.ruleId}] ${violation.description}`);
+        }
+        return res.nextState;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
   useEffect(() => {
     if (!liveState) return;
     setStateHistory((prev) => {
@@ -344,9 +701,14 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
   /* ── connection ── */
   const handleConnect = (): void => {
     if (clientRef.current) clientRef.current.disconnect();
-    if (!token) { addLog('Cannot connect: auth token missing.', 'ERROR'); return; }
-    setIsHalted(false); setHaltError(null); setStateHistory([]);
-    const client = new WebSocketClient(wsUrl, token, roomId, {
+    if (!token) {
+      addLog('Cannot connect: auth token missing.', 'ERROR');
+      return;
+    }
+    setIsHalted(false);
+    setHaltError(null);
+    setStateHistory([]);
+    const client = new WebSocketClient(wsUrl, token, roomId, selectedDomain, {
       onStateChange: (s) => {
         setLiveState({ ...s });
       },
@@ -366,8 +728,13 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
           });
         }
       },
-      onHalt: (e) => { setIsHalted(true); setHaltError(e); },
-      onEventLog: (l) => { setEventLogs((p) => [l, ...p].slice(0, 100)); },
+      onHalt: (e) => {
+        setIsHalted(true);
+        setHaltError(e);
+      },
+      onEventLog: (l) => {
+        setEventLogs((p) => [l, ...p].slice(0, 100));
+      },
     });
     clientRef.current = client;
     client.connect();
@@ -392,7 +759,12 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       if (!res.ok) throw new Error(`HTTP ${String(res.status)}`);
       const data = (await res.json()) as { success: boolean; token?: string; user?: unknown };
       const t = data.token;
-      if (t) { setToken(t); setAuthReady(true); setAuthError(null); addLog('Credentials loaded — ready to connect.', 'SUCCESS'); }
+      if (t) {
+        setToken(t);
+        setAuthReady(true);
+        setAuthError(null);
+        addLog('Credentials loaded — ready to connect.', 'SUCCESS');
+      }
     } catch {
       // Standalone cloud / in-browser sandbox fallback
       const fallbackToken = 'sandbox-token-' + Math.random().toString(36).substring(2, 10);
@@ -413,19 +785,21 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       payload?: Record<string, unknown>;
     },
   ): void => {
-    setEventLogs((p) => [
-      {
-        id: Math.random().toString(36).substring(7),
-        timestamp: Date.now(),
-        tick: meta?.tick ?? liveState?.tick ?? 0,
-        message,
-        type,
-        eventType: meta?.eventType,
-        involvedEntities: meta?.involvedEntities ?? [],
-        payload: meta?.payload,
-      },
-      ...p,
-    ].slice(0, 1000));
+    setEventLogs((p) =>
+      [
+        {
+          id: Math.random().toString(36).substring(7),
+          timestamp: Date.now(),
+          tick: meta?.tick ?? liveState?.tick ?? 0,
+          message,
+          type,
+          eventType: meta?.eventType,
+          involvedEntities: meta?.involvedEntities ?? [],
+          payload: meta?.payload,
+        },
+        ...p,
+      ].slice(0, 1000),
+    );
   };
 
   /* ── sim actions ── */
@@ -443,9 +817,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     const finalTopic = topicsList.includes(topic) ? topic : topicsList[0]!;
 
     const partitions = liveState.topics[finalTopic] || [];
-    const partition = partitions.length > 0
-      ? partitions[Math.floor(Math.random() * partitions.length)]!.partition
-      : 0;
+    const partition =
+      partitions.length > 0
+        ? partitions[Math.floor(Math.random() * partitions.length)]!.partition
+        : 0;
 
     const activePartition = partitions.find((p) => p.partition === partition);
     const leaderId = activePartition?.leaderBrokerId ?? '1';
@@ -509,7 +884,28 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       }
       setLiveState(res.nextState as unknown as KafkaClusterState);
       setRenderedState(res.nextState as unknown as KafkaClusterState);
-      addLog(`[${targetProd.id}] Produced record to ${finalTopic}/p-${String(partition)} (Offset #${nextOffset})`, 'SUCCESS');
+
+      const failedEv = res.emittedEvents.find((e) => e.type === ('RECORD_PRODUCED_FAILED' as any));
+      const dupEv = res.emittedEvents.find(
+        (e) => e.type === ('RECORD_PRODUCED_DUPLICATE_IGNORED' as any),
+      );
+
+      if (failedEv) {
+        addLog(
+          `[${targetProd.id}] ❌ Produce REJECTED: ${String(failedEv.payload['error'])} (|ISR|=${String(failedEv.payload['isrLength'])} < min.insync.replicas=${String(failedEv.payload['minInsyncReplicas'])})`,
+          'WARN',
+        );
+      } else if (dupEv) {
+        addLog(
+          `[${targetProd.id}] ⚠️ Record ignored: duplicate sequence number #${String(dupEv.payload['sequenceNumber'])} (KIP-98 deduplication)`,
+          'WARN',
+        );
+      } else {
+        addLog(
+          `[${targetProd.id}] Produced record to ${finalTopic}/p-${String(partition)} (Offset #${nextOffset})`,
+          'SUCCESS',
+        );
+      }
     }
   };
 
@@ -578,7 +974,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
           return { ...p, topic: newTopic };
         }
         return p;
-      })
+      }),
     );
     addLog(`Updated Producer "${id}" target topic to "${newTopic}"`, 'INFO');
   };
@@ -614,12 +1010,15 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
           return { ...p, autoProduceEnabled: nextEnabled };
         }
         return p;
-      })
+      }),
     );
   };
 
   const handleAutoProduceIntervalChange = (id: string, intervalSeconds: number): void => {
-    const clamped = Math.max(0.5, Math.min(30.0, Number.isFinite(intervalSeconds) ? intervalSeconds : 3.0));
+    const clamped = Math.max(
+      0.5,
+      Math.min(30.0, Number.isFinite(intervalSeconds) ? intervalSeconds : 3.0),
+    );
     setProducers((prev) =>
       prev.map((p) => {
         if (p.id === id) {
@@ -634,7 +1033,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
           return { ...p, autoProduceInterval: clamped };
         }
         return p;
-      })
+      }),
     );
   };
 
@@ -658,10 +1057,16 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         topics: [topic],
       });
       setConsumers((c) => [...c, { id: newId, topic, groupId, joined: true, memberId: newId }]);
-      addLog(`Created & Joined Consumer "${newId}" for topic "${topic}" in group "${groupId}"`, 'INFO');
+      addLog(
+        `Created & Joined Consumer "${newId}" for topic "${topic}" in group "${groupId}"`,
+        'INFO',
+      );
     } else {
       setConsumers((c) => [...c, { id: newId, topic, groupId, joined: false, memberId: null }]);
-      addLog(`Created Consumer "${newId}" configured for topic "${topic}" in group "${groupId}"`, 'INFO');
+      addLog(
+        `Created Consumer "${newId}" configured for topic "${topic}" in group "${groupId}"`,
+        'INFO',
+      );
     }
 
     setShowAddConsumerModal(false);
@@ -685,9 +1090,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
   };
 
   const handleConsumerTopicChange = (id: string, newTopic: string): void => {
-    setConsumers((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, topic: newTopic } : c))
-    );
+    setConsumers((prev) => prev.map((c) => (c.id === id ? { ...c, topic: newTopic } : c)));
     addLog(`Updated Consumer "${id}" target topic to "${newTopic}"`, 'INFO');
   };
 
@@ -703,9 +1106,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       topics: [cConfig.topic],
     });
 
-    setConsumers((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, joined: true, memberId } : c))
-    );
+    setConsumers((prev) => prev.map((c) => (c.id === id ? { ...c, joined: true, memberId } : c)));
     addLog(
       `[${id}] Dispatched: CONSUMER_JOIN on topic "${cConfig.topic}" (group "${cConfig.groupId}")`,
       'INFO',
@@ -733,55 +1134,43 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
     const leavingMemberId = cConfig.memberId;
     setConsumers((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, joined: false, memberId: null } : c))
+      prev.map((c) => (c.id === id ? { ...c, joined: false, memberId: null } : c)),
     );
-    addLog(
-      `[${id}] Dispatched: CONSUMER_LEAVE (group "${cConfig.groupId}")`,
-      'INFO',
-      {
-        eventType: 'CONSUMER_LEFT',
-        involvedEntities: [
-          { type: 'consumer', id: leavingMemberId },
-          { type: 'consumer', id: id },
-          { type: 'consumerGroup', id: cConfig.groupId },
-        ],
-        payload: { memberId: leavingMemberId, clientId: id, groupId: cConfig.groupId },
-      },
-    );
+    addLog(`[${id}] Dispatched: CONSUMER_LEAVE (group "${cConfig.groupId}")`, 'INFO', {
+      eventType: 'CONSUMER_LEFT',
+      involvedEntities: [
+        { type: 'consumer', id: leavingMemberId },
+        { type: 'consumer', id: id },
+        { type: 'consumerGroup', id: cConfig.groupId },
+      ],
+      payload: { memberId: leavingMemberId, clientId: id, groupId: cConfig.groupId },
+    });
   };
 
   const handleCrashSpecificBroker = (brokerId: string): void => {
     if (!liveState || !clientRef.current) return;
     clientRef.current.sendIntent('CHAOS_KILL_BROKER', { brokerId });
-    addLog(
-      `💥 Chaos triggered: Crashed Broker Node #${brokerId}`,
-      'WARN',
-      {
-        eventType: 'BROKER_STATUS_CHANGED',
-        involvedEntities: [
-          { type: 'broker', id: brokerId },
-          { type: 'controller', id: liveState.kraft.activeControllerId ?? '1' },
-        ],
-        payload: { brokerId, nextStatus: 'CRASHED' },
-      },
-    );
+    addLog(`💥 Chaos triggered: Crashed Broker Node #${brokerId}`, 'WARN', {
+      eventType: 'BROKER_STATUS_CHANGED',
+      involvedEntities: [
+        { type: 'broker', id: brokerId },
+        { type: 'controller', id: liveState.kraft.activeControllerId ?? '1' },
+      ],
+      payload: { brokerId, nextStatus: 'CRASHED' },
+    });
   };
 
   const handleRecoverSpecificBroker = (brokerId: string): void => {
     if (!liveState || !clientRef.current) return;
     clientRef.current.sendIntent('CHAOS_RECOVER_BROKER', { brokerId });
-    addLog(
-      `🔄 Chaos recovery: Restored Broker Node #${brokerId} to ALIVE`,
-      'INFO',
-      {
-        eventType: 'BROKER_STATUS_CHANGED',
-        involvedEntities: [
-          { type: 'broker', id: brokerId },
-          { type: 'controller', id: liveState.kraft.activeControllerId ?? '1' },
-        ],
-        payload: { brokerId, nextStatus: 'ALIVE' },
-      },
-    );
+    addLog(`🔄 Chaos recovery: Restored Broker Node #${brokerId} to ALIVE`, 'INFO', {
+      eventType: 'BROKER_STATUS_CHANGED',
+      involvedEntities: [
+        { type: 'broker', id: brokerId },
+        { type: 'controller', id: liveState.kraft.activeControllerId ?? '1' },
+      ],
+      payload: { brokerId, nextStatus: 'ALIVE' },
+    });
   };
 
   const handleProduceKey = (topic: string, key: string, value: string): void => {
@@ -790,7 +1179,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     if (partitions.length === 0) return;
 
     // Use Murmur2 Key Partitioner
-    const targetPart = Math.abs(key.split('').reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)) % partitions.length;
+    const targetPart =
+      Math.abs(key.split('').reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)) %
+      partitions.length;
     const activePartition = partitions.find((p) => p.partition === targetPart);
     const leaderId = activePartition?.leaderBrokerId ?? '1';
 
@@ -838,9 +1229,32 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       clearInterval(replayTimerRef.current);
       replayTimerRef.current = null;
     }
-    setProducers([{ id: 'producer-1', topic: 'orders', autoProduceEnabled: false, autoProduceInterval: 3.0 }]);
-    setConsumers([{ id: 'consumer-1', topic: 'orders', groupId: 'order-processors', joined: false, memberId: null }]);
-    addLog('🔄 Simulation reset: Topology restored to default, scheduler and caches cleared.', 'INFO');
+    setProducers([
+      { id: 'producer-1', topic: 'orders', autoProduceEnabled: false, autoProduceInterval: 3.0 },
+    ]);
+    setConsumers([
+      {
+        id: 'consumer-1',
+        topic: 'orders',
+        groupId: 'order-processors',
+        joined: false,
+        memberId: null,
+      },
+    ]);
+    setRateLimiterState(createDefaultRateLimiterCluster());
+    rateLimiterRngRef.current = new DeterministicRNG(42);
+    setDistLockState(createDefaultDistributedLockCluster());
+    distLockRngRef.current = new DeterministicRNG(42);
+    setCdnCacheState(createDefaultCdnCacheCluster());
+    cdnCacheRngRef.current = new DeterministicRNG(42);
+    setIdGenState(createDefaultIdGenCluster());
+    idGenRngRef.current = new DeterministicRNG(42);
+    setTxnState(createDefaultTransactionsCluster());
+    txnRngRef.current = new DeterministicRNG(42);
+    addLog(
+      '🔄 Simulation reset: Topology restored to default, scheduler and caches cleared.',
+      'INFO',
+    );
   };
 
   const handleToggleReplay = (): void => {
@@ -853,7 +1267,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       addLog('❚❚ Event replay paused.', 'INFO');
     } else {
       if (stateHistory.length < 2) {
-        addLog('Cannot replay: state history requires at least 2 recorded timeline frames.', 'WARN');
+        addLog(
+          'Cannot replay: state history requires at least 2 recorded timeline frames.',
+          'WARN',
+        );
         return;
       }
       setIsPaused(true);
@@ -863,23 +1280,26 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       if (replayTimerRef.current) clearInterval(replayTimerRef.current);
       addLog(`🎬 Started animated event replay at ${String(replaySpeed)}x speed...`, 'INFO');
 
-      replayTimerRef.current = setInterval(() => {
-        replayIndexRef.current++;
-        if (replayIndexRef.current >= stateHistory.length) {
-          if (replayTimerRef.current) {
-            clearInterval(replayTimerRef.current);
-            replayTimerRef.current = null;
+      replayTimerRef.current = setInterval(
+        () => {
+          replayIndexRef.current++;
+          if (replayIndexRef.current >= stateHistory.length) {
+            if (replayTimerRef.current) {
+              clearInterval(replayTimerRef.current);
+              replayTimerRef.current = null;
+            }
+            setIsReplaying(false);
+            addLog('🎬 Event replay complete.', 'SUCCESS');
+            return;
           }
-          setIsReplaying(false);
-          addLog('🎬 Event replay complete.', 'SUCCESS');
-          return;
-        }
-        const frame = stateHistory[replayIndexRef.current];
-        if (frame) {
-          setRenderedState(frame);
-          setPlaybackTick(frame.tick);
-        }
-      }, Math.max(25, 100 / replaySpeed));
+          const frame = stateHistory[replayIndexRef.current];
+          if (frame) {
+            setRenderedState(frame);
+            setPlaybackTick(frame.tick);
+          }
+        },
+        Math.max(25, 100 / replaySpeed),
+      );
     }
   };
 
@@ -892,50 +1312,86 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     if (scenarioId === 'leader-failover') {
       const ordersP0 = liveState.topics['orders']?.[0];
       const leaderId = ordersP0?.leaderBrokerId || '1';
-      addLog(`[Scenario: Failover] Step 1/3: Simulating crash on Partition Leader Broker #${leaderId}...`, 'WARN');
+      addLog(
+        `[Scenario: Failover] Step 1/3: Simulating crash on Partition Leader Broker #${leaderId}...`,
+        'WARN',
+      );
       handleCrashSpecificBroker(leaderId);
 
       setTimeout(() => {
-        addLog('[Scenario: Failover] Step 2/3: KRaft Controller detected crash; promoted in-sync follower and shrank ISR.', 'INFO');
+        addLog(
+          '[Scenario: Failover] Step 2/3: KRaft Controller detected crash; promoted in-sync follower and shrank ISR.',
+          'INFO',
+        );
       }, 2000);
 
       setTimeout(() => {
-        addLog(`[Scenario: Failover] Step 3/3: Restoring Broker #${leaderId} to ALIVE; syncing as in-sync follower and producer reconnecting...`, 'SUCCESS');
+        addLog(
+          `[Scenario: Failover] Step 3/3: Restoring Broker #${leaderId} to ALIVE; syncing as in-sync follower and producer reconnecting...`,
+          'SUCCESS',
+        );
         handleRecoverSpecificBroker(leaderId);
       }, 4500);
     } else if (scenarioId === 'cooperative-rebalance') {
-      addLog('[Scenario: Rebalance] Step 1/3: Active Consumer-1 bound to topic "orders" in group "order-processors"', 'INFO');
-      
+      addLog(
+        '[Scenario: Rebalance] Step 1/3: Active Consumer-1 bound to topic "orders" in group "order-processors"',
+        'INFO',
+      );
+
       if (!consumers[0]?.joined) {
         handleConsumerJoinSpecific('consumer-1');
       }
 
       setTimeout(() => {
         const newId = `consumer-${String(consumers.length + 1)}`;
-        addLog(`[Scenario: Rebalance] Step 2/3: Joining ${newId} to group "order-processors"...`, 'INFO');
+        addLog(
+          `[Scenario: Rebalance] Step 2/3: Joining ${newId} to group "order-processors"...`,
+          'INFO',
+        );
         clientRef.current?.sendIntent('CONSUMER_JOIN', {
           groupId: 'order-processors',
           clientId: newId,
           memberId: newId,
           topics: ['orders'],
         });
-        setConsumers((c) => [...c, { id: newId, topic: 'orders', groupId: 'order-processors', joined: true, memberId: newId }]);
+        setConsumers((c) => [
+          ...c,
+          {
+            id: newId,
+            topic: 'orders',
+            groupId: 'order-processors',
+            joined: true,
+            memberId: newId,
+          },
+        ]);
       }, 1800);
 
       setTimeout(() => {
-        addLog('[Scenario: Rebalance] Step 3/3: Coordinator completed cooperative sticky partition rebalancing without stop-the-world freeze.', 'SUCCESS');
+        addLog(
+          '[Scenario: Rebalance] Step 3/3: Coordinator completed cooperative sticky partition rebalancing without stop-the-world freeze.',
+          'SUCCESS',
+        );
       }, 4000);
     } else if (scenarioId === 'kraft-controller-failover') {
       const ctrlId = liveState.kraft.activeControllerId || '1';
-      addLog(`[Scenario: KRaft Quorum] Step 1/3: Crashing active KRaft metadata controller Broker #${ctrlId}...`, 'WARN');
+      addLog(
+        `[Scenario: KRaft Quorum] Step 1/3: Crashing active KRaft metadata controller Broker #${ctrlId}...`,
+        'WARN',
+      );
       handleCrashSpecificBroker(ctrlId);
 
       setTimeout(() => {
-        addLog('[Scenario: KRaft Quorum] Step 2/3: Metadata voter quorum held election, bumped epoch, and installed successor controller.', 'INFO');
+        addLog(
+          '[Scenario: KRaft Quorum] Step 2/3: Metadata voter quorum held election, bumped epoch, and installed successor controller.',
+          'INFO',
+        );
       }, 2000);
 
       setTimeout(() => {
-        addLog(`[Scenario: KRaft Quorum] Step 3/3: Restoring Broker #${ctrlId} back to quorum voter pool.`, 'SUCCESS');
+        addLog(
+          `[Scenario: KRaft Quorum] Step 3/3: Restoring Broker #${ctrlId} back to quorum voter pool.`,
+          'SUCCESS',
+        );
         handleRecoverSpecificBroker(ctrlId);
       }, 4500);
     }
@@ -943,7 +1399,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
   const handleKillBroker = (): void => {
     if (!liveState) return;
-    const alive = Object.keys(liveState.brokers).filter((id) => liveState.brokers[id]?.status === 'ALIVE');
+    const alive = Object.keys(liveState.brokers).filter(
+      (id) => liveState.brokers[id]?.status === 'ALIVE',
+    );
     if (!alive.length) return;
     const id = alive[Math.floor(Math.random() * alive.length)]!;
     if (connected && clientRef.current) {
@@ -965,8 +1423,13 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
   const handleRecoverBroker = (): void => {
     if (!liveState) return;
-    const crashed = Object.keys(liveState.brokers).filter((id) => liveState.brokers[id]?.status === 'CRASHED');
-    if (!crashed.length) { addLog('All brokers ALIVE.', 'INFO'); return; }
+    const crashed = Object.keys(liveState.brokers).filter(
+      (id) => liveState.brokers[id]?.status === 'CRASHED',
+    );
+    if (!crashed.length) {
+      addLog('All brokers ALIVE.', 'INFO');
+      return;
+    }
     const id = crashed[Math.floor(Math.random() * crashed.length)]!;
     if (connected && clientRef.current) {
       clientRef.current.sendIntent('CHAOS_RECOVER_BROKER', { brokerId: id });
@@ -995,7 +1458,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       a.download = `kafka-reconstituted-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      addLog(`Exported reconstituted trace bundle (${String(bundle.events.length)} events)`, 'INFO');
+      addLog(
+        `Exported reconstituted trace bundle (${String(bundle.events.length)} events)`,
+        'INFO',
+      );
       return;
     }
 
@@ -1028,7 +1494,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     a.download = `kafka-visualizer-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    addLog(`Exported deterministic cluster trace bundle (${String(stateHistory.length)} snapshots)`, 'INFO');
+    addLog(
+      `Exported deterministic cluster trace bundle (${String(stateHistory.length)} snapshots)`,
+      'INFO',
+    );
   };
 
   const handleLoadReconstitutedTrace = (parsed: ParsedTraceResult, rawJson: string): void => {
@@ -1044,8 +1513,8 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       setReconstitutedViolations(reconstitutor.getViolations());
 
       const init = reconstitutor.currentState;
-      setRenderedState((init as unknown) as KafkaClusterState);
-      setLiveState((init as unknown) as KafkaClusterState);
+      setRenderedState(init as unknown as KafkaClusterState);
+      setLiveState(init as unknown as KafkaClusterState);
       setPlaybackTick(reconstitutor.currentTick);
 
       const logs: EventLogItem[] = reconstitutor.getTimelineSteps().map((s) => ({
@@ -1071,12 +1540,14 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     const res = reconstitutorRef.current.stepForward();
     if (res) {
       setCurrentReconstitutedStep(res.stepIndex);
-      setRenderedState((res.state as unknown) as KafkaClusterState);
-      setLiveState((res.state as unknown) as KafkaClusterState);
+      setRenderedState(res.state as unknown as KafkaClusterState);
+      setLiveState(res.state as unknown as KafkaClusterState);
       setPlaybackTick(res.tick);
       if (res.violation) {
         setIsHalted(true);
-        setHaltError(`[Reconstitution Step ${res.stepIndex}] ${res.violation.invariantName}: ${res.violation.description}`);
+        setHaltError(
+          `[Reconstitution Step ${res.stepIndex}] ${res.violation.invariantName}: ${res.violation.description}`,
+        );
       }
     }
   };
@@ -1086,8 +1557,8 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     const res = reconstitutorRef.current.stepBackward();
     if (res) {
       setCurrentReconstitutedStep(res.stepIndex);
-      setRenderedState((res.state as unknown) as KafkaClusterState);
-      setLiveState((res.state as unknown) as KafkaClusterState);
+      setRenderedState(res.state as unknown as KafkaClusterState);
+      setLiveState(res.state as unknown as KafkaClusterState);
       setPlaybackTick(res.tick);
       setIsHalted(false);
       setHaltError(null);
@@ -1098,13 +1569,15 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     if (!reconstitutorRef.current) return;
     const state = reconstitutorRef.current.seekToStep(stepIndex);
     setCurrentReconstitutedStep(stepIndex);
-    setRenderedState((state as unknown) as KafkaClusterState);
-    setLiveState((state as unknown) as KafkaClusterState);
+    setRenderedState(state as unknown as KafkaClusterState);
+    setLiveState(state as unknown as KafkaClusterState);
     setPlaybackTick(reconstitutorRef.current.currentTick);
     const meta = reconstitutorRef.current.getTimelineSteps()[stepIndex];
     if (meta?.violation) {
       setIsHalted(true);
-      setHaltError(`[Step ${stepIndex}] ${meta.violation.invariantName}: ${meta.violation.description}`);
+      setHaltError(
+        `[Step ${stepIndex}] ${meta.violation.invariantName}: ${meta.violation.description}`,
+      );
     } else {
       setIsHalted(false);
       setHaltError(null);
@@ -1132,7 +1605,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         payload: { command },
       };
       const res = pureRaftTransition(prev, ev, raftRngRef.current);
-      addLog(`[Raft] Propose Write: ${command} to Leader #${prev.activeLeaderId ?? 'None'}`, 'INFO');
+      addLog(
+        `[Raft] Propose Write: ${command} to Leader #${prev.activeLeaderId ?? 'None'}`,
+        'INFO',
+      );
       return res.nextState;
     });
   };
@@ -1279,7 +1755,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       for (const emitted of res.emittedEvents) {
         if (emitted.type === 'DB_HINT_DELIVER') {
           res = pureDBTransition(res.nextState, emitted, dbRngRef.current);
-          addLog(`[DB Hint Delivery] Flushed pending hinted handoffs to Node #${nodeId}`, 'SUCCESS');
+          addLog(
+            `[DB Hint Delivery] Flushed pending hinted handoffs to Node #${nodeId}`,
+            'SUCCESS',
+          );
         }
       }
       const violation = dbInvariantCheckerRef.current.check(res.nextState);
@@ -1306,8 +1785,35 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     });
   };
 
+  const handleDBConfigureFidelity = (fidelityMode: 'TEXTBOOK' | 'REALISTIC'): void => {
+    setDbState((prev) => {
+      const vnodesPerNode = fidelityMode === 'REALISTIC' ? 256 : 3;
+      const ev: DBSimEvent = {
+        id: `db-fid-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'DB_CONFIGURE_FIDELITY',
+        payload: {
+          fidelityMode,
+          vnodesPerNode,
+          hintedHandoffEnabled: fidelityMode === 'REALISTIC',
+        },
+      };
+      const res = pureDBTransition(prev, ev, dbRngRef.current);
+      addLog(
+        `[DB Fidelity] Switched mode to ${fidelityMode} (${vnodesPerNode} vnodes/node, Cassandra Murmur3 distribution)`,
+        'INFO',
+      );
+      return res.nextState;
+    });
+  };
+
   /* ── Redis Domain Handlers ── */
-  const handleRedisSetKey = (key: string, value: string, ttl: number | null, targetNodeId?: string): void => {
+  const handleRedisSetKey = (
+    key: string,
+    value: string,
+    ttl: number | null,
+    targetNodeId?: string,
+  ): void => {
     setRedisState((prev) => {
       const ev: RedisSimEvent = {
         id: `redis-set-${String(Date.now())}`,
@@ -1318,9 +1824,15 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       const res = pureRedisTransition(prev, ev, redisRngRef.current);
       for (const emitted of res.emittedEvents) {
         if (emitted.type === 'REDIS_MOVED_REDIRECT') {
-          addLog(`[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Redirect to Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+          addLog(
+            `[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Redirect to Master #${String(emitted.payload['targetMasterId'])}`,
+            'WARN',
+          );
         } else if (emitted.type === 'REDIS_ASK_REDIRECT') {
-          addLog(`[Redis -ASK] Slot ${String(emitted.payload['slot'])} (Migrating) -> Query Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+          addLog(
+            `[Redis -ASK] Slot ${String(emitted.payload['slot'])} (Migrating) -> Query Master #${String(emitted.payload['targetMasterId'])}`,
+            'WARN',
+          );
         }
       }
       const violation = redisInvariantCheckerRef.current.check(res.nextState);
@@ -1344,7 +1856,15 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       const res = pureRedisTransition(prev, ev, redisRngRef.current);
       for (const emitted of res.emittedEvents) {
         if (emitted.type === 'REDIS_MOVED_REDIRECT') {
-          addLog(`[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Redirect to Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+          addLog(
+            `[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Permanent route cache update to Master #${String(emitted.payload['targetMasterId'])}`,
+            'WARN',
+          );
+        } else if (emitted.type === 'REDIS_ASK_REDIRECT') {
+          addLog(
+            `[Redis -ASK] Slot ${String(emitted.payload['slot'])} migrating -> Transient single-request redirect to Master #${String(emitted.payload['targetMasterId'])} (no cache update)`,
+            'WARN',
+          );
         }
       }
       addLog(`[Redis] GET "${key}"`, 'INFO');
@@ -1366,7 +1886,12 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     });
   };
 
-  const handleRedisReshard = (sourceMasterId: string, targetMasterId: string, startSlot: number, endSlot: number): void => {
+  const handleRedisReshard = (
+    sourceMasterId: string,
+    targetMasterId: string,
+    startSlot: number,
+    endSlot: number,
+  ): void => {
     setRedisState((prev) => {
       const ev: RedisSimEvent = {
         id: `redis-reshard-${String(Date.now())}`,
@@ -1375,7 +1900,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         payload: { sourceMasterId, targetMasterId, startSlot, endSlot },
       };
       const res = pureRedisTransition(prev, ev, redisRngRef.current);
-      addLog(`[Redis Reshard] Moved Slots ${startSlot}-${endSlot} from Node #${sourceMasterId} to Node #${targetMasterId}`, 'SUCCESS');
+      addLog(
+        `[Redis Reshard] Moved Slots ${startSlot}-${endSlot} from Node #${sourceMasterId} to Node #${targetMasterId}`,
+        'SUCCESS',
+      );
       return res.nextState;
     });
   };
@@ -1392,7 +1920,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       for (const emitted of res.emittedEvents) {
         if (emitted.type === 'REDIS_FAILOVER') {
           res = pureRedisTransition(res.nextState, emitted, redisRngRef.current);
-          addLog(`[Redis Failover] Replica promoted to Master for crashed Node #${nodeId}`, 'SUCCESS');
+          addLog(
+            `[Redis Failover] Replica promoted to Master for crashed Node #${nodeId}`,
+            'SUCCESS',
+          );
         }
       }
       addLog(`[Redis Chaos] Node #${nodeId} crashed`, 'WARN');
@@ -1462,7 +1993,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         setIsHalted(true);
         setHaltError(`[K8s ${violation.ruleId}] ${violation.description}`);
       }
-      addLog(`[K8s Rollout] Initiated rolling update for "${deploymentId}" to "${newImage}"`, 'SUCCESS');
+      addLog(
+        `[K8s Rollout] Initiated rolling update for "${deploymentId}" to "${newImage}"`,
+        'SUCCESS',
+      );
       return res.nextState;
     });
   };
@@ -1524,7 +2058,12 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
   };
 
   /* ── RabbitMQ Domain Handlers ── */
-  const handleRabbitPublish = (exchangeName: string, routingKey: string, payload: string, ttl: number | null): void => {
+  const handleRabbitPublish = (
+    exchangeName: string,
+    routingKey: string,
+    payload: string,
+    ttl: number | null,
+  ): void => {
     setRabbitState((prev) => {
       const ev: RabbitSimEvent = {
         id: `rabbit-pub-${String(Date.now())}`,
@@ -1605,7 +2144,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         setIsHalted(true);
         setHaltError(`[Storage ${violation.ruleId}] ${violation.description}`);
       }
-      addLog(`[Storage Write] Key #${key} -> "${value}" (${res.nextState.activeEngine})`, 'SUCCESS');
+      addLog(
+        `[Storage Write] Key #${key} -> "${value}" (${res.nextState.activeEngine})`,
+        'SUCCESS',
+      );
       return res.nextState;
     });
   };
@@ -1666,6 +2208,23 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     });
   };
 
+  const handleStorageConfigureFidelity = (fidelityMode: 'TEXTBOOK' | 'REALISTIC'): void => {
+    setStorageState((prev) => {
+      const ev: StorageSimEvent = {
+        id: `storage-fid-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'STORAGE_CONFIGURE_FIDELITY',
+        payload: { fidelityMode },
+      };
+      const res = pureStorageTransition(prev, ev, storageRngRef.current);
+      addLog(
+        `[Storage Fidelity] Switched mode to ${fidelityMode} (B+Tree Order ${fidelityMode === 'REALISTIC' ? '170' : '4'})`,
+        'INFO',
+      );
+      return res.nextState;
+    });
+  };
+
   /* ── Networking Domain Handlers ── */
   const handleNetworkingStartHandshake = (): void => {
     setNetworkingState((prev) => {
@@ -1681,7 +2240,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         setIsHalted(true);
         setHaltError(`[Networking ${violation.ruleId}] ${violation.description}`);
       }
-      addLog(`[TCP Handshake] Client sent SYN packet (seq=${res.nextState.clientSeqNumber})`, 'INFO');
+      addLog(
+        `[TCP Handshake] Client sent SYN packet (seq=${res.nextState.clientSeqNumber})`,
+        'INFO',
+      );
       return res.nextState;
     });
   };
@@ -1714,6 +2276,504 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     });
   };
 
+  const handleNetworkingConfigureFidelity = (algorithm: 'RENO' | 'CUBIC'): void => {
+    setNetworkingState((prev) => {
+      const ev: NetworkSimEvent = {
+        id: `net-fid-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TCP_CONFIGURE_FIDELITY',
+        payload: { algorithm },
+      };
+      const res = pureNetworkingTransition(prev, ev, networkingRngRef.current);
+      addLog(
+        `[TCP Fidelity] Congestion control set to ${algorithm} (${algorithm === 'CUBIC' ? 'RFC 8312 cubic window growth' : 'Classic AIMD'})`,
+        'INFO',
+      );
+      return res.nextState;
+    });
+  };
+
+  /* ── Rate Limiter Domain Handlers ── */
+  const handleRateLimiterRequest = (clientId: string, cost?: number): void => {
+    setRateLimiterState((prev) => {
+      const ev: RateLimiterSimEvent = {
+        id: `rl-req-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RATE_LIMITER_REQUEST',
+        payload: { clientId, ...(cost !== undefined ? { cost } : {}) },
+      };
+      const res = pureRateLimiterTransition(prev, ev, rateLimiterRngRef.current);
+      const violation = rateLimiterInvariantCheckerRef.current.check(res.nextState);
+      if (violation && !violation.isPedagogicalFlaw) {
+        setIsHalted(true);
+        setHaltError(`[RateLimiter ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[Rate Limiter] Client "${clientId}" requested (cost: ${cost ?? 1})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleRateLimiterBurst = (clientId: string, count: number): void => {
+    setRateLimiterState((prev) => {
+      const ev: RateLimiterSimEvent = {
+        id: `rl-burst-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RATE_LIMITER_BURST',
+        payload: { clientId, count },
+      };
+      const res = pureRateLimiterTransition(prev, ev, rateLimiterRngRef.current);
+      addLog(
+        `[Rate Limiter Burst] Dispatched burst of ${count} requests for "${clientId}"`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleRateLimiterTriggerBoundaryBurst = (): void => {
+    setRateLimiterState((prev) => {
+      const ev: RateLimiterSimEvent = {
+        id: `rl-boundary-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RATE_LIMITER_BURST',
+        payload: { clientId: 'client-burst', count: prev.globalLimit },
+      };
+      const res = pureRateLimiterTransition(prev, ev, rateLimiterRngRef.current);
+      addLog(
+        `[Fixed Window Flaw] Dispatched boundary burst of ${prev.globalLimit} requests across boundary!`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleRateLimiterUpdateConfig = (cfg: {
+    capacity?: number;
+    refillRatePerTick?: number;
+    windowSizeTicks?: number;
+    limit?: number;
+    backendMode?: RateLimiterBackendMode;
+    activeAlgorithm?: RateLimiterAlgorithm | 'ALL_PARALLEL';
+  }): void => {
+    setRateLimiterState((prev) => {
+      const ev: RateLimiterSimEvent = {
+        id: `rl-cfg-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'RATE_LIMITER_UPDATE_CONFIG',
+        payload: cfg,
+      };
+      const res = pureRateLimiterTransition(prev, ev, rateLimiterRngRef.current);
+      addLog(`[Rate Limiter Config] Updated configuration`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  /* ── Distributed Lock Domain Handlers ── */
+  const handleDistLockAcquire = (clientId: string): void => {
+    setDistLockState((prev) => {
+      const ev: DistributedLockSimEvent = {
+        id: `lock-acq-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'LOCK_ACQUIRE',
+        payload: { clientId },
+      };
+      const res = pureDistributedLockTransition(prev, ev, distLockRngRef.current);
+      const violation = distLockInvariantCheckerRef.current.check(res.nextState);
+      if (violation && !violation.isPedagogicalFlaw) {
+        setIsHalted(true);
+        setHaltError(`[DistLock ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[DistLock] ${clientId} attempted lock acquisition`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleDistLockRelease = (clientId: string): void => {
+    setDistLockState((prev) => {
+      const ev: DistributedLockSimEvent = {
+        id: `lock-rel-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'LOCK_RELEASE',
+        payload: { clientId },
+      };
+      const res = pureDistributedLockTransition(prev, ev, distLockRngRef.current);
+      addLog(`[DistLock] ${clientId} released lock`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleDistLockInjectGcPause = (clientId: string, durationTicks: number): void => {
+    setDistLockState((prev) => {
+      const ev: DistributedLockSimEvent = {
+        id: `lock-gc-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'LOCK_INJECT_GC_PAUSE',
+        payload: { clientId, durationTicks },
+      };
+      const res = pureDistributedLockTransition(prev, ev, distLockRngRef.current);
+      addLog(
+        `[Kleppmann Hazard] Injected ${durationTicks}-tick GC pause into ${clientId}! Lease will expire mid-operation.`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleDistLockWriteProtectedResource = (clientId: string, data: string): void => {
+    setDistLockState((prev) => {
+      const ev: DistributedLockSimEvent = {
+        id: `lock-write-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'LOCK_WRITE_PROTECTED_RESOURCE',
+        payload: { clientId, data },
+      };
+      const res = pureDistributedLockTransition(prev, ev, distLockRngRef.current);
+      const violation = distLockInvariantCheckerRef.current.check(res.nextState);
+      if (violation && !violation.isPedagogicalFlaw) {
+        setIsHalted(true);
+        setHaltError(`[DistLock ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[DistLock Storage] ${clientId} attempted write "${data}"`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleDistLockToggleFencing = (enabled: boolean): void => {
+    setDistLockState((prev) => {
+      const ev: DistributedLockSimEvent = {
+        id: `lock-fence-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'LOCK_UPDATE_CONFIG',
+        payload: { fencingEnabled: enabled },
+      };
+      const res = pureDistributedLockTransition(prev, ev, distLockRngRef.current);
+      addLog(
+        `[DistLock Config] Monotonic fencing tokens ${enabled ? 'ENABLED' : 'DISABLED'}`,
+        'INFO',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleDistLockToggleNodeStatus = (
+    nodeId: string,
+    status: 'ONLINE' | 'PARTITIONED' | 'DOWN',
+  ): void => {
+    setDistLockState((prev) => {
+      const ev: DistributedLockSimEvent = {
+        id: `lock-node-${nodeId}-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'LOCK_TOGGLE_NODE_STATUS',
+        payload: { nodeId, status },
+      };
+      const res = pureDistributedLockTransition(prev, ev, distLockRngRef.current);
+      addLog(`[Redlock Quorum] Node ${nodeId} status set to ${status}`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  /* ── CDN Cache Domain Handlers ── */
+  const handleCdnRequest = (
+    key: string,
+    clientRegion?: 'US_EAST' | 'US_WEST' | 'EU_WEST' | 'AP_SOUTH',
+  ): void => {
+    setCdnCacheState((prev) => {
+      const ev: CdnCacheSimEvent = {
+        id: `cdn-req-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'CDN_REQUEST',
+        payload: { key, ...(clientRegion !== undefined ? { clientRegion } : {}) },
+      };
+      const res = pureCdnCacheTransition(prev, ev, cdnCacheRngRef.current);
+      addLog(`[CDN Request] GET "${key}" from ${clientRegion ?? 'US_EAST'}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleCdnFlashCrowd = (
+    key: string,
+    count: number,
+    clientRegion?: 'US_EAST' | 'US_WEST' | 'EU_WEST' | 'AP_SOUTH',
+  ): void => {
+    setCdnCacheState((prev) => {
+      const ev: CdnCacheSimEvent = {
+        id: `cdn-flash-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'CDN_FLASH_CROWD',
+        payload: {
+          key,
+          requestCount: count,
+          ...(clientRegion !== undefined ? { clientRegion } : {}),
+        },
+      };
+      const res = pureCdnCacheTransition(prev, ev, cdnCacheRngRef.current);
+      addLog(`[Flash Crowd] Dispatched ${count} concurrent requests for "${key}"`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleCdnPurge = (key: string): void => {
+    setCdnCacheState((prev) => {
+      const ev: CdnCacheSimEvent = {
+        id: `cdn-purge-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'CDN_PURGE_KEY',
+        payload: { key },
+      };
+      const res = pureCdnCacheTransition(prev, ev, cdnCacheRngRef.current);
+      addLog(
+        `[CDN Invalidation] Purged cache entry for "${key}" across all Edge PoPs and Regionals`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleCdnTogglePopStatus = (popId: string, status: 'ONLINE' | 'OFFLINE'): void => {
+    setCdnCacheState((prev) => {
+      const ev: CdnCacheSimEvent = {
+        id: `cdn-pop-${popId}-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'CDN_TOGGLE_POP_STATUS',
+        payload: { popId, status },
+      };
+      const res = pureCdnCacheTransition(prev, ev, cdnCacheRngRef.current);
+      addLog(`[CDN Edge Fleet] PoP ${popId} status changed to ${status}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleCdnToggleCoalescing = (enabled: boolean): void => {
+    setCdnCacheState((prev) => {
+      const ev: CdnCacheSimEvent = {
+        id: `cdn-coal-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'CDN_UPDATE_CONFIG',
+        payload: { coalescingEnabled: enabled },
+      };
+      const res = pureCdnCacheTransition(prev, ev, cdnCacheRngRef.current);
+      addLog(
+        `[Request Coalescing] Single-flight coalescing ${enabled ? 'ENABLED' : 'DISABLED'}`,
+        'INFO',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleCdnUpdateOrigin = (key: string, newValue: string): void => {
+    setCdnCacheState((prev) => {
+      const ev: CdnCacheSimEvent = {
+        id: `cdn-orig-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'CDN_UPDATE_ORIGIN_OBJECT',
+        payload: { key, newValue },
+      };
+      const res = pureCdnCacheTransition(prev, ev, cdnCacheRngRef.current);
+      addLog(`[Origin Mutation] Object "${key}" updated at origin server`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  /* ── ID Generation Domain Handlers ── */
+  const handleIdGenGenerate = (workerId: number, count?: number): void => {
+    setIdGenState((prev) => {
+      const ev: IdGenSimEvent = {
+        id: `id-gen-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'ID_GEN_GENERATE',
+        payload: { workerId, ...(count !== undefined ? { count } : {}) },
+      };
+      const res = pureIdGenTransition(prev, ev, idGenRngRef.current);
+      const violation = idGenInvariantCheckerRef.current.check(res.nextState);
+      if (violation && !violation.isPedagogicalFlaw) {
+        setIsHalted(true);
+        setHaltError(`[IdGen ${violation.ruleId}] ${violation.description}`);
+      }
+      addLog(`[ID Gen] Worker ${workerId} generated ID`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleIdGenInjectClockSkew = (workerId: number, backwardSkewMs: number): void => {
+    setIdGenState((prev) => {
+      const ev: IdGenSimEvent = {
+        id: `id-skew-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'ID_GEN_INJECT_CLOCK_SKEW',
+        payload: { workerId, backwardSkewMs },
+      };
+      const res = pureIdGenTransition(prev, ev, idGenRngRef.current);
+      addLog(
+        `[NTP Hazard] Injected ${backwardSkewMs}ms backward clock skew on Worker ${workerId}!`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleIdGenFloodOverflow = (workerId: number, burstCount: number): void => {
+    setIdGenState((prev) => {
+      const ev: IdGenSimEvent = {
+        id: `id-flood-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'ID_GEN_FLOOD_OVERFLOW',
+        payload: { workerId, burstCount },
+      };
+      const res = pureIdGenTransition(prev, ev, idGenRngRef.current);
+      addLog(
+        `[Sequence Overflow] Flooded Worker ${workerId} with ${burstCount} requests in same millisecond`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleIdGenAssignDuplicateWorker = (conflictingWorkerId: number): void => {
+    setIdGenState((prev) => {
+      const ev: IdGenSimEvent = {
+        id: `id-dup-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'ID_GEN_ASSIGN_DUPLICATE_WORKER',
+        payload: { conflictingWorkerId },
+      };
+      const res = pureIdGenTransition(prev, ev, idGenRngRef.current);
+      addLog(
+        `[Worker Conflict] Duplicate Worker ID #${conflictingWorkerId} assigned to two separate nodes!`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleIdGenSwitchGeneratorType = (generatorType: IdGeneratorType): void => {
+    setIdGenState((prev) => {
+      const ev: IdGenSimEvent = {
+        id: `id-sw-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'ID_GEN_UPDATE_CONFIG',
+        payload: { generatorType },
+      };
+      const res = pureIdGenTransition(prev, ev, idGenRngRef.current);
+      addLog(`[ID Gen Mode] Generator switched to ${generatorType}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  /* ── Distributed Transactions Domain Handlers ── */
+  const handleTxnStart2PC = (transactionId: string): void => {
+    setTxnState((prev) => {
+      const ev: TransactionsSimEvent = {
+        id: `txn-2pc-start-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TXN_2PC_START',
+        payload: { transactionId },
+      };
+      const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+      addLog(`[2PC Coordinator] Initiated Prepare phase for transaction ${transactionId}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleTxnVoteParticipant = (
+    participantId: string,
+    vote: 'VOTE_COMMIT' | 'VOTE_ABORT',
+  ): void => {
+    setTxnState((prev) => {
+      const ev: TransactionsSimEvent = {
+        id: `txn-vote-${participantId}-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TXN_2PC_PARTICIPANT_VOTE',
+        payload: { participantId, vote },
+      };
+      const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+      addLog(`[2PC Participant] ${participantId} voted ${vote}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleTxnCrashCoordinator = (crashTiming: 'AFTER_PREPARE' | 'AFTER_COMMIT'): void => {
+    setTxnState((prev) => {
+      const ev: TransactionsSimEvent = {
+        id: `txn-crash-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TXN_2PC_CRASH_COORDINATOR',
+        payload: { crashTiming },
+      };
+      const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+      addLog(
+        `[2PC Blocking Hazard] Coordinator CRASHED (${crashTiming})! Participants are indefinitely blocked holding resource locks.`,
+        'WARN',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleTxnRecoverCoordinator = (): void => {
+    setTxnState((prev) => {
+      const ev: TransactionsSimEvent = {
+        id: `txn-rec-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TXN_2PC_RECOVER_COORDINATOR',
+        payload: {},
+      };
+      const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+      addLog(
+        `[2PC Recovery] Coordinator recovered — replaying WAL to resolve blocked participants`,
+        'SUCCESS',
+      );
+      return res.nextState;
+    });
+  };
+
+  const handleTxnStartSaga = (sagaId: string): void => {
+    setTxnState((prev) => {
+      const ev: TransactionsSimEvent = {
+        id: `txn-saga-start-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TXN_SAGA_START',
+        payload: { sagaId },
+      };
+      const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+      addLog(`[Saga Orchestrator] Started workflow ${sagaId}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleTxnStepSaga = (stepIndex: number, success: boolean): void => {
+    setTxnState((prev) => {
+      const ev: TransactionsSimEvent = {
+        id: `txn-saga-step-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TXN_SAGA_STEP_OUTCOME',
+        payload: { stepIndex, success },
+      };
+      const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+      if (!success) {
+        addLog(
+          `[Saga Failure] Step ${stepIndex} failed! Triggering reverse LIFO compensating transactions...`,
+          'WARN',
+        );
+      } else {
+        addLog(`[Saga Forward] Step ${stepIndex} succeeded`, 'SUCCESS');
+      }
+      return res.nextState;
+    });
+  };
+
+  const handleTxnSwitchProtocol = (protocol: TransactionProtocol): void => {
+    setTxnState((prev) => {
+      const ev: TransactionsSimEvent = {
+        id: `txn-proto-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TXN_UPDATE_CONFIG',
+        payload: { protocol },
+      };
+      const res = pureTransactionsTransition(prev, ev, txnRngRef.current);
+      addLog(`[Transaction Paradigm] Switched view to ${protocol}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
   const handleImportTrace = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1729,7 +2789,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
           setIsPaused(true);
           setPlaybackTick(trace.stateHistory[0].tick);
           setRenderedState(trace.stateHistory[0]);
-          addLog(`Imported offline trace: ${file.name} (${String(trace.stateHistory.length)} snapshots)`, 'INFO');
+          addLog(
+            `Imported offline trace: ${file.name} (${String(trace.stateHistory.length)} snapshots)`,
+            'INFO',
+          );
         } else {
           addLog('Trace format invalid: missing stateHistory array.', 'ERROR');
         }
@@ -1800,7 +2863,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       const res = pureStateTransition(liveState, ev, kafkaRngRef.current);
       setLiveState(res.nextState as unknown as KafkaClusterState);
       setRenderedState(res.nextState as unknown as KafkaClusterState);
-      addLog(`[Cluster Updated] Created Topic "${topic}" (${String(newPartitions)} partitions)`, 'INFO');
+      addLog(
+        `[Cluster Updated] Created Topic "${topic}" (${String(newPartitions)} partitions)`,
+        'INFO',
+      );
     }
   };
 
@@ -1812,8 +2878,12 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
   };
 
   /* ── derived ── */
-  const aliveBrokers = Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'ALIVE').length;
-  const crashedBrokers = Object.values(liveState?.brokers ?? {}).filter((b) => b.status === 'CRASHED').length;
+  const aliveBrokers = Object.values(liveState?.brokers ?? {}).filter(
+    (b) => b.status === 'ALIVE',
+  ).length;
+  const crashedBrokers = Object.values(liveState?.brokers ?? {}).filter(
+    (b) => b.status === 'CRASHED',
+  ).length;
 
   const statValues: Record<string, string> = {
     tick: String(liveState?.tick ?? 0),
@@ -1824,9 +2894,192 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
   const availableTopics = liveState ? Object.keys(liveState.topics) : ['orders'];
 
+  const [showTourModal, setShowTourModal] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
+
+  const accessibleRows = React.useMemo(() => {
+    if (selectedDomain === 'kafka') {
+      return Object.values(renderedState?.brokers ?? {}).map((b) => ({
+        id: `broker-${b.id}`,
+        name: `Broker ${b.id} (${b.rack})`,
+        roleOrType: 'Kafka Broker',
+        status: b.status,
+        metrics: `Disk: ${(b.diskUsageBytes / (1024 * 1024)).toFixed(1)} MB / 10 GB`,
+      }));
+    }
+    if (selectedDomain === 'raft') {
+      return Object.values(raftState.nodes).map((n) => ({
+        id: `raft-${n.id}`,
+        name: `Raft Node ${n.id}`,
+        roleOrType: n.role,
+        status: n.status,
+        metrics: `Term: ${n.currentTerm} | Log Entries: ${n.log.length}`,
+      }));
+    }
+    if (selectedDomain === 'database') {
+      return Object.values(dbState.nodes).map((n) => ({
+        id: `db-${n.id}`,
+        name: `Node ${n.id} (${n.host})`,
+        roleOrType: `Tokens: ${n.tokens.length}`,
+        status: n.status,
+        metrics: `Storage: ${Object.keys(n.storage).length} keys | Hints: ${n.hints.length}`,
+      }));
+    }
+    if (selectedDomain === 'redis') {
+      return Object.values(redisState.nodes).map((n) => ({
+        id: `redis-${n.id}`,
+        name: `Redis Node ${n.id} (${n.role})`,
+        roleOrType: n.role,
+        status: n.status,
+        metrics: `Ranges: ${n.slotRanges.length} | Keys: ${Object.keys(n.storage).length} | Mem: ${(n.memoryUsedBytes / (1024 * 1024)).toFixed(1)} MB`,
+      }));
+    }
+    if (selectedDomain === 'kubernetes') {
+      return Object.values(k8sState.nodes).map((n) => ({
+        id: `k8s-node-${n.id}`,
+        name: `${n.name} (${n.role})`,
+        roleOrType: n.role,
+        status: n.status,
+        metrics: `CPU: ${n.allocated.cpuMillis}/${n.capacity.cpuMillis}m | Mem: ${n.allocated.memoryMb}/${n.capacity.memoryMb}MB | Pods: ${n.podIds.length}`,
+      }));
+    }
+    if (selectedDomain === 'rabbitmq') {
+      return Object.values(rabbitState.queues).map((q) => ({
+        id: `queue-${q.id}`,
+        name: q.name,
+        roleOrType: q.durable ? 'Durable Queue' : 'Transient Queue',
+        status: 'ALIVE',
+        metrics: `Messages: ${q.messages.length} | Consumers: ${q.consumerCount}`,
+      }));
+    }
+    if (selectedDomain === 'storage') {
+      return [
+        {
+          id: 'storage-engine',
+          name:
+            storageState.activeEngine === 'B_TREE' ? 'B+Tree Page Engine' : 'LSM-Tree Log Engine',
+          roleOrType: storageState.activeEngine,
+          status: 'ACTIVE',
+          metrics: `Writes: ${storageState.totalWrites} | Reads: ${storageState.totalReads} | Splits/Compactions: ${storageState.activeEngine === 'B_TREE' ? storageState.btree.totalPageSplits : storageState.lsm.totalCompactions}`,
+        },
+      ];
+    }
+    if (selectedDomain === 'rate-limiter') {
+      const client = rateLimiterState.clients['client-1'];
+      return [
+        {
+          id: 'rl-token-bucket',
+          name: 'Token Bucket (RFC 2697)',
+          roleOrType: 'Rate Limiter',
+          status: 'ACTIVE',
+          metrics: `Tokens: ${client?.tokenBucket.tokens ?? 0}/${rateLimiterState.globalCapacity} | Refill: ${rateLimiterState.globalRefillRatePerTick}/tick | Admitted: ${client?.totalAdmitted.TOKEN_BUCKET ?? 0}`,
+        },
+        {
+          id: 'rl-leaky-bucket',
+          name: 'Leaky Bucket',
+          roleOrType: 'Traffic Shaper',
+          status: 'ACTIVE',
+          metrics: `Queue: ${client?.leakyBucket.queueSize ?? 0}/${rateLimiterState.globalCapacity} | Leak: ${client?.leakyBucket.leakRatePerTick ?? 1}/tick | Admitted: ${client?.totalAdmitted.LEAKY_BUCKET ?? 0}`,
+        },
+        {
+          id: 'rl-fixed-window',
+          name: 'Fixed Window Counter',
+          roleOrType: 'Rate Limiter',
+          status: 'ACTIVE',
+          metrics: `Count: ${client?.fixedWindow.count ?? 0}/${rateLimiterState.globalLimit} | Window: ${rateLimiterState.globalWindowSizeTicks} ticks | Admitted: ${client?.totalAdmitted.FIXED_WINDOW ?? 0}`,
+        },
+        {
+          id: 'rl-sliding-log',
+          name: 'Sliding Window Log',
+          roleOrType: 'Rate Limiter',
+          status: 'ACTIVE',
+          metrics: `Entries: ${client?.slidingLog.log.length ?? 0}/${rateLimiterState.globalLimit} | Admitted: ${client?.totalAdmitted.SLIDING_LOG ?? 0}`,
+        },
+        {
+          id: 'rl-sliding-counter',
+          name: 'Cloudflare Sliding Counter',
+          roleOrType: 'Rate Limiter',
+          status: 'ACTIVE',
+          metrics: `Current: ${client?.slidingCounter.currentCount ?? 0} | Prev: ${client?.slidingCounter.previousCount ?? 0} | Admitted: ${client?.totalAdmitted.SLIDING_COUNTER ?? 0}`,
+        },
+      ];
+    }
+    if (selectedDomain === 'distributed-lock') {
+      return Object.values(distLockState.nodes).map((n) => ({
+        id: `dist-lock-node-${n.nodeId}`,
+        name: `Lock Node ${n.nodeId}`,
+        roleOrType: 'Redlock Quorum Member',
+        status: n.status,
+        metrics: `Current Grant: ${n.heldByClient ?? 'None'} | Token: #${n.fencingToken ?? 'None'} | Expires: Tick ${n.expiresAtTick}`,
+      }));
+    }
+    if (selectedDomain === 'cdn-cache') {
+      return Object.values(cdnCacheState.edgePops).map((pop) => ({
+        id: `cdn-pop-${pop.popId}`,
+        name: `Edge PoP ${pop.popId} (${pop.region})`,
+        roleOrType: 'Anycast Edge Cache',
+        status: pop.status,
+        metrics: `Hits: ${pop.totalHits} | Misses: ${pop.totalMisses} | Cached Keys: ${Object.keys(pop.cache).length}`,
+      }));
+    }
+    if (selectedDomain === 'id-gen') {
+      return Object.values(idGenState.workers).map((w) => ({
+        id: `id-worker-${w.workerId}`,
+        name: `ID Worker Node #${w.workerId} (${w.name})`,
+        roleOrType: 'Snowflake Generator',
+        status: w.status,
+        metrics: `Sequence: ${w.sequence}/4095 | Tick: ${w.currentTickMs}ms | Generated: ${w.totalGenerated}`,
+      }));
+    }
+    if (selectedDomain === 'transactions') {
+      return [
+        {
+          id: 'txn-2pc',
+          name: 'Two-Phase Commit (2PC)',
+          roleOrType: `Phase: ${txnState.twoPhaseCommit.phase}`,
+          status:
+            txnState.twoPhaseCommit.coordinatorCrashPoint !== 'NONE'
+              ? 'COORDINATOR_CRASHED'
+              : 'OPERATIONAL',
+          metrics: `TxId: ${txnState.twoPhaseCommit.transactionId} | Outcome: ${txnState.twoPhaseCommit.finalOutcome} | Votes: ${Object.values(txnState.twoPhaseCommit.participants).filter((p) => p.vote === 'VOTE_COMMIT').length}/3`,
+        },
+        {
+          id: 'txn-saga',
+          name: 'Saga Orchestration',
+          roleOrType: `Status: ${txnState.saga.status}`,
+          status: txnState.saga.status === 'COMPENSATING' ? 'COMPENSATING' : 'ACTIVE',
+          metrics: `Current Step: ${txnState.saga.currentStepIndex + 1}/${txnState.saga.steps.length} | Comp Done: ${txnState.saga.compensationExecutedOrder.length}`,
+        },
+      ];
+    }
+    return [
+      {
+        id: 'tcp-connection',
+        name: 'TCP Client-Server Connection',
+        roleOrType: `Client: ${networkingState.clientState} | Server: ${networkingState.serverState}`,
+        status: networkingState.clientState === 'ESTABLISHED' ? 'ACTIVE' : 'IDLE',
+        metrics: `CWND: ${networkingState.congestion.cwnd} MSS | SSTHRESH: ${networkingState.congestion.ssthresh} | In-Flight: ${networkingState.inFlightPackets.length} | Sent: ${networkingState.totalPacketsSent}`,
+      },
+    ];
+  }, [
+    selectedDomain,
+    renderedState,
+    raftState,
+    dbState,
+    redisState,
+    k8sState,
+    rabbitState,
+    storageState,
+    networkingState,
+    rateLimiterState,
+    distLockState,
+    cdnCacheState,
+    idGenState,
+    txnState,
+  ]);
+
   return (
     <div className="app-shell">
-
       {/* ── Header ── */}
       <header className="app-header">
         <div className="header-brand">
@@ -1836,7 +3089,8 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
           {/* Multi-Domain Dropdown Switcher */}
           {(() => {
-            const currentDomainObj = DOMAIN_OPTIONS.find((d) => d.id === selectedDomain) ?? DOMAIN_OPTIONS[0]!;
+            const currentDomainObj =
+              DOMAIN_OPTIONS.find((d) => d.id === selectedDomain) ?? DOMAIN_OPTIONS[0]!;
             return (
               <div style={{ position: 'relative', marginLeft: '12px' }}>
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -1871,7 +3125,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                     >
                       {currentDomainObj.category}
                     </span>
-                    <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginLeft: '2px' }}>▼</span>
+                    <span style={{ fontSize: '0.65rem', color: '#94a3b8', marginLeft: '2px' }}>
+                      ▼
+                    </span>
                   </button>
 
                   <button
@@ -1904,7 +3160,16 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                       zIndex: 100,
                     }}
                   >
-                    <div style={{ padding: '6px 10px', fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <div
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        color: '#64748b',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
                       Distributed System Visualizers
                     </div>
                     {DOMAIN_OPTIONS.map((d) => (
@@ -1925,7 +3190,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                           padding: '8px 10px',
                           borderRadius: '6px',
                           backgroundColor: selectedDomain === d.id ? '#1e293b' : 'transparent',
-                          border: selectedDomain === d.id ? `1px solid ${d.color}44` : '1px solid transparent',
+                          border:
+                            selectedDomain === d.id
+                              ? `1px solid ${d.color}44`
+                              : '1px solid transparent',
                           color: selectedDomain === d.id ? '#ffffff' : '#94a3b8',
                           textAlign: 'left',
                           cursor: 'pointer',
@@ -1935,11 +3203,25 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ fontSize: '1.1rem' }}>{d.icon}</span>
                           <div>
-                            <div style={{ fontWeight: selectedDomain === d.id ? 700 : 500, fontSize: '0.8rem', color: selectedDomain === d.id ? '#f8fafc' : '#cbd5e1' }}>{d.name}</div>
-                            <div style={{ fontSize: '0.65rem', color: '#64748b' }}>{d.category}</div>
+                            <div
+                              style={{
+                                fontWeight: selectedDomain === d.id ? 700 : 500,
+                                fontSize: '0.8rem',
+                                color: selectedDomain === d.id ? '#f8fafc' : '#cbd5e1',
+                              }}
+                            >
+                              {d.name}
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                              {d.category}
+                            </div>
                           </div>
                         </div>
-                        <span style={{ fontSize: '0.65rem', color: '#475569', fontFamily: 'monospace' }}>{d.path}</span>
+                        <span
+                          style={{ fontSize: '0.65rem', color: '#475569', fontFamily: 'monospace' }}
+                        >
+                          {d.path}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -1952,33 +3234,45 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         <div className="header-right">
           <div className="connection-pill">
             <div className="connection-field">
-              <span className="connection-field-label">REST Gateway</span>
+              <label htmlFor="rest-gateway-url-input" className="connection-field-label">
+                REST Gateway
+              </label>
               <input
+                id="rest-gateway-url-input"
                 type="text"
                 value={restUrl}
                 onChange={(e) => setRestUrl(e.target.value)}
+                aria-label="REST Gateway URL"
                 className="connection-field-input"
                 style={{ width: 160 }}
               />
             </div>
             <div className="connection-divider" />
             <div className="connection-field">
-              <span className="connection-field-label">WS Tunnel</span>
+              <label htmlFor="ws-tunnel-url-input" className="connection-field-label">
+                WS Tunnel
+              </label>
               <input
+                id="ws-tunnel-url-input"
                 type="text"
                 value={wsUrl}
                 onChange={(e) => setWsUrl(e.target.value)}
+                aria-label="WebSocket Tunnel URL"
                 className="connection-field-input"
                 style={{ width: 160 }}
               />
             </div>
             <div className="connection-divider" />
             <div className="connection-field">
-              <span className="connection-field-label">Room</span>
+              <label htmlFor="room-id-input" className="connection-field-label">
+                Room
+              </label>
               <input
+                id="room-id-input"
                 type="text"
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
+                aria-label="Simulation Room ID"
                 className="connection-field-input"
                 style={{ width: 72 }}
               />
@@ -2006,31 +3300,61 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
               📥 Ingest Trace
             </button>
 
-            <button onClick={() => { void handleSandboxLogin(); }} className="btn btn--ghost">
+            <button
+              onClick={() => setShowTableModal(true)}
+              className="btn btn--secondary"
+              title="Open accessible non-canvas data table view"
+            >
+              📊 Table View
+            </button>
+
+            <button
+              onClick={() => setShowTourModal(true)}
+              className="btn btn--ghost"
+              title="Start feature tour (?)"
+            >
+              💡 Tour
+            </button>
+
+            <button
+              onClick={() => {
+                void handleSandboxLogin();
+              }}
+              className="btn btn--ghost"
+            >
               Auth Dev
             </button>
 
-            {authError
-              ? <span className="status-badge status-badge--disconnected" title={authError}>Auth Failed</span>
-              : authReady
-                ? <span className="status-badge status-badge--connected">Auth Ready</span>
-                : <span className="status-badge status-badge--connecting">No Auth</span>
-            }
+            {authError ? (
+              <span className="status-badge status-badge--disconnected" title={authError}>
+                Auth Failed
+              </span>
+            ) : authReady ? (
+              <span className="status-badge status-badge--connected">Auth Ready</span>
+            ) : (
+              <span className="status-badge status-badge--connecting">No Auth</span>
+            )}
 
-            {connected
-              ? <button onClick={handleDisconnect} className="btn btn--rose">Disconnect</button>
-              : <button onClick={handleConnect} className="btn btn--emerald" disabled={!authReady}>Connect</button>
-            }
+            {connected ? (
+              <button onClick={handleDisconnect} className="btn btn--rose">
+                Disconnect
+              </button>
+            ) : (
+              <button onClick={handleConnect} className="btn btn--emerald" disabled={!authReady}>
+                Connect
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       {/* ── Body ── */}
       <div className="app-body">
-
         {/* ── Left Sidebar ── */}
-        <aside className="sidebar">
-
+        <aside
+          className="sidebar"
+          aria-label={`${selectedDomain} simulation controls and overview`}
+        >
           {/* System Overview */}
           <div className="card card--yellow">
             <p className="card-title card-title--yellow">System Overview</p>
@@ -2049,7 +3373,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p className="card-title card-title--blue">Producers ({producers.length})</p>
             </div>
-            
+
             <div className="btn-row">
               <button
                 onClick={() => setShowAddProducerModal(true)}
@@ -2069,16 +3393,30 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
             {/* Inline Add Producer Modal */}
             {showAddProducerModal && (
-              <form onSubmit={handleConfirmAddProducer} className="form-body" style={{ background: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                <span className="form-label" style={{ fontWeight: 700, color: '#1e40af' }}>Bind Producer to Topic</span>
+              <form
+                onSubmit={handleConfirmAddProducer}
+                className="form-body"
+                style={{
+                  background: '#ffffff',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: '1px solid #bfdbfe',
+                }}
+              >
+                <span className="form-label" style={{ fontWeight: 700, color: '#1e40af' }}>
+                  Bind Producer to Topic
+                </span>
                 <select
                   value={producerSelectedTopic}
                   onChange={(e) => setProducerSelectedTopic(e.target.value)}
+                  aria-label="Bind producer to topic"
                   className="producer-select"
                   style={{ width: '100%', marginBottom: '8px' }}
                 >
                   {availableTopics.map((t) => (
-                    <option key={t} value={t}>{t}</option>
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
                   ))}
                   <option value="__NEW__">➕ Create New Topic...</option>
                 </select>
@@ -2096,26 +3434,42 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 )}
 
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <button type="submit" className="btn btn--primary" style={{ flex: 1 }}>Confirm</button>
-                  <button type="button" onClick={() => setShowAddProducerModal(false)} className="btn btn--ghost">Cancel</button>
+                  <button type="submit" className="btn btn--primary" style={{ flex: 1 }}>
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddProducerModal(false)}
+                    className="btn btn--ghost"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </form>
             )}
 
             <div className="card-divider form-body">
-              <span className="form-label" style={{ color: '#1e3a8a', fontWeight: 700 }}>Active Producers</span>
+              <span className="form-label" style={{ color: '#1e3a8a', fontWeight: 700 }}>
+                Active Producers
+              </span>
               <div className="producer-list-container">
                 {producers.map((prod) => {
                   const partitions = liveState?.topics[prod.topic] || [];
                   const leaderSet = new Set<string>();
                   for (const p of partitions) {
-                    if (p.leaderBrokerId && liveState?.brokers[p.leaderBrokerId]?.status === 'ALIVE') {
+                    if (
+                      p.leaderBrokerId &&
+                      liveState?.brokers[p.leaderBrokerId]?.status === 'ALIVE'
+                    ) {
                       leaderSet.add(p.leaderBrokerId);
                     }
                   }
-                  const brokerLabel = leaderSet.size > 0
-                    ? `→ ${Array.from(leaderSet).map((b) => `B${b}`).join(',')}`
-                    : '→ OFFLINE';
+                  const brokerLabel =
+                    leaderSet.size > 0
+                      ? `→ ${Array.from(leaderSet)
+                          .map((b) => `B${b}`)
+                          .join(',')}`
+                      : '→ OFFLINE';
 
                   const interval = prod.autoProduceInterval ?? 3.0;
                   const rateMsgSec = (1 / interval).toFixed(2);
@@ -2125,18 +3479,27 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                       <div className="producer-row">
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                           <span className="producer-label">P-{prod.id.substring(9)}</span>
-                          <span style={{ fontSize: '7.5px', color: leaderSet.size > 0 ? '#059669' : '#e11d48', fontWeight: 600 }}>
+                          <span
+                            style={{
+                              fontSize: '7.5px',
+                              color: leaderSet.size > 0 ? '#059669' : '#e11d48',
+                              fontWeight: 600,
+                            }}
+                          >
                             {brokerLabel}
                           </span>
                         </div>
                         <select
                           value={prod.topic}
                           onChange={(e) => handleProducerTopicChange(prod.id, e.target.value)}
+                          aria-label={`Select topic for producer ${prod.id}`}
                           className="producer-select"
                           disabled={isHalted}
                         >
                           {availableTopics.map((t) => (
-                            <option key={t} value={t}>{t}</option>
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
                           ))}
                         </select>
                         <button
@@ -2159,6 +3522,17 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
                       {/* Auto-Produce Cadence Slider & Input Drawer */}
                       <div className="producer-auto-drawer">
+                        <label
+                          className="producer-auto-rate-label"
+                          style={{
+                            display: 'block',
+                            marginBottom: '2px',
+                            fontSize: '9px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Cadence (seconds):
+                        </label>
                         <div className="producer-auto-controls-row">
                           <input
                             type="range"
@@ -2166,9 +3540,12 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                             max="30.0"
                             step="0.1"
                             value={interval}
-                            onChange={(e) => handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))}
+                            onChange={(e) =>
+                              handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))
+                            }
                             className="producer-auto-slider"
                             disabled={isHalted}
+                            aria-label={`Auto-produce interval for producer ${prod.id} in seconds`}
                             title={`Auto-produce interval: ${interval.toFixed(1)}s`}
                           />
                           <input
@@ -2177,14 +3554,20 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                             max="30.0"
                             step="0.1"
                             value={interval}
-                            onChange={(e) => handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))}
+                            onChange={(e) =>
+                              handleAutoProduceIntervalChange(prod.id, parseFloat(e.target.value))
+                            }
                             onBlur={(e) => {
                               const val = parseFloat(e.target.value);
-                              const clamped = Math.max(0.5, Math.min(30.0, Number.isNaN(val) ? 3.0 : val));
+                              const clamped = Math.max(
+                                0.5,
+                                Math.min(30.0, Number.isNaN(val) ? 3.0 : val),
+                              );
                               handleAutoProduceIntervalChange(prod.id, clamped);
                             }}
                             className="producer-auto-number-input"
                             disabled={isHalted}
+                            aria-label={`Exact auto-produce interval in seconds for producer ${prod.id}`}
                             title="Exact interval in seconds"
                           />
                         </div>
@@ -2232,31 +3615,55 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
             {/* Inline Add Consumer Modal */}
             {showAddConsumerModal && (
-              <form onSubmit={handleConfirmAddConsumer} className="form-body" style={{ background: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #e9d5ff' }}>
-                <span className="form-label" style={{ fontWeight: 700, color: '#6b21a8' }}>Select Subscribed Topic</span>
+              <form
+                onSubmit={handleConfirmAddConsumer}
+                className="form-body"
+                style={{
+                  background: '#ffffff',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: '1px solid #e9d5ff',
+                }}
+              >
+                <span className="form-label" style={{ fontWeight: 700, color: '#6b21a8' }}>
+                  Select Subscribed Topic
+                </span>
                 <select
                   value={consumerSelectedTopic}
                   onChange={(e) => setConsumerSelectedTopic(e.target.value)}
+                  aria-label="Select topic to subscribe"
                   className="producer-select"
                   style={{ width: '100%', marginBottom: '8px' }}
                 >
                   {availableTopics.map((t) => (
-                    <option key={t} value={t}>{t}</option>
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
                   ))}
                 </select>
 
-                <span className="form-label" style={{ fontWeight: 700, color: '#6b21a8', marginTop: '4px' }}>Consumer Group</span>
+                <span
+                  className="form-label"
+                  style={{ fontWeight: 700, color: '#6b21a8', marginTop: '4px' }}
+                >
+                  Consumer Group
+                </span>
                 <select
                   value={consumerSelectedGroup}
                   onChange={(e) => setConsumerSelectedGroup(e.target.value)}
+                  aria-label="Select consumer group"
                   className="producer-select"
                   style={{ width: '100%', marginBottom: '8px' }}
                 >
-                  {[...new Set([
-                    ...Object.keys(liveState?.consumerGroups ?? {}),
-                    ...consumers.map((c) => c.groupId),
-                  ])].map((g) => (
-                    <option key={g} value={g}>{g}</option>
+                  {[
+                    ...new Set([
+                      ...Object.keys(liveState?.consumerGroups ?? {}),
+                      ...consumers.map((c) => c.groupId),
+                    ]),
+                  ].map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
                   ))}
                   <option value="__NEW__">➕ Create New Group...</option>
                 </select>
@@ -2274,20 +3681,38 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 )}
 
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <button type="submit" className="btn btn--indigo" style={{ flex: 1 }}>Confirm</button>
-                  <button type="button" onClick={() => setShowAddConsumerModal(false)} className="btn btn--ghost">Cancel</button>
+                  <button type="submit" className="btn btn--indigo" style={{ flex: 1 }}>
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddConsumerModal(false)}
+                    className="btn btn--ghost"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </form>
             )}
 
             <div className="card-divider form-body">
-              <span className="form-label" style={{ color: '#581c87', fontWeight: 700 }}>Consumer Subscriptions</span>
+              <span className="form-label" style={{ color: '#581c87', fontWeight: 700 }}>
+                Consumer Subscriptions
+              </span>
               <div className="producer-list-container">
                 {consumers.map((c) => (
                   <div key={c.id} className="producer-row">
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span className="producer-label" style={{ minWidth: '28px' }}>C-{c.id.substring(9)}</span>
-                      <span style={{ fontSize: '7.5px', color: c.joined ? '#059669' : '#64748b', fontWeight: 600 }}>
+                      <span className="producer-label" style={{ minWidth: '28px' }}>
+                        C-{c.id.substring(9)}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '7.5px',
+                          color: c.joined ? '#059669' : '#64748b',
+                          fontWeight: 600,
+                        }}
+                      >
                         {c.joined ? '● JOINED' : '○ IDLE'}
                       </span>
                       <span style={{ fontSize: '6.5px', color: '#581c87', fontWeight: 700 }}>
@@ -2297,11 +3722,14 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                     <select
                       value={c.topic}
                       onChange={(e) => handleConsumerTopicChange(c.id, e.target.value)}
+                      aria-label={`Topic subscription for consumer ${c.id}`}
                       className="producer-select"
                       disabled={isHalted || c.joined}
                     >
                       {availableTopics.map((t) => (
-                        <option key={t} value={t}>{t}</option>
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
                       ))}
                     </select>
                     {c.joined ? (
@@ -2335,8 +3763,16 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
           <div className="card card--pink">
             <p className="card-title card-title--pink">Chaos Laboratory</p>
             <div className="btn-row">
-              <button onClick={handleKillBroker} disabled={isHalted} className="btn btn--rose">💥 Crash Broker</button>
-              <button onClick={handleRecoverBroker} disabled={isHalted} className="btn btn--emerald">🔧 Recover Broker</button>
+              <button onClick={handleKillBroker} disabled={isHalted} className="btn btn--rose">
+                💥 Crash Broker
+              </button>
+              <button
+                onClick={handleRecoverBroker}
+                disabled={isHalted}
+                className="btn btn--emerald"
+              >
+                🔧 Recover Broker
+              </button>
             </div>
           </div>
 
@@ -2350,23 +3786,31 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
             </div>
             <form onSubmit={handleCreateTopic} className="form-body">
               <div className="form-group">
-                <span className="form-label">Topic Name</span>
+                <label htmlFor="new-topic-name-input" className="form-label">
+                  Topic Name
+                </label>
                 <input
+                  id="new-topic-name-input"
                   type="text"
                   value={newTopicName}
                   onChange={(e) => setNewTopicName(e.target.value)}
+                  aria-label="New topic name"
                   className="form-input"
                   required
                 />
               </div>
               <div className="form-group">
-                <span className="form-label">Partitions</span>
+                <label htmlFor="new-partitions-input" className="form-label">
+                  Partitions
+                </label>
                 <input
+                  id="new-partitions-input"
                   type="number"
                   min="1"
                   max="10"
                   value={newPartitions}
                   onChange={(e) => setNewPartitions(parseInt(e.target.value, 10))}
+                  aria-label="Number of partitions"
                   className="form-input"
                   required
                 />
@@ -2398,8 +3842,17 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
             </div>
 
             {/* Replay Speed Multiplier Pills */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-              <span style={{ fontSize: '11px', color: '#047857', fontWeight: 600 }}>Replay Speed:</span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: '6px',
+              }}
+            >
+              <span style={{ fontSize: '11px', color: '#047857', fontWeight: 600 }}>
+                Replay Speed:
+              </span>
               <div style={{ display: 'flex', gap: '4px' }}>
                 {([1, 2, 4] as const).map((spd) => (
                   <button
@@ -2433,7 +3886,13 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
               <label
                 className="btn btn--ghost"
-                style={{ flex: 1, fontSize: '10px', padding: '4px', textAlign: 'center', cursor: 'pointer' }}
+                style={{
+                  flex: 1,
+                  fontSize: '10px',
+                  padding: '4px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                }}
                 title="Import and replay offline JSON trace"
               >
                 📂 Import
@@ -2459,7 +3918,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                   gap: '8px',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
                   <span style={{ fontSize: '11px', fontWeight: 700, color: '#818cf8' }}>
                     📼 RECONSTITUTION CONTROLLER
                   </span>
@@ -2473,7 +3934,8 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 </div>
 
                 <div style={{ fontSize: '11px', color: '#cbd5e1' }}>
-                  Step <strong>{currentReconstitutedStep}</strong> / {reconstitutedTimeline.length - 1} · Tick {playbackTick}
+                  Step <strong>{currentReconstitutedStep}</strong> /{' '}
+                  {reconstitutedTimeline.length - 1} · Tick {playbackTick}
                 </div>
 
                 <div style={{ display: 'flex', gap: '4px' }}>
@@ -2496,7 +3958,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                   </button>
                   <button
                     onClick={handleReconstitutionStepForward}
-                    disabled={currentReconstitutedStep >= (reconstitutorRef.current?.totalSteps ?? 0)}
+                    disabled={
+                      currentReconstitutedStep >= (reconstitutorRef.current?.totalSteps ?? 0)
+                    }
                     className="btn btn--primary"
                     style={{ flex: 1, padding: '4px', fontSize: '11px' }}
                     title="Step forward one event"
@@ -2504,7 +3968,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                     Step ▶
                   </button>
                   <button
-                    onClick={() => handleReconstitutionSeek((reconstitutorRef.current?.totalSteps ?? 1))}
+                    onClick={() =>
+                      handleReconstitutionSeek(reconstitutorRef.current?.totalSteps ?? 1)
+                    }
                     className="btn btn--ghost"
                     style={{ flex: 1, padding: '4px', fontSize: '11px' }}
                     title="Jump to end"
@@ -2535,7 +4001,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                   type="range"
                   className="scrubber-input"
                   min={0}
-                  max={Math.max(1, (reconstitutorRef.current?.totalSteps ?? 1))}
+                  max={Math.max(1, reconstitutorRef.current?.totalSteps ?? 1)}
                   value={currentReconstitutedStep}
                   onChange={(e) => handleReconstitutionSeek(parseInt(e.target.value, 10))}
                 />
@@ -2562,7 +4028,10 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 <hr className="scrubber-divider" />
                 <div className="scrubber-range-row">
                   <span>Tick {String(stateHistory[0]?.tick ?? 0)}</span>
-                  <span>▶ {String(playbackTick)} {isReplaying ? `(Replaying ${String(replaySpeed)}x)` : ''}</span>
+                  <span>
+                    ▶ {String(playbackTick)}{' '}
+                    {isReplaying ? `(Replaying ${String(replaySpeed)}x)` : ''}
+                  </span>
                   <span>{String(stateHistory[stateHistory.length - 1]?.tick ?? 0)}</span>
                 </div>
                 <input
@@ -2580,89 +4049,149 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
 
         {/* ── Center Canvas ── */}
         <main className="canvas-panel">
-          {selectedDomain === 'kafka' ? (
-            <Visualizer
-              state={renderedState}
-              producers={producers}
-              consumers={consumers}
-              produceTrigger={produceTrigger}
-              resetTrigger={resetCounter}
-              onHoverDetails={setHoverDetails}
-              onSelectEntity={(entity) => setInspectEntity(entity)}
-            />
-          ) : selectedDomain === 'raft' ? (
-            <RaftVisualizer
-              state={raftState}
-              onProposeCommand={handleRaftProposeCommand}
-              onCrashNode={handleRaftCrashNode}
-              onRecoverNode={handleRaftRecoverNode}
-              onTogglePartition={handleRaftTogglePartition}
-            />
-          ) : selectedDomain === 'database' ? (
-            <HashRingVisualizer
-              state={dbState}
-              onWriteKey={handleDBWriteKey}
-              onReadKey={handleDBReadKey}
-              onAddNode={handleDBAddNode}
-              onCrashNode={handleDBCrashNode}
-              onRecoverNode={handleDBRecoverNode}
-              onUpdateConsistency={handleDBUpdateConsistency}
-            />
-          ) : selectedDomain === 'redis' ? (
-            <RedisClusterVisualizer
-              state={redisState}
-              onSetKey={handleRedisSetKey}
-              onGetKey={handleRedisGetKey}
-              onDelKey={handleRedisDelKey}
-              onReshard={handleRedisReshard}
-              onCrashNode={handleRedisCrashNode}
-              onRecoverNode={handleRedisRecoverNode}
-              onSetEvictionPolicy={handleRedisSetEvictionPolicy}
-            />
-          ) : selectedDomain === 'kubernetes' ? (
-            <K8sClusterVisualizer
-              state={k8sState}
-              onScaleDeployment={handleK8sScaleDeployment}
-              onUpdateImage={handleK8sUpdateImage}
-              onNodeCordon={handleK8sNodeCordon}
-              onNodeDrain={handleK8sNodeDrain}
-              onNodeCrash={handleK8sNodeCrash}
-              onNodeRecover={handleK8sNodeRecover}
-            />
-          ) : selectedDomain === 'rabbitmq' ? (
-            <RabbitMQVisualizer
-              state={rabbitState}
-              onPublish={handleRabbitPublish}
-              onAck={handleRabbitAck}
-              onNack={handleRabbitNack}
-              onReject={handleRabbitReject}
-            />
-          ) : selectedDomain === 'storage' ? (
-            <StorageEngineVisualizer
-              state={storageState}
-              onWrite={handleStorageWrite}
-              onRead={handleStorageRead}
-              onSwitchEngine={handleStorageSwitchEngine}
-              onTriggerFlush={handleStorageTriggerFlush}
-              onTriggerCompaction={handleStorageTriggerCompaction}
-            />
-          ) : (
-            <NetworkingVisualizer
-              state={networkingState}
-              onStartHandshake={handleNetworkingStartHandshake}
-              onSendData={handleNetworkingSendData}
-              onDropPacket={handleNetworkingDropPacket}
-            />
-          )}
+          <ErrorBoundary fallbackTitle={`${selectedDomain.toUpperCase()} Visualizer Fault`}>
+            {selectedDomain === 'kafka' ? (
+              <Visualizer
+                state={renderedState}
+                producers={producers}
+                consumers={consumers}
+                produceTrigger={produceTrigger}
+                resetTrigger={resetCounter}
+                onHoverDetails={setHoverDetails}
+                onSelectEntity={(entity) => setInspectEntity(entity)}
+              />
+            ) : selectedDomain === 'raft' ? (
+              <RaftVisualizer
+                state={raftState}
+                onProposeCommand={handleRaftProposeCommand}
+                onCrashNode={handleRaftCrashNode}
+                onRecoverNode={handleRaftRecoverNode}
+                onTogglePartition={handleRaftTogglePartition}
+              />
+            ) : selectedDomain === 'database' ? (
+              <HashRingVisualizer
+                state={dbState}
+                onWriteKey={handleDBWriteKey}
+                onReadKey={handleDBReadKey}
+                onAddNode={handleDBAddNode}
+                onCrashNode={handleDBCrashNode}
+                onRecoverNode={handleDBRecoverNode}
+                onUpdateConsistency={handleDBUpdateConsistency}
+                onConfigureFidelity={handleDBConfigureFidelity}
+              />
+            ) : selectedDomain === 'redis' ? (
+              <RedisClusterVisualizer
+                state={redisState}
+                onSetKey={handleRedisSetKey}
+                onGetKey={handleRedisGetKey}
+                onDelKey={handleRedisDelKey}
+                onReshard={handleRedisReshard}
+                onCrashNode={handleRedisCrashNode}
+                onRecoverNode={handleRedisRecoverNode}
+                onSetEvictionPolicy={handleRedisSetEvictionPolicy}
+              />
+            ) : selectedDomain === 'kubernetes' ? (
+              <K8sClusterVisualizer
+                state={k8sState}
+                onScaleDeployment={handleK8sScaleDeployment}
+                onUpdateImage={handleK8sUpdateImage}
+                onNodeCordon={handleK8sNodeCordon}
+                onNodeDrain={handleK8sNodeDrain}
+                onNodeCrash={handleK8sNodeCrash}
+                onNodeRecover={handleK8sNodeRecover}
+              />
+            ) : selectedDomain === 'rabbitmq' ? (
+              <RabbitMQVisualizer
+                state={rabbitState}
+                onPublish={handleRabbitPublish}
+                onAck={handleRabbitAck}
+                onNack={handleRabbitNack}
+                onReject={handleRabbitReject}
+              />
+            ) : selectedDomain === 'storage' ? (
+              <StorageEngineVisualizer
+                state={storageState}
+                onWrite={handleStorageWrite}
+                onRead={handleStorageRead}
+                onSwitchEngine={handleStorageSwitchEngine}
+                onTriggerFlush={handleStorageTriggerFlush}
+                onTriggerCompaction={handleStorageTriggerCompaction}
+                onConfigureFidelity={handleStorageConfigureFidelity}
+              />
+            ) : selectedDomain === 'networking' ? (
+              <NetworkingVisualizer
+                state={networkingState}
+                onStartHandshake={handleNetworkingStartHandshake}
+                onSendData={handleNetworkingSendData}
+                onDropPacket={handleNetworkingDropPacket}
+                onConfigureFidelity={handleNetworkingConfigureFidelity}
+              />
+            ) : selectedDomain === 'rate-limiter' ? (
+              <RateLimiterVisualizer
+                state={rateLimiterState}
+                onRequest={handleRateLimiterRequest}
+                onBurst={handleRateLimiterBurst}
+                onTriggerBoundaryBurst={handleRateLimiterTriggerBoundaryBurst}
+                onUpdateConfig={handleRateLimiterUpdateConfig}
+              />
+            ) : selectedDomain === 'distributed-lock' ? (
+              <DistributedLockVisualizer
+                state={distLockState}
+                onAcquire={handleDistLockAcquire}
+                onRelease={handleDistLockRelease}
+                onInjectGcPause={handleDistLockInjectGcPause}
+                onWriteProtectedResource={handleDistLockWriteProtectedResource}
+                onToggleFencing={handleDistLockToggleFencing}
+                onToggleNodeStatus={handleDistLockToggleNodeStatus}
+              />
+            ) : selectedDomain === 'cdn-cache' ? (
+              <CdnCacheVisualizer
+                state={cdnCacheState}
+                onRequest={handleCdnRequest}
+                onFlashCrowd={handleCdnFlashCrowd}
+                onPurge={handleCdnPurge}
+                onTogglePopStatus={handleCdnTogglePopStatus}
+                onToggleCoalescing={handleCdnToggleCoalescing}
+                onUpdateOrigin={handleCdnUpdateOrigin}
+              />
+            ) : selectedDomain === 'id-gen' ? (
+              <IdGenVisualizer
+                state={idGenState}
+                onGenerate={handleIdGenGenerate}
+                onInjectClockSkew={handleIdGenInjectClockSkew}
+                onFloodOverflow={handleIdGenFloodOverflow}
+                onAssignDuplicateWorker={handleIdGenAssignDuplicateWorker}
+                onSwitchGeneratorType={handleIdGenSwitchGeneratorType}
+              />
+            ) : (
+              <TransactionsVisualizer
+                state={txnState}
+                onStart2PC={handleTxnStart2PC}
+                onVoteParticipant={handleTxnVoteParticipant}
+                onCrashCoordinator={handleTxnCrashCoordinator}
+                onRecoverCoordinator={handleTxnRecoverCoordinator}
+                onStartSaga={handleTxnStartSaga}
+                onStepSaga={handleTxnStepSaga}
+                onSwitchProtocol={handleTxnSwitchProtocol}
+              />
+            )}
+          </ErrorBoundary>
           {hoverDetails && selectedDomain === 'kafka' && (
             <div className="hover-tooltip">
               <p className="hover-tooltip__title">{hoverDetails.title}</p>
-              {hoverDetails.subtitle && <p className="hover-tooltip__subtitle">{hoverDetails.subtitle}</p>}
+              {hoverDetails.subtitle && (
+                <p className="hover-tooltip__subtitle">{hoverDetails.subtitle}</p>
+              )}
               <div className="hover-tooltip__stats">
                 {hoverDetails.stats.map((s, idx) => (
                   <div key={idx} className="hover-tooltip__stat-row">
                     <span className="hover-tooltip__stat-label">{s.label}:</span>
-                    <span className="hover-tooltip__stat-value" style={s.color ? { color: s.color } : undefined}>{s.value}</span>
+                    <span
+                      className="hover-tooltip__stat-value"
+                      style={s.color ? { color: s.color } : undefined}
+                    >
+                      {s.value}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -2674,12 +4203,16 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         </main>
 
         {/* ── Right Event Log ── */}
-        <aside className="card card--purple log-sidebar">
+        <aside
+          className="card card--purple log-sidebar"
+          aria-label="Event audit log and state inspector"
+        >
           <p className="card-title card-title--purple">Event Log Stream</p>
           <div className="log-list">
-            {eventLogs.length === 0
-              ? <div className="log-empty">No events captured yet</div>
-              : eventLogs.map((log) => (
+            {eventLogs.length === 0 ? (
+              <div className="log-empty">No events captured yet</div>
+            ) : (
+              eventLogs.map((log) => (
                 <div key={log.id} className={logEntryClass(log.type)}>
                   <div className="log-entry-header">
                     <span className="log-entry-time">
@@ -2690,7 +4223,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                   <p className="log-entry-message">{log.message}</p>
                 </div>
               ))
-            }
+            )}
           </div>
         </aside>
       </div>
@@ -2731,6 +4264,17 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
         onClose={() => setShowDomainDirectoryModal(false)}
       />
 
+      {/* ── Feature Onboarding Tour ── */}
+      <OnboardingTour isOpen={showTourModal} onClose={() => setShowTourModal(false)} />
+
+      {/* ── Accessible Data Table Modal ── */}
+      <DataTableModal
+        isOpen={showTableModal}
+        onClose={() => setShowTableModal(false)}
+        domainName={selectedDomain.toUpperCase()}
+        rows={accessibleRows}
+      />
+
       {/* ── Halt Banner ── */}
       {isHalted && (
         <div className="halt-banner">
@@ -2739,7 +4283,11 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
           </span>
           <button
             className="halt-banner-reset"
-            onClick={() => { setIsHalted(false); setHaltError(null); handleConnect(); }}
+            onClick={() => {
+              setIsHalted(false);
+              setHaltError(null);
+              handleConnect();
+            }}
           >
             Reset Session
           </button>

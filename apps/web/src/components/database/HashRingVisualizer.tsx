@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+
 import type { ConsistencyLevel, DBClusterState } from '@the-visualizer/simulation';
 import { ConsistentHashRing, hashToToken } from '@the-visualizer/simulation';
 
@@ -12,6 +13,7 @@ interface HashRingVisualizerProps {
   onCrashNode: (nodeId: string) => void;
   onRecoverNode: (nodeId: string) => void;
   onUpdateConsistency: (read: ConsistencyLevel, write: ConsistencyLevel) => void;
+  onConfigureFidelity?: (mode: 'TEXTBOOK' | 'REALISTIC') => void;
 }
 
 export function HashRingVisualizer({
@@ -22,21 +24,30 @@ export function HashRingVisualizer({
   onCrashNode,
   onRecoverNode,
   onUpdateConsistency,
+  onConfigureFidelity,
 }: HashRingVisualizerProps): React.JSX.Element {
   const [keyInput, setKeyInput] = useState('user:42');
   const [valInput, setValInput] = useState('{"name":"Alice"}');
   const [readKeyInput, setReadKeyInput] = useState('user:42');
   const [lastReadResult, setLastReadResult] = useState<string | null>(null);
 
-  // Hash Ring calculations for SVG
-  const ring = new ConsistentHashRing(3);
-  ring.setRingTokens(state.ringTokens);
-  const activeKeyToken = keyInput ? hashToToken(keyInput) : 0;
-  const { replicaNodeIds } = ring.findReplicas(keyInput, state.replicationFactor);
-
   const cx = 200;
   const cy = 200;
   const radius = 140;
+
+  // Memoized Consistent Hash Ring instance to prevent continuous re-allocation
+  const ring = React.useMemo(() => {
+    const r = new ConsistentHashRing(3);
+    r.setRingTokens(state.ringTokens);
+    return r;
+  }, [state.ringTokens]);
+
+  const activeKeyToken = React.useMemo(() => (keyInput ? hashToToken(keyInput) : 0), [keyInput]);
+
+  const replicaNodeIds = React.useMemo(
+    () => ring.findReplicas(keyInput, state.replicationFactor).replicaNodeIds,
+    [ring, keyInput, state.replicationFactor],
+  );
 
   const tokenToAngle = (token: number): number => {
     return (token / 4294967295) * 360;
@@ -50,13 +61,32 @@ export function HashRingVisualizer({
     };
   };
 
+  // Pre-calculated vnode coordinate mapping
+  const tokenCoordinates = React.useMemo(() => {
+    return state.ringTokens.map((item, idx) => {
+      const deg = (item.token / 4294967295) * 360;
+      const rad = ((deg - 90) * Math.PI) / 180;
+      return {
+        idx,
+        item,
+        pos: {
+          x: cx + radius * Math.cos(rad),
+          y: cy + radius * Math.sin(rad),
+        },
+      };
+    });
+  }, [state.ringTokens]);
+
   // PACELC Quorum Calculation
   const getRequiredCount = (level: ConsistencyLevel): number => {
     switch (level) {
-      case 'ONE': return 1;
-      case 'ALL': return state.replicationFactor;
+      case 'ONE':
+        return 1;
+      case 'ALL':
+        return state.replicationFactor;
       case 'QUORUM':
-      default: return Math.floor(state.replicationFactor / 2) + 1;
+      default:
+        return Math.floor(state.replicationFactor / 2) + 1;
     }
   };
 
@@ -70,13 +100,23 @@ export function HashRingVisualizer({
     onReadKey(readKeyInput.trim(), state.readConsistency);
 
     // Look up what sampled value might be
-    const { replicaNodeIds: rNodes } = ring.findReplicas(readKeyInput.trim(), state.replicationFactor);
+    const { replicaNodeIds: rNodes } = ring.findReplicas(
+      readKeyInput.trim(),
+      state.replicationFactor,
+    );
     const aliveRNodes = rNodes.filter((id) => state.nodes[id]?.status === 'ALIVE');
     if (aliveRNodes.length > 0) {
-      const records = aliveRNodes.map((id) => state.nodes[id]?.storage[readKeyInput.trim()]).filter(Boolean);
+      const records = aliveRNodes
+        .map((id) => state.nodes[id]?.storage[readKeyInput.trim()])
+        .filter(Boolean);
       if (records.length > 0) {
-        const latest = records.reduce((max, cur) => (cur && cur.version > (max?.version ?? 0) ? cur : max), records[0]);
-        setLastReadResult(`Key "${readKeyInput}": "${latest?.value ?? ''}" (v${String(latest?.version ?? 0)}) from ${String(aliveRNodes.length)} replicas`);
+        const latest = records.reduce(
+          (max, cur) => (cur && cur.version > (max?.version ?? 0) ? cur : max),
+          records[0],
+        );
+        setLastReadResult(
+          `Key "${readKeyInput}": "${latest?.value ?? ''}" (v${String(latest?.version ?? 0)}) from ${String(aliveRNodes.length)} replicas`,
+        );
       } else {
         setLastReadResult(`Key "${readKeyInput}": (null / not found)`);
       }
@@ -86,7 +126,15 @@ export function HashRingVisualizer({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', gap: '16px' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        padding: '16px',
+        gap: '16px',
+      }}
+    >
       {/* Top Banner with PACELC & Consistency Controls */}
       <div
         style={{
@@ -108,7 +156,13 @@ export function HashRingVisualizer({
               Consistent Hash Ring (Dynamo / Cassandra Architecture)
             </h2>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Replication Factor (N): <strong>{state.replicationFactor}</strong> · Total Tokens: <strong>{state.ringTokens.length}</strong> · Stale Reads: <strong style={{ color: state.staleReadsObserved > 0 ? '#f43f5e' : '#4ade80' }}>{state.staleReadsObserved}</strong> · Read Repairs: <strong style={{ color: '#38bdf8' }}>{state.readRepairsCompleted}</strong>
+              Replication Factor (N): <strong>{state.replicationFactor}</strong> · Total Tokens:{' '}
+              <strong>{state.ringTokens.length}</strong> · Stale Reads:{' '}
+              <strong style={{ color: state.staleReadsObserved > 0 ? '#f43f5e' : '#4ade80' }}>
+                {state.staleReadsObserved}
+              </strong>{' '}
+              · Read Repairs:{' '}
+              <strong style={{ color: '#38bdf8' }}>{state.readRepairsCompleted}</strong>
             </span>
           </div>
         </div>
@@ -119,7 +173,9 @@ export function HashRingVisualizer({
             style={{
               padding: '6px 12px',
               borderRadius: '6px',
-              backgroundColor: isStrongConsistency ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+              backgroundColor: isStrongConsistency
+                ? 'rgba(34, 197, 94, 0.15)'
+                : 'rgba(234, 179, 8, 0.15)',
               border: isStrongConsistency ? '1px solid #22c55e' : '1px solid #eab308',
               color: isStrongConsistency ? '#4ade80' : '#fde047',
               fontSize: '0.75rem',
@@ -131,12 +187,29 @@ export function HashRingVisualizer({
               : `⚠️ EVENTUAL (R:${rCount} + W:${wCount} ≤ N:${state.replicationFactor})`}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#cbd5e1' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.75rem',
+              color: '#cbd5e1',
+            }}
+          >
             <span>Write (W):</span>
             <select
               value={state.writeConsistency}
-              onChange={(e) => onUpdateConsistency(state.readConsistency, e.target.value as ConsistencyLevel)}
-              style={{ backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', padding: '4px' }}
+              onChange={(e) =>
+                onUpdateConsistency(state.readConsistency, e.target.value as ConsistencyLevel)
+              }
+              aria-label="Write consistency level (W)"
+              style={{
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+                padding: '4px',
+              }}
             >
               <option value="ONE">ONE (1)</option>
               <option value="QUORUM">QUORUM (2)</option>
@@ -146,8 +219,17 @@ export function HashRingVisualizer({
             <span style={{ marginLeft: '6px' }}>Read (R):</span>
             <select
               value={state.readConsistency}
-              onChange={(e) => onUpdateConsistency(e.target.value as ConsistencyLevel, state.writeConsistency)}
-              style={{ backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', padding: '4px' }}
+              onChange={(e) =>
+                onUpdateConsistency(e.target.value as ConsistencyLevel, state.writeConsistency)
+              }
+              aria-label="Read consistency level (R)"
+              style={{
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+                padding: '4px',
+              }}
             >
               <option value="ONE">ONE (1)</option>
               <option value="QUORUM">QUORUM (2)</option>
@@ -163,11 +245,62 @@ export function HashRingVisualizer({
           >
             ➕ Scale-Out Node
           </button>
+
+          {/* Mode Switcher: Textbook vs. Realistic */}
+          {onConfigureFidelity && (
+            <div
+              style={{
+                display: 'flex',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+                overflow: 'hidden',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => onConfigureFidelity('TEXTBOOK')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.7rem',
+                  backgroundColor: state.fidelityMode === 'TEXTBOOK' ? '#38bdf8' : '#1e293b',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: state.fidelityMode === 'TEXTBOOK' ? 700 : 400,
+                }}
+              >
+                📖 Textbook (3 vnodes)
+              </button>
+              <button
+                type="button"
+                onClick={() => onConfigureFidelity('REALISTIC')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.7rem',
+                  backgroundColor: state.fidelityMode === 'REALISTIC' ? '#818cf8' : '#1e293b',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: state.fidelityMode === 'REALISTIC' ? 700 : 400,
+                }}
+              >
+                ⚙️ Realistic (256 vnodes)
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Grid: SVG Hash Ring + Operations + Node Details */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(380px, 420px) 1fr', gap: '16px', flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(380px, 420px) 1fr',
+          gap: '16px',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {/* Left: SVG Hash Ring */}
         <div
           style={{
@@ -182,8 +315,18 @@ export function HashRingVisualizer({
             position: 'relative',
           }}
         >
-          <div style={{ position: 'absolute', top: 12, left: 16, fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8' }}>
+          <div
+            style={{
+              position: 'absolute',
+              top: 12,
+              left: 16,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: '#94a3b8',
+            }}
+          >
             32-BIT TOKEN RING [0 → 2³²-1]
+            {(state.vnodesPerNode ?? 3) > 16 ? ' · Cassandra Murmur3' : ''}
           </div>
 
           <svg width="380" height="380" viewBox="0 0 400 400">
@@ -199,32 +342,33 @@ export function HashRingVisualizer({
             />
 
             {/* Vnode Markers on Perimeter */}
-            {state.ringTokens.map((item, idx) => {
-              const deg = tokenToAngle(item.token);
-              const pos = angleToCoord(deg);
+            {tokenCoordinates.map(({ idx, item, pos }) => {
               const node = state.nodes[item.nodeId];
               const isTargetReplica = replicaNodeIds.includes(item.nodeId);
+              const isDense = (state.vnodesPerNode ?? 3) > 16;
 
               return (
                 <g key={idx}>
                   <circle
                     cx={pos.x}
                     cy={pos.y}
-                    r={isTargetReplica ? 8 : 5}
-                    fill={node?.status === 'DOWN' ? '#64748b' : node?.color ?? '#38bdf8'}
-                    stroke="#0f172a"
-                    strokeWidth="2"
+                    r={isDense ? (isTargetReplica ? 4 : 1.5) : isTargetReplica ? 8 : 5}
+                    fill={node?.status === 'DOWN' ? '#64748b' : (node?.color ?? '#38bdf8')}
+                    stroke={isDense ? (isTargetReplica ? '#ffffff' : 'none') : '#0f172a'}
+                    strokeWidth={isDense ? (isTargetReplica ? 1 : 0) : 2}
                   />
-                  <text
-                    x={pos.x}
-                    y={pos.y - 10}
-                    fill="#94a3b8"
-                    fontSize="9"
-                    textAnchor="middle"
-                    fontFamily="monospace"
-                  >
-                    #{item.nodeId}
-                  </text>
+                  {!isDense && (
+                    <text
+                      x={pos.x}
+                      y={pos.y - 10}
+                      fill="#94a3b8"
+                      fontSize="9"
+                      textAnchor="middle"
+                      fontFamily="monospace"
+                    >
+                      #{item.nodeId}
+                    </text>
+                  )}
                 </g>
               );
             })}
@@ -262,11 +406,27 @@ export function HashRingVisualizer({
             )}
 
             {/* Center Label */}
-            <text x={cx} y={cy - 10} fill="#f8fafc" fontSize="13" fontWeight="bold" textAnchor="middle">
-              {replicaNodeIds.length} Replicas
+            <text
+              x={cx}
+              y={cy - 10}
+              fill="#f8fafc"
+              fontSize="13"
+              fontWeight="bold"
+              textAnchor="middle"
+            >
+              {(state.vnodesPerNode ?? 3) > 16
+                ? '256 VNodes / Node'
+                : `${replicaNodeIds.length} Replicas`}
             </text>
-            <text x={cx} y={cy + 12} fill="#38bdf8" fontSize="11" fontFamily="monospace" textAnchor="middle">
-              [{replicaNodeIds.map((id) => `#${id}`).join(', ')}]
+            <text
+              x={cx}
+              y={cy + 12}
+              fill="#38bdf8"
+              fontSize="11"
+              fontFamily="monospace"
+              textAnchor="middle"
+            >
+              Replicas: [{replicaNodeIds.map((id) => `#${id}`).join(', ')}]
             </text>
           </svg>
 
@@ -283,7 +443,8 @@ export function HashRingVisualizer({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (keyInput.trim()) onWriteKey(keyInput.trim(), valInput.trim(), state.writeConsistency);
+                if (keyInput.trim())
+                  onWriteKey(keyInput.trim(), valInput.trim(), state.writeConsistency);
               }}
               style={{
                 backgroundColor: '#0f172a',
@@ -330,7 +491,11 @@ export function HashRingVisualizer({
                   }}
                 />
               </div>
-              <button type="submit" className="btn btn--primary" style={{ fontSize: '0.75rem', padding: '5px' }}>
+              <button
+                type="submit"
+                className="btn btn--primary"
+                style={{ fontSize: '0.75rem', padding: '5px' }}
+              >
                 Dispatch Write to Replicas
               </button>
             </form>
@@ -367,7 +532,11 @@ export function HashRingVisualizer({
                     borderRadius: '4px',
                   }}
                 />
-                <button type="submit" className="btn btn--indigo" style={{ fontSize: '0.75rem', padding: '5px 12px' }}>
+                <button
+                  type="submit"
+                  className="btn btn--indigo"
+                  style={{ fontSize: '0.75rem', padding: '5px 12px' }}
+                >
                   Read
                 </button>
               </div>
@@ -380,7 +549,13 @@ export function HashRingVisualizer({
           </div>
 
           {/* Node Cards Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '10px',
+            }}
+          >
             {Object.values(state.nodes).map((node) => {
               const isDown = node.status === 'DOWN';
               const keys = Object.keys(node.storage);
@@ -390,7 +565,9 @@ export function HashRingVisualizer({
                   key={node.id}
                   style={{
                     backgroundColor: isDown ? 'rgba(244, 63, 94, 0.05)' : '#0f172a',
-                    border: isDown ? '1px solid rgba(244, 63, 94, 0.4)' : `1px solid ${node.color}40`,
+                    border: isDown
+                      ? '1px solid rgba(244, 63, 94, 0.4)'
+                      : `1px solid ${node.color}40`,
                     borderRadius: '6px',
                     padding: '10px',
                     display: 'flex',
@@ -398,9 +575,22 @@ export function HashRingVisualizer({
                     gap: '6px',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: node.color }} />
+                      <span
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: node.color,
+                        }}
+                      />
                       <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#f8fafc' }}>
                         Node #{node.id}
                       </span>
@@ -419,19 +609,41 @@ export function HashRingVisualizer({
                   </div>
 
                   <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                    Vnodes: <strong>{node.tokens.length}</strong> · Keys: <strong>{keys.length}</strong> · Hints: <strong>{node.hints.length}</strong>
+                    Vnodes: <strong>{node.tokens.length}</strong> · Keys:{' '}
+                    <strong>{keys.length}</strong> · Hints: <strong>{node.hints.length}</strong>
                   </div>
 
                   {/* Storage Table */}
-                  <div style={{ maxHeight: '80px', overflowY: 'auto', backgroundColor: '#020617', padding: '4px', borderRadius: '4px' }}>
+                  <div
+                    style={{
+                      maxHeight: '80px',
+                      overflowY: 'auto',
+                      backgroundColor: '#020617',
+                      padding: '4px',
+                      borderRadius: '4px',
+                    }}
+                  >
                     {keys.length === 0 ? (
-                      <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>(empty)</span>
+                      <span style={{ fontSize: '0.65rem', color: '#475569', fontStyle: 'italic' }}>
+                        (empty)
+                      </span>
                     ) : (
                       keys.map((k) => {
                         const rec = node.storage[k];
                         return (
-                          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', fontFamily: 'monospace', color: '#cbd5e1' }}>
-                            <span>{k}: &quot;{rec?.value ?? ''}&quot;</span>
+                          <div
+                            key={k}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              fontSize: '0.65rem',
+                              fontFamily: 'monospace',
+                              color: '#cbd5e1',
+                            }}
+                          >
+                            <span>
+                              {k}: &quot;{rec?.value ?? ''}&quot;
+                            </span>
                             <span style={{ color: '#38bdf8' }}>v{String(rec?.version ?? 0)}</span>
                           </div>
                         );

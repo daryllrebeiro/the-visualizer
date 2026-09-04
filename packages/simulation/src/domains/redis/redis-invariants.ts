@@ -1,4 +1,4 @@
-import type { RedisClusterState, RedisNode } from './redis-types.js';
+import type { RedisClusterState } from './redis-types.js';
 
 export interface RedisInvariantViolation {
   ruleId: string;
@@ -22,7 +22,7 @@ export class RedisInvariantChecker {
 
   private checkSlotCoverage(state: RedisClusterState): RedisInvariantViolation | undefined {
     const slotOwners = new Map<number, string>();
-    const nodes = Object.values(state.nodes) as RedisNode[];
+    const nodes = Object.values(state.nodes);
     const masters = nodes.filter((n) => n.role === 'MASTER' && n.status === 'ALIVE');
 
     for (const master of masters) {
@@ -47,7 +47,7 @@ export class RedisInvariantChecker {
   private checkMemoryLimits(state: RedisClusterState): RedisInvariantViolation | undefined {
     if (state.evictionPolicy === 'noeviction') return undefined;
 
-    const nodes = Object.values(state.nodes) as RedisNode[];
+    const nodes = Object.values(state.nodes);
     for (const node of nodes) {
       if (node.memoryUsedBytes > node.maxMemoryBytes) {
         return {
