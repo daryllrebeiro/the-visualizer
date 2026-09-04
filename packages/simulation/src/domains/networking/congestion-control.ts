@@ -1,4 +1,8 @@
-import type { CongestionControlState, TCPSlidingWindowSlot, TCPCongestionAlgorithm } from './networking-types.js';
+import type {
+  CongestionControlState,
+  TCPCongestionAlgorithm,
+  TCPSlidingWindowSlot,
+} from './networking-types.js';
 
 export function createInitialSlidingWindow(startSeq = 1001, count = 12): TCPSlidingWindowSlot[] {
   const slots: TCPSlidingWindowSlot[] = [];
@@ -14,7 +18,9 @@ export function createInitialSlidingWindow(startSeq = 1001, count = 12): TCPSlid
   return slots;
 }
 
-export function createInitialCongestionState(algorithm: TCPCongestionAlgorithm = 'CUBIC'): CongestionControlState {
+export function createInitialCongestionState(
+  algorithm: TCPCongestionAlgorithm = 'CUBIC',
+): CongestionControlState {
   const srtt = 2;
   const rttvar = 1;
   const rto = srtt + Math.max(1, 4 * rttvar);
@@ -43,9 +49,12 @@ export function createInitialCongestionState(algorithm: TCPCongestionAlgorithm =
  * RTTVAR <- (1 - beta) * RTTVAR + beta * |SRTT - R'| (beta = 1/4)
  * RTO = SRTT + max(G, K * RTTVAR) (K = 4, G = 1 tick)
  */
-export function updateRttAndRto(congestion: CongestionControlState, measuredRttTicks: number): void {
+export function updateRttAndRto(
+  congestion: CongestionControlState,
+  measuredRttTicks: number,
+): void {
   const alpha = 0.125; // 1/8
-  const beta = 0.25;   // 1/4
+  const beta = 0.25; // 1/4
   const K = 4;
   const G = 1;
 
@@ -53,11 +62,15 @@ export function updateRttAndRto(congestion: CongestionControlState, measuredRttT
     congestion.srttTicks = measuredRttTicks;
     congestion.rttvarTicks = measuredRttTicks / 2;
   } else {
-    congestion.rttvarTicks = (1 - beta) * congestion.rttvarTicks + beta * Math.abs(congestion.srttTicks - measuredRttTicks);
+    congestion.rttvarTicks =
+      (1 - beta) * congestion.rttvarTicks +
+      beta * Math.abs(congestion.srttTicks - measuredRttTicks);
     congestion.srttTicks = (1 - alpha) * congestion.srttTicks + alpha * measuredRttTicks;
   }
 
-  congestion.rtoTicks = Number((congestion.srttTicks + Math.max(G, K * congestion.rttvarTicks)).toFixed(2));
+  congestion.rtoTicks = Number(
+    (congestion.srttTicks + Math.max(G, K * congestion.rttvarTicks)).toFixed(2),
+  );
   congestion.rttTicks = Number(congestion.srttTicks.toFixed(2));
 }
 
@@ -131,7 +144,10 @@ export function advanceCongestionWindow(
       }
     } else if (congestion.phase === 'CongestionAvoidance') {
       if (congestion.algorithm === 'CUBIC') {
-        const elapsedRtts = Math.max(0, (tick - congestion.lastLossTick) / Math.max(1, congestion.rttTicks));
+        const elapsedRtts = Math.max(
+          0,
+          (tick - congestion.lastLossTick) / Math.max(1, congestion.rttTicks),
+        );
         const target = computeCubicTarget(congestion.wMax, elapsedRtts);
         if (target > congestion.cwnd) {
           congestion.cwnd += Number(((target - congestion.cwnd) / congestion.cwnd).toFixed(2));

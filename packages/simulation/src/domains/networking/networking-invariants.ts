@@ -29,6 +29,21 @@ export class NetworkInvariantChecker {
       };
     }
 
+    // 3. NET-3: Exact Mode-Aware Multiplicative Decrease Factor Check
+    if (state.totalPacketsDropped > 0 || state.congestion.lastLossTick > 0) {
+      const isCubic = state.congestion.algorithm === 'CUBIC';
+      const factor = isCubic ? 0.7 : 0.5;
+      const expectedSsthresh = Math.max(2, Math.floor(state.congestion.wMax * factor));
+      if (state.congestion.ssthresh !== expectedSsthresh) {
+        return {
+          ruleId: 'NET-3',
+          invariantName: 'AIMD Multiplicative Decrease Factor',
+          description: `ssthresh (${String(state.congestion.ssthresh)}) does not match expected ${isCubic ? 'CUBIC (0.7x)' : 'Reno (0.5x)'} multiplicative decrease factor of wMax (${String(state.congestion.wMax)}): expected ${String(expectedSsthresh)}`,
+          affectedEntities: ['congestion'],
+        };
+      }
+    }
+
     return undefined;
   }
 }

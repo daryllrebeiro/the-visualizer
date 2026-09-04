@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import {
   advanceCongestionWindow,
@@ -6,6 +7,7 @@ import {
   createInitialCongestionState,
   updateRttAndRto,
 } from './congestion-control.js';
+import { NetworkInvariantChecker } from './networking-invariants.js';
 import {
   createDefaultNetworkingCluster,
   pureNetworkingTransition,
@@ -90,17 +92,41 @@ describe('TCP Networking Domain Fidelity Test Suite', () => {
       let state = createDefaultNetworkingCluster();
 
       // Complete handshake
-      state = pureNetworkingTransition(state, { id: 'e1', tick: 1, type: 'TCP_START_HANDSHAKE', payload: {} }, rng).nextState;
-      state = pureNetworkingTransition(state, { id: 'e2', tick: 2, type: 'TCP_TICK', payload: {} }, rng).nextState;
-      state = pureNetworkingTransition(state, { id: 'e3', tick: 3, type: 'TCP_TICK', payload: {} }, rng).nextState;
-      state = pureNetworkingTransition(state, { id: 'e4', tick: 4, type: 'TCP_TICK', payload: {} }, rng).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e1', tick: 1, type: 'TCP_START_HANDSHAKE', payload: {} },
+        rng,
+      ).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e2', tick: 2, type: 'TCP_TICK', payload: {} },
+        rng,
+      ).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e3', tick: 3, type: 'TCP_TICK', payload: {} },
+        rng,
+      ).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e4', tick: 4, type: 'TCP_TICK', payload: {} },
+        rng,
+      ).nextState;
 
       expect(state.clientState).toBe('ESTABLISHED');
       expect(state.serverState).toBe('ESTABLISHED');
 
       // Send packet 1001 and deliver
-      state = pureNetworkingTransition(state, { id: 'e5', tick: 5, type: 'TCP_SEND_DATA', payload: {} }, rng).nextState;
-      state = pureNetworkingTransition(state, { id: 'e6', tick: 6, type: 'TCP_TICK', payload: {} }, rng).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e5', tick: 5, type: 'TCP_SEND_DATA', payload: {} },
+        rng,
+      ).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e6', tick: 6, type: 'TCP_TICK', payload: {} },
+        rng,
+      ).nextState;
 
       expect(state.serverAckNumber).toBe(1101);
 
@@ -118,7 +144,11 @@ describe('TCP Networking Domain Fidelity Test Suite', () => {
         sentAtTick: 7,
         state: 'InFlight',
       });
-      state = pureNetworkingTransition(state, { id: 'e7', tick: 8, type: 'TCP_TICK', payload: {} }, rng).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e7', tick: 8, type: 'TCP_TICK', payload: {} },
+        rng,
+      ).nextState;
 
       state.inFlightPackets.push({
         id: 'ooo-2',
@@ -133,7 +163,11 @@ describe('TCP Networking Domain Fidelity Test Suite', () => {
         sentAtTick: 8,
         state: 'InFlight',
       });
-      state = pureNetworkingTransition(state, { id: 'e8', tick: 9, type: 'TCP_TICK', payload: {} }, rng).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e8', tick: 9, type: 'TCP_TICK', payload: {} },
+        rng,
+      ).nextState;
 
       state.inFlightPackets.push({
         id: 'ooo-3',
@@ -148,7 +182,11 @@ describe('TCP Networking Domain Fidelity Test Suite', () => {
         sentAtTick: 9,
         state: 'InFlight',
       });
-      state = pureNetworkingTransition(state, { id: 'e9', tick: 10, type: 'TCP_TICK', payload: {} }, rng).nextState;
+      state = pureNetworkingTransition(
+        state,
+        { id: 'e9', tick: 10, type: 'TCP_TICK', payload: {} },
+        rng,
+      ).nextState;
 
       // 3 duplicate ACKs recorded
       expect(state.congestion.duplicateAckCount).toBe(3);
@@ -179,6 +217,50 @@ describe('TCP Networking Domain Fidelity Test Suite', () => {
       expect(result.windowScaleShift).toBe(7);
       expect(result.effectiveWindowSize).toBe(4 << 7); // 4 * 128 = 512
       expect(result.sackEnabled).toBe(true);
+    });
+  });
+
+  describe('Mode-Aware NET-3 Multiplicative Decrease Invariant Validation', () => {
+    it('enforces Reno 0.5x vs CUBIC 0.7x multiplicative decrease and flags incorrect multiplier', () => {
+      const checker = new NetworkInvariantChecker();
+
+      // Case 1: Reno mode with correct 0.5x factor
+      const renoState = createDefaultNetworkingCluster();
+      renoState.congestion.algorithm = 'RENO';
+      renoState.congestion.wMax = 10;
+      renoState.congestion.ssthresh = 5; // floor(10 * 0.5) = 5
+      renoState.totalPacketsDropped = 1;
+      expect(checker.check(renoState)).toBeUndefined();
+
+      // Case 2: CUBIC mode with correct 0.7x factor (RFC 8312)
+      const cubicState = createDefaultNetworkingCluster();
+      cubicState.congestion.algorithm = 'CUBIC';
+      cubicState.congestion.wMax = 10;
+      cubicState.congestion.ssthresh = 7; // floor(10 * 0.7) = 7
+      cubicState.totalPacketsDropped = 1;
+      expect(checker.check(cubicState)).toBeUndefined();
+
+      // Case 3: In CUBIC mode, but erroneously applied Reno 0.5x factor (ssthresh = 5 instead of 7)
+      const erroneousCubicState = createDefaultNetworkingCluster();
+      erroneousCubicState.congestion.algorithm = 'CUBIC';
+      erroneousCubicState.congestion.wMax = 10;
+      erroneousCubicState.congestion.ssthresh = 5; // Erroneous factor for CUBIC!
+      erroneousCubicState.totalPacketsDropped = 1;
+      const cubicViolation = checker.check(erroneousCubicState);
+      expect(cubicViolation).toBeDefined();
+      expect(cubicViolation?.ruleId).toBe('NET-3');
+      expect(cubicViolation?.description).toContain('CUBIC (0.7x)');
+
+      // Case 4: In Reno mode, but erroneously applied CUBIC 0.7x factor (ssthresh = 7 instead of 5)
+      const erroneousRenoState = createDefaultNetworkingCluster();
+      erroneousRenoState.congestion.algorithm = 'RENO';
+      erroneousRenoState.congestion.wMax = 10;
+      erroneousRenoState.congestion.ssthresh = 7; // Erroneous factor for Reno!
+      erroneousRenoState.totalPacketsDropped = 1;
+      const renoViolation = checker.check(erroneousRenoState);
+      expect(renoViolation).toBeDefined();
+      expect(renoViolation?.ruleId).toBe('NET-3');
+      expect(renoViolation?.description).toContain('Reno (0.5x)');
     });
   });
 });
