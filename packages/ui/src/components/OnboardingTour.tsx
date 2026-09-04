@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+
 import { Button } from '../primitives/Button.js';
 import { Card } from '../primitives/Card.js';
 
@@ -184,12 +185,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
             paddingTop: '16px',
           }}
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            style={{ color: '#64748b' }}
-          >
+          <Button variant="ghost" size="sm" onClick={onClose} style={{ color: '#64748b' }}>
             Skip Tour
           </Button>
 
@@ -200,7 +196,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
               </Button>
             )}
             <Button variant="primary" size="sm" onClick={handleNext}>
-              {isLast ? "Get Started 🚀" : "Next →"}
+              {isLast ? 'Get Started 🚀' : 'Next →'}
             </Button>
           </div>
         </div>

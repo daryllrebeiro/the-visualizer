@@ -1,4 +1,4 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { getClusterSlot } from './crc16.js';
 import { evictUntilMemoryAvailable } from './redis-eviction.js';
 import type {
@@ -141,7 +141,7 @@ export function createDefaultRedisCluster(clusterId = 'redis-cluster-1'): RedisC
 }
 
 export function findMasterForSlot(state: RedisClusterState, slot: number): RedisNode | undefined {
-  const nodes = Object.values(state.nodes) as RedisNode[];
+  const nodes = Object.values(state.nodes);
   return nodes.find(
     (n) =>
       n.role === 'MASTER' &&
@@ -270,7 +270,7 @@ function handleSet(
     targetMaster.memoryUsedBytes += sizeBytes;
 
     // Replicate to replica
-    const nodes = Object.values(state.nodes) as RedisNode[];
+    const nodes = Object.values(state.nodes);
     const replica = nodes.find(
       (n) => n.role === 'REPLICA' && n.masterId === targetMaster.id && n.status === 'ALIVE',
     );
@@ -333,7 +333,7 @@ function handleDel(state: RedisClusterState, event: RedisSimEvent): void {
     targetMaster.memoryUsedBytes = Math.max(0, targetMaster.memoryUsedBytes - entry.sizeBytes);
     delete targetMaster.storage[key];
 
-    const nodes = Object.values(state.nodes) as RedisNode[];
+    const nodes = Object.values(state.nodes);
     const replica = nodes.find((n) => n.role === 'REPLICA' && n.masterId === targetMaster.id);
     if (replica) {
       delete replica.storage[key];
@@ -377,7 +377,7 @@ function handleReshard(state: RedisClusterState, event: RedisSimEvent): void {
 
   // Migrate matching keys
   for (const [key, rawEntry] of Object.entries(src.storage)) {
-    const entry = rawEntry as RedisCacheEntry;
+    const entry = rawEntry;
     const slot = getClusterSlot(key);
     if (slot >= start && slot <= end) {
       dst.storage[key] = JSON.parse(JSON.stringify(entry)) as RedisCacheEntry;
@@ -400,7 +400,7 @@ function handleFailover(state: RedisClusterState, event: RedisSimEvent): void {
   state.currentEpoch += 1;
 
   // Find replica
-  const nodes = Object.values(state.nodes) as RedisNode[];
+  const nodes = Object.values(state.nodes);
   const replica = nodes.find(
     (n) => n.role === 'REPLICA' && n.masterId === masterId && n.status === 'ALIVE',
   );
@@ -447,7 +447,7 @@ function handleSetEvictionPolicy(state: RedisClusterState, event: RedisSimEvent)
 }
 
 function handleTick(state: RedisClusterState): void {
-  const nodes = Object.values(state.nodes) as RedisNode[];
+  const nodes = Object.values(state.nodes);
   for (const node of nodes) {
     for (const [key, entry] of Object.entries(node.storage)) {
       if (entry.ttl !== null) {

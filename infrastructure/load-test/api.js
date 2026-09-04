@@ -1,15 +1,15 @@
-import http from 'k6/http';
 import { check, sleep } from 'k6';
+import http from 'k6/http';
 
 export const options = {
   stages: [
-    { duration: '10s', target: 10 },  // Ramp-up to 10 users
-    { duration: '20s', target: 50 },  // Scale to 50 users
-    { duration: '10s', target: 0 },   // Ramp-down to 0
+    { duration: '10s', target: 10 }, // Ramp-up to 10 users
+    { duration: '20s', target: 50 }, // Scale to 50 users
+    { duration: '10s', target: 0 }, // Ramp-down to 0
   ],
   thresholds: {
-    http_req_failed: ['rate<0.01'],    // Error rate less than 1%
-    http_req_duration: ['p(95)<300'],  // 95% of requests must complete under 300ms
+    http_req_failed: ['rate<0.01'], // Error rate less than 1%
+    http_req_duration: ['p(95)<300'], // 95% of requests must complete under 300ms
   },
 };
 

@@ -217,7 +217,7 @@ export function pureCdnCacheTransition(
         let resolvedEtag = '';
 
         if (regFreshness === 'FRESH' && regEntry) {
-          regTier!.totalHits += 1;
+          regTier.totalHits += 1;
           servedTier = 'REGIONAL_HIT';
           resolvedValue = regEntry.value;
           resolvedEtag = regEntry.etag;
@@ -366,12 +366,12 @@ export function pureCdnCacheTransition(
       // Invalidate on edge PoPs and Regional tiers
       for (const pop of Object.values(nextState.edgePops)) {
         if (pop.cache[key]) {
-          pop.cache[key]!.purged = true;
+          pop.cache[key].purged = true;
         }
       }
       for (const reg of Object.values(nextState.regionalTiers)) {
         if (reg.cache[key]) {
-          reg.cache[key]!.purged = true;
+          reg.cache[key].purged = true;
         }
       }
 

@@ -84,7 +84,10 @@ export class PartitionLogStorage {
     const recordBytes = 14 + keyBytes + valueBytes;
 
     // Roll segment if active exceeds limit
-    if (this.activeSegment.records.length > 0 && this.activeSegment.sizeBytes + recordBytes > this.maxSegmentBytes) {
+    if (
+      this.activeSegment.records.length > 0 &&
+      this.activeSegment.sizeBytes + recordBytes > this.maxSegmentBytes
+    ) {
       this.rollNewSegment(this.nextOffset);
     }
 
@@ -205,9 +208,10 @@ export class PartitionLogStorage {
     const active = this.activeSegment;
     active.records = active.records.filter((r) => r.offset <= targetOffset);
     active.sizeBytes = active.records.reduce((sum, r) => sum + r.sizeBytes, 0);
-    this.nextOffset = active.records.length > 0
-      ? (active.records[active.records.length - 1]?.offset ?? 0) + 1
-      : active.baseOffset;
+    this.nextOffset =
+      active.records.length > 0
+        ? (active.records[active.records.length - 1]?.offset ?? 0) + 1
+        : active.baseOffset;
   }
 
   public getSummaries(): Array<{

@@ -14,7 +14,7 @@ describe('Kubernetes Scheduler & Reconciliation Engine', () => {
     expect(Object.keys(cluster.nodes).length).toBe(3);
     expect(Object.keys(cluster.pods).length).toBe(3);
 
-    const pods = Object.values(cluster.pods) as PodSpec[];
+    const pods = Object.values(cluster.pods);
     expect(pods.every((p) => p.status === 'Running' && p.nodeName !== null)).toBe(true);
     expect(checker.check(cluster)).toBeUndefined();
   });
@@ -142,7 +142,7 @@ describe('Kubernetes Scheduler & Reconciliation Engine', () => {
     expect(res.nextState.nodes['2']?.podIds.length).toBe(0);
 
     // All pods should still be running across nodes 1 and 3
-    const pods = Object.values(res.nextState.pods) as PodSpec[];
+    const pods = Object.values(res.nextState.pods);
     expect(pods.every((p) => p.status === 'Running' && p.nodeName !== 'worker-node-2')).toBe(true);
   });
 });

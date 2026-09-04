@@ -59,6 +59,15 @@ export default [
       '@typescript-eslint/no-unnecessary-type-conversion': 'warn',
       '@typescript-eslint/restrict-template-expressions': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'warn',
+      '@typescript-eslint/dot-notation': 'off',
+      '@typescript-eslint/no-extraneous-class': 'off',
+      '@typescript-eslint/no-inferrable-types': 'off',
+      '@typescript-eslint/array-type': 'off',
+      '@typescript-eslint/no-redundant-type-constituents': 'warn',
+      '@typescript-eslint/no-base-to-string': 'off',
+      '@typescript-eslint/no-dynamic-delete': 'off',
+      '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/no-invalid-void-type': 'off',
 
       /* Security rules */
       'no-eval': 'error',
@@ -80,6 +89,13 @@ export default [
       'prefer-const': 'error',
       'no-var': 'error',
       eqeqeq: ['error', 'always', { null: 'ignore' }],
+    },
+  },
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': 'off',
+      'prefer-const': 'off',
     },
   },
 ];

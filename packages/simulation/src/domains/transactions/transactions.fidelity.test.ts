@@ -6,7 +6,6 @@ import {
   createDefaultTransactionsCluster,
   pureTransactionsTransition,
 } from './transactions-state-transitions.js';
-import type { TransactionsSimEvent } from './transactions-types.js';
 
 describe('Distributed Transactions Domain Fidelity Suite', () => {
   const rng = new DeterministicRNG(42);

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Modal } from '../primitives/Modal.js';
+
 import { Button } from '../primitives/Button.js';
+import { Modal } from '../primitives/Modal.js';
 
 export interface DataTableRow {
   id: string;
@@ -38,7 +39,14 @@ export const DataTableModal: React.FC<DataTableModalProps> = ({
         </Button>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '14px',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        }}
+      >
         {extraSummary && (
           <div
             style={{
@@ -64,24 +72,41 @@ export const DataTableModal: React.FC<DataTableModalProps> = ({
           >
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Entity ID</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Name / Label</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Role / Type</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>
+                  Entity ID
+                </th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>
+                  Name / Label
+                </th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>
+                  Role / Type
+                </th>
                 <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Status</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Live Metrics</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, color: '#475569' }}>
+                  Live Metrics
+                </th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
+                  <td
+                    colSpan={5}
+                    style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}
+                  >
                     No active entities recorded in cluster state.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
                   <tr key={row.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '8px 12px', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontWeight: 600,
+                      }}
+                    >
                       {row.id}
                     </td>
                     <td style={{ padding: '8px 12px', fontWeight: 500 }}>{row.name}</td>
@@ -94,12 +119,18 @@ export const DataTableModal: React.FC<DataTableModalProps> = ({
                           borderRadius: '4px',
                           fontSize: '11px',
                           fontWeight: 600,
-                          background: row.status.toLowerCase().includes('alive') || row.status.toLowerCase().includes('running') || row.status.toLowerCase().includes('ready')
-                            ? '#dcfce7'
-                            : '#fee2e2',
-                          color: row.status.toLowerCase().includes('alive') || row.status.toLowerCase().includes('running') || row.status.toLowerCase().includes('ready')
-                            ? '#15803d'
-                            : '#b91c1c',
+                          background:
+                            row.status.toLowerCase().includes('alive') ||
+                            row.status.toLowerCase().includes('running') ||
+                            row.status.toLowerCase().includes('ready')
+                              ? '#dcfce7'
+                              : '#fee2e2',
+                          color:
+                            row.status.toLowerCase().includes('alive') ||
+                            row.status.toLowerCase().includes('running') ||
+                            row.status.toLowerCase().includes('ready')
+                              ? '#15803d'
+                              : '#b91c1c',
                         }}
                       >
                         {row.status}

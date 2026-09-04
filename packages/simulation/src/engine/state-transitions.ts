@@ -135,7 +135,7 @@ function triggerKRaftControllerElection(
     emittedEvents.push({
       id: `kraft-elect-${String(tick)}`,
       tick,
-      type: 'KRAFT_LEADER_ELECTED' as any,
+      type: 'KRAFT_LEADER_ELECTED',
       payload: {
         activeControllerId: newControllerId,
         controllerEpoch: state.kraft.controllerEpoch,
@@ -147,7 +147,7 @@ function triggerKRaftControllerElection(
     emittedEvents.push({
       id: `kraft-quorum-lost-${String(tick)}`,
       tick,
-      type: 'KRAFT_LEADER_ELECTED' as any,
+      type: 'KRAFT_LEADER_ELECTED',
       payload: {
         activeControllerId: null,
         controllerEpoch: state.kraft.controllerEpoch,
@@ -297,7 +297,10 @@ function handleRecordProduced(
 
   // 2. min.insync.replicas enforcement: block if acks=-1/'all' and |ISR| < minInsyncReplicas
   const acks = event.payload.acks;
-  if ((acks === -1 || acks === 'all') && partition.isr.length < (partition.minInsyncReplicas ?? 1)) {
+  if (
+    (acks === -1 || acks === 'all') &&
+    partition.isr.length < (partition.minInsyncReplicas ?? 1)
+  ) {
     emittedEvents.push({
       id: `produce-failed-${topic}-${String(partitionId)}-${String(event.tick)}`,
       tick: event.tick,
@@ -400,7 +403,7 @@ function handleConsumerRebalance(
   if (!group) {
     if (event.type !== 'CONSUMER_JOINED') return;
     group = {
-      id: groupId as never,
+      id: groupId,
       state: 'Empty',
       protocol: 'range',
       generationId: 0,
@@ -451,7 +454,7 @@ function handleConsumerRebalance(
       for (const topic of topics) {
         const parts = state.topics[topic] ?? [];
         const subscribingMembers = membersList.filter(
-          (m) => !m.subscribedTopics || m.subscribedTopics.includes(topic)
+          (m) => !m.subscribedTopics || m.subscribedTopics.includes(topic),
         );
 
         if (subscribingMembers.length > 0) {
@@ -494,7 +497,8 @@ function handleConsumerRebalance(
 
 function handleBrokerAdded(state: any, event: any): void {
   const brokerId = event.payload.brokerId as string;
-  const rack = (event.payload.rack as string) || `rack-${String(Object.keys(state.brokers).length)}`;
+  const rack =
+    (event.payload.rack as string) || `rack-${String(Object.keys(state.brokers).length)}`;
   if (!state.brokers[brokerId]) {
     state.brokers[brokerId] = {
       id: brokerId,
@@ -508,7 +512,12 @@ function handleBrokerAdded(state: any, event: any): void {
     if (!state.kraft.voters.includes(brokerId)) {
       state.kraft.voters.push(brokerId);
     }
-    appendMetadataRecord(state, 'REGISTER_BROKER_RECORD', { brokerId, rack: rack ?? null }, event.tick);
+    appendMetadataRecord(
+      state,
+      'REGISTER_BROKER_RECORD',
+      { brokerId, rack: rack ?? null },
+      event.tick,
+    );
   }
 }
 
@@ -523,7 +532,12 @@ function handleTopicCreated(state: any, event: any): void {
   );
   if (aliveBrokers.length === 0) return; // No alive brokers to assign
 
-  appendMetadataRecord(state, 'TOPIC_RECORD', { topic: topicName, partitions: partitionCount }, event.tick);
+  appendMetadataRecord(
+    state,
+    'TOPIC_RECORD',
+    { topic: topicName, partitions: partitionCount },
+    event.tick,
+  );
 
   const partitionsArray: any[] = [];
   for (let p = 0; p < partitionCount; p++) {
@@ -554,7 +568,12 @@ function handleTopicCreated(state: any, event: any): void {
     appendMetadataRecord(
       state,
       'PARTITION_RECORD',
-      { topic: topicName, partition: p, leader: leaderId, isr: replicasArray.map((r) => r.brokerId) },
+      {
+        topic: topicName,
+        partition: p,
+        leader: leaderId,
+        isr: replicasArray.map((r) => r.brokerId),
+      },
       event.tick,
     );
   }
@@ -603,4 +622,3 @@ function handleReplicaLagCheck(
     }
   }
 }
-

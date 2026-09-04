@@ -4,7 +4,12 @@ import { pack, unpack } from 'msgpackr';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 
-import { ClientIntentSchema, IntentJoinRoomSchema, IntentGapRecoverySchema, type KafkaClusterState } from '@the-visualizer/contracts';
+import {
+  ClientIntentSchema,
+  IntentGapRecoverySchema,
+  IntentJoinRoomSchema,
+  type KafkaClusterState,
+} from '@the-visualizer/contracts';
 import {
   captureException,
   logger,
@@ -13,7 +18,6 @@ import {
   wsMessagesSentTotal,
   wsRateLimitedMessagesTotal,
 } from '@the-visualizer/logging';
-
 import { DomainRegistry } from '@the-visualizer/simulation';
 
 import { authenticateConnection } from './auth.js';
@@ -34,7 +38,10 @@ interface ExtendedWebSocket extends WebSocket {
   };
 }
 
-export function checkConnectionRateLimit(ws: ExtendedWebSocket): { allowed: boolean; terminate: boolean } {
+export function checkConnectionRateLimit(ws: ExtendedWebSocket): {
+  allowed: boolean;
+  terminate: boolean;
+} {
   const now = Date.now();
 
   // 1. Hard system limit (250 msgs/s)
@@ -292,7 +299,11 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
               ws.send(
                 pack({
                   type: 'MSG_SESSION_ERROR',
-                  payload: { code: 'ERR_BAD_REQUEST', message: 'Invalid JOIN_ROOM payload', fatal: true },
+                  payload: {
+                    code: 'ERR_BAD_REQUEST',
+                    message: 'Invalid JOIN_ROOM payload',
+                    fatal: true,
+                  },
                 }),
               );
               return;
@@ -308,53 +319,53 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                 pack({
                   type: 'MSG_SESSION_ERROR',
                   payload: { code: 'ERR_DOMAIN_LOCKED', message: err.message, fatal: true },
-                })
+                }),
               );
               return;
             }
 
-              // Fetch cached topology or use default
-              const cachedTopologyStr = await roomManager.getCachedTopology(targetRoomId);
-              
-              const domainPlugin = DomainRegistry.get(domainId);
-              let topology = domainPlugin ? domainPlugin.createDefaultState() : DEFAULT_TOPOLOGY;
+            // Fetch cached topology or use default
+            const cachedTopologyStr = await roomManager.getCachedTopology(targetRoomId);
 
-              if (cachedTopologyStr) {
-                try {
-                  topology = JSON.parse(cachedTopologyStr);
-                } catch {
-                  // Ignore JSON parse errors
-                }
+            const domainPlugin = DomainRegistry.get(domainId);
+            let topology = domainPlugin ? domainPlugin.createDefaultState() : DEFAULT_TOPOLOGY;
+
+            if (cachedTopologyStr) {
+              try {
+                topology = JSON.parse(cachedTopologyStr);
+              } catch {
+                // Ignore JSON parse errors
               }
+            }
 
-              // Start simulation runner session
-              simulationRunner.startSession(targetRoomId, domainId, topology);
+            // Start simulation runner session
+            simulationRunner.startSession(targetRoomId, domainId, topology);
 
-              // Fetch current engine state if session exists
-              const session = simulationRunner.getSession(targetRoomId);
-              const currentState = session ? session.engine.state : topology;
+            // Fetch current engine state if session exists
+            const session = simulationRunner.getSession(targetRoomId);
+            const currentState = session ? session.engine.state : topology;
 
-              // Confirm join
-              ws.send(
-                pack({
-                  type: 'ROOM_JOINED',
-                  payload: { roomId: targetRoomId },
-                }),
-              );
-              wsMessagesSentTotal.inc({ type: 'ROOM_JOINED' });
+            // Confirm join
+            ws.send(
+              pack({
+                type: 'ROOM_JOINED',
+                payload: { roomId: targetRoomId },
+              }),
+            );
+            wsMessagesSentTotal.inc({ type: 'ROOM_JOINED' });
 
-              // Send full initial state snapshot
-              ws.send(
-                pack({
-                  type: 'INIT_SNAPSHOT',
-                  payload: {
-                    roomId: targetRoomId,
-                    state: currentState,
-                    tick: currentState ? currentState.tick : 0,
-                  },
-                }),
-              );
-              wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT' });
+            // Send full initial state snapshot
+            ws.send(
+              pack({
+                type: 'INIT_SNAPSHOT',
+                payload: {
+                  roomId: targetRoomId,
+                  state: currentState,
+                  tick: currentState ? currentState.tick : 0,
+                },
+              }),
+            );
+            wsMessagesSentTotal.inc({ type: 'INIT_SNAPSHOT' });
             return;
           }
 
@@ -373,7 +384,11 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
               ws.send(
                 pack({
                   type: 'MSG_SESSION_ERROR',
-                  payload: { code: 'ERR_BAD_REQUEST', message: 'Invalid GAP_RECOVERY payload', fatal: false },
+                  payload: {
+                    code: 'ERR_BAD_REQUEST',
+                    message: 'Invalid GAP_RECOVERY payload',
+                    fatal: false,
+                  },
                 }),
               );
               return;
@@ -437,7 +452,10 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             payload: parseResult.data,
           });
         } catch (err) {
-          logger.warn({ err, userId: ws.userId }, 'Failed to parse incoming WebSocket message frame');
+          logger.warn(
+            { err, userId: ws.userId },
+            'Failed to parse incoming WebSocket message frame',
+          );
           captureException(err, { service: 'ws-gateway', userId: ws.userId });
         }
       })();

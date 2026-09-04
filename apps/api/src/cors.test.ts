@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { describe, expect, it } from 'vitest';
 
 describe('API CORS Security & Origin Whitelist', () => {
   const app = new Hono();
@@ -10,10 +10,16 @@ describe('API CORS Security & Origin Whitelist', () => {
     cors({
       origin: (origin) => {
         if (!origin) return undefined;
-        if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        if (
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('https://localhost:') ||
+          origin.startsWith('http://127.0.0.1:')
+        ) {
           return origin;
         }
-        const allowedEnv = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : [];
+        const allowedEnv = process.env.ALLOWED_ORIGINS
+          ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
+          : [];
         if (allowedEnv.includes(origin) || origin.endsWith('.run.app')) {
           return origin;
         }
@@ -59,6 +65,8 @@ describe('API CORS Security & Origin Whitelist', () => {
       },
     });
 
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://the-visualizer-frontend.run.app');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://the-visualizer-frontend.run.app',
+    );
   });
 });

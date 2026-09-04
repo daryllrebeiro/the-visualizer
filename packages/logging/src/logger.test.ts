@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createLogger, withTraceContext, logger } from './index.js';
+
+import { createLogger, logger, withTraceContext } from './index.js';
 
 describe('Structured Logger & Redaction', () => {
   it('instantiates logger with default levels and serializer configs', () => {

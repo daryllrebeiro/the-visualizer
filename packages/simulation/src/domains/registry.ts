@@ -2,7 +2,7 @@ import { pureStateTransition } from '../engine/state-transitions.js';
 import type { KafkaClusterState, SimEvent } from '../engine/types.js';
 import { InvariantChecker } from '../invariants/invariant-checker.js';
 import { KafkaOracleHarness } from '../oracle/oracle-harness.js';
-import { DeterministicRNG } from '../prng/deterministic-rng.js';
+import type { DeterministicRNG } from '../prng/deterministic-rng.js';
 import { createDefaultBaselineState } from '../reconstitution/event-log-parser.js';
 import { CdnCacheInvariantChecker } from './cdn-cache/cdn-cache-invariants.js';
 import {

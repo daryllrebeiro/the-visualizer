@@ -1,8 +1,9 @@
 import * as crypto from 'crypto';
-import { createLogger, withTraceContext, type Logger } from '@the-visualizer/logging';
-import { httpRequestsTotal, httpRequestDurationSeconds } from '@the-visualizer/logging';
 import type { MiddlewareHandler } from 'hono';
 import { routePath } from 'hono/route';
+
+import { type Logger, createLogger, withTraceContext } from '@the-visualizer/logging';
+import { httpRequestDurationSeconds, httpRequestsTotal } from '@the-visualizer/logging';
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -39,7 +40,7 @@ export const requestLogger = (): MiddlewareHandler => {
     const durationMs = performance.now() - startTime;
     const durationSec = durationMs / 1000;
     const status = c.res.status;
-    
+
     // Use Hono's matched route path template (e.g., /topologies/:id) to prevent metric cardinality explosion
     const route = routePath(c) || c.req.path;
 

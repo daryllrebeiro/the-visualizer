@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { KafkaOracleHarness } from './oracle-harness.js';
 
 describe('KafkaOracleHarness differential verification', () => {

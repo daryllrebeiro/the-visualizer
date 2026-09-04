@@ -6,7 +6,6 @@ import {
   createDefaultDistributedLockCluster,
   pureDistributedLockTransition,
 } from './distributed-lock-state-transitions.js';
-import type { DistributedLockSimEvent } from './distributed-lock-types.js';
 
 describe('Distributed Lock Domain Fidelity Suite', () => {
   const rng = new DeterministicRNG(42);

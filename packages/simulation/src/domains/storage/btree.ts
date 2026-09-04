@@ -129,7 +129,7 @@ function splitNode(state: BTreeState, nodeId: string): void {
 
   // Update children parentIds if internal
   for (const cId of rightNode.childrenIds) {
-    if (state.nodes[cId]) state.nodes[cId]!.parentId = newNodeId;
+    if (state.nodes[cId]) state.nodes[cId].parentId = newNodeId;
   }
 
   node.keys = node.keys.slice(0, mid);
@@ -187,7 +187,7 @@ export function deleteBTree(state: BTreeState, key: number): boolean {
   if (!leafId) return false;
 
   const leaf = state.nodes[leafId];
-  if (!leaf || !leaf.isLeaf) return false;
+  if (!leaf?.isLeaf) return false;
 
   const idx = leaf.keys.indexOf(key);
   if (idx === -1) return false;
@@ -210,7 +210,7 @@ export function deleteBTree(state: BTreeState, key: number): boolean {
 
 function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): void {
   const node = state.nodes[nodeId];
-  if (!node || !node.parentId) return;
+  if (!node?.parentId) return;
 
   const parent = state.nodes[node.parentId];
   if (!parent) return;
@@ -236,7 +236,7 @@ function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): vo
     if (!node.isLeaf && leftSibling.childrenIds.length > 0) {
       const borrowedChild = leftSibling.childrenIds.pop()!;
       node.childrenIds.unshift(borrowedChild);
-      if (state.nodes[borrowedChild]) state.nodes[borrowedChild]!.parentId = node.id;
+      if (state.nodes[borrowedChild]) state.nodes[borrowedChild].parentId = node.id;
     }
 
     // Update parent separator
@@ -255,7 +255,7 @@ function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): vo
     if (!node.isLeaf && rightSibling.childrenIds.length > 0) {
       const borrowedChild = rightSibling.childrenIds.shift()!;
       node.childrenIds.push(borrowedChild);
-      if (state.nodes[borrowedChild]) state.nodes[borrowedChild]!.parentId = node.id;
+      if (state.nodes[borrowedChild]) state.nodes[borrowedChild].parentId = node.id;
     }
 
     // Update parent separator
@@ -271,7 +271,7 @@ function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): vo
     leftSibling.values.push(...node.values);
     if (!node.isLeaf) {
       for (const cId of node.childrenIds) {
-        if (state.nodes[cId]) state.nodes[cId]!.parentId = leftSibling.id;
+        if (state.nodes[cId]) state.nodes[cId].parentId = leftSibling.id;
       }
       leftSibling.childrenIds.push(...node.childrenIds);
     }
@@ -286,7 +286,7 @@ function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): vo
     node.values.push(...rightSibling.values);
     if (!node.isLeaf) {
       for (const cId of rightSibling.childrenIds) {
-        if (state.nodes[cId]) state.nodes[cId]!.parentId = node.id;
+        if (state.nodes[cId]) state.nodes[cId].parentId = node.id;
       }
       node.childrenIds.push(...rightSibling.childrenIds);
     }
@@ -303,7 +303,7 @@ function handleUnderflow(state: BTreeState, nodeId: string, minKeys: number): vo
     if (parent.keys.length === 0 && parent.childrenIds.length === 1) {
       const newRootId = parent.childrenIds[0]!;
       state.rootId = newRootId;
-      if (state.nodes[newRootId]) state.nodes[newRootId]!.parentId = null;
+      if (state.nodes[newRootId]) state.nodes[newRootId].parentId = null;
       delete state.nodes[parent.id];
     }
   } else if (parent.keys.length < minKeys) {

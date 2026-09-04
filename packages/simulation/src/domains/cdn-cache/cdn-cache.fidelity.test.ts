@@ -6,7 +6,6 @@ import {
   createDefaultCdnCacheCluster,
   pureCdnCacheTransition,
 } from './cdn-cache-state-transitions.js';
-import type { CdnCacheSimEvent } from './cdn-cache-types.js';
 
 describe('CDN & Multi-Tier Caching Fidelity Suite', () => {
   const rng = new DeterministicRNG(42);

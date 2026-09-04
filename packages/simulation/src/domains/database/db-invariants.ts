@@ -1,4 +1,4 @@
-import type { DBClusterState, DBNode } from './db-types.js';
+import type { DBClusterState } from './db-types.js';
 
 export interface DBInvariantViolation {
   ruleId: string;
@@ -38,7 +38,7 @@ export class DBInvariantChecker {
   }
 
   private checkNodeStates(state: DBClusterState): DBInvariantViolation | undefined {
-    const nodes = Object.values(state.nodes) as DBNode[];
+    const nodes = Object.values(state.nodes);
     for (const node of nodes) {
       if (node.tokens.length === 0 && node.status === 'ALIVE') {
         return {

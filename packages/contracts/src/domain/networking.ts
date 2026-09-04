@@ -17,11 +17,7 @@ export const TCPConnectionStateSchema = z.enum([
 ]);
 export type TCPConnectionState = z.infer<typeof TCPConnectionStateSchema>;
 
-export const CongestionPhaseSchema = z.enum([
-  'SlowStart',
-  'CongestionAvoidance',
-  'FastRecovery',
-]);
+export const CongestionPhaseSchema = z.enum(['SlowStart', 'CongestionAvoidance', 'FastRecovery']);
 export type CongestionPhase = z.infer<typeof CongestionPhaseSchema>;
 
 export const TCPPacketSchema = z.object({
@@ -40,12 +36,14 @@ export const TCPPacketSchema = z.object({
 export type TCPPacket = z.infer<typeof TCPPacketSchema>;
 
 export const CongestionControlStateSchema = z.object({
-  cwnd: z.number().positive().default(1),          // in MSS packets
-  ssthresh: z.number().positive().default(16),     // Slow Start Threshold
+  cwnd: z.number().positive().default(1), // in MSS packets
+  ssthresh: z.number().positive().default(16), // Slow Start Threshold
   phase: CongestionPhaseSchema.default('SlowStart'),
   rttTicks: z.number().positive().default(2),
   duplicateAckCount: z.number().int().nonnegative().default(0),
-  history: z.array(z.object({ tick: z.number(), cwnd: z.number(), phase: CongestionPhaseSchema })).default([]),
+  history: z
+    .array(z.object({ tick: z.number(), cwnd: z.number(), phase: CongestionPhaseSchema }))
+    .default([]),
 });
 export type CongestionControlState = z.infer<typeof CongestionControlStateSchema>;
 

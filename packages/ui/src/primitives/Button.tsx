@@ -116,9 +116,13 @@ export const Button: React.FC<ButtonProps> = ({
         </>
       ) : (
         <>
-          {icon && iconPosition === 'left' && <span style={{ display: 'inline-flex' }}>{icon}</span>}
+          {icon && iconPosition === 'left' && (
+            <span style={{ display: 'inline-flex' }}>{icon}</span>
+          )}
           {children}
-          {icon && iconPosition === 'right' && <span style={{ display: 'inline-flex' }}>{icon}</span>}
+          {icon && iconPosition === 'right' && (
+            <span style={{ display: 'inline-flex' }}>{icon}</span>
+          )}
         </>
       )}
     </button>

@@ -1,4 +1,4 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import {
   createInitialBTree,
   deleteBTree,

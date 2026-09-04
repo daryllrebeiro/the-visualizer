@@ -89,12 +89,25 @@ export const Modal: React.FC<ModalProps> = ({
         >
           <div>
             {title && (
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: 'var(--text-primary, #0f172a)',
+                }}
+              >
                 {title}
               </h3>
             )}
             {subtitle && (
-              <p style={{ margin: '3px 0 0 0', fontSize: '13px', color: 'var(--text-muted, #64748b)' }}>
+              <p
+                style={{
+                  margin: '3px 0 0 0',
+                  fontSize: '13px',
+                  color: 'var(--text-muted, #64748b)',
+                }}
+              >
                 {subtitle}
               </p>
             )}
@@ -120,9 +133,7 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Body */}
-        <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
-          {children}
-        </div>
+        <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>{children}</div>
 
         {/* Footer */}
         {footer && (

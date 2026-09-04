@@ -1,5 +1,6 @@
-import { tokenRevocationStore } from '@the-visualizer/contracts';
 import { verify } from 'hono/jwt';
+
+import { tokenRevocationStore } from '@the-visualizer/contracts';
 
 import { JWT_SECRET } from '../config.js';
 

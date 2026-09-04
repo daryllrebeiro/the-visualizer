@@ -40,7 +40,8 @@ export const Drawer: React.FC<DrawerProps> = ({
         inset: 0,
         zIndex: 50,
         display: 'flex',
-        justifyContent: position === 'right' ? 'flex-end' : position === 'left' ? 'flex-start' : 'center',
+        justifyContent:
+          position === 'right' ? 'flex-end' : position === 'left' ? 'flex-start' : 'center',
         alignItems: position === 'bottom' ? 'flex-end' : 'stretch',
       }}
     >
@@ -71,7 +72,10 @@ export const Drawer: React.FC<DrawerProps> = ({
           display: 'flex',
           flexDirection: 'column',
           fontFamily: 'Inter, system-ui, sans-serif',
-          animation: position === 'right' ? 'slideInRight 200ms cubic-bezier(0.16, 1, 0.3, 1)' : 'slideInBottom 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+          animation:
+            position === 'right'
+              ? 'slideInRight 200ms cubic-bezier(0.16, 1, 0.3, 1)'
+              : 'slideInBottom 200ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         {/* Header */}
@@ -87,12 +91,25 @@ export const Drawer: React.FC<DrawerProps> = ({
         >
           <div>
             {title && (
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--text-primary, #0f172a)' }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: 'var(--text-primary, #0f172a)',
+                }}
+              >
                 {title}
               </h3>
             )}
             {subtitle && (
-              <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-muted, #64748b)' }}>
+              <p
+                style={{
+                  margin: '2px 0 0 0',
+                  fontSize: '12px',
+                  color: 'var(--text-muted, #64748b)',
+                }}
+              >
                 {subtitle}
               </p>
             )}

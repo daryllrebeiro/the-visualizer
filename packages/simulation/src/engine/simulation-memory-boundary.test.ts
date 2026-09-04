@@ -5,8 +5,9 @@
  * without memory leaks, heap bloat, or invariant assertion degradation.
  */
 import { describe, expect, it } from 'vitest';
-import { DeterministicRNG } from '../prng/deterministic-rng.js';
+
 import { DomainRegistry } from '../domains/registry.js';
+import { DeterministicRNG } from '../prng/deterministic-rng.js';
 
 describe('Long-Running Simulation Memory Stability', () => {
   it('runs 10,000 ticks across all 8 domain reducers with bounded memory footprint', () => {

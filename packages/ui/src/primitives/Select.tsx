@@ -10,7 +10,7 @@ export interface SelectOption<T extends string | number = string> {
 export interface SelectProps<T extends string | number = string> {
   value: T;
   onChange: (value: T) => void;
-  options: Array<SelectOption<T>>;
+  options: SelectOption<T>[];
   label?: string;
   size?: 'sm' | 'md';
   disabled?: boolean;

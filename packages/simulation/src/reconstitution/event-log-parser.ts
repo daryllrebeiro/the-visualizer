@@ -3,14 +3,16 @@ import type { KafkaClusterState, SimEventLog, SimTraceBundle } from '../engine/t
 export interface ParsedTraceResult {
   initialState: KafkaClusterState;
   events: SimEventLog[];
-  metadata?: {
-    clusterId: string;
-    totalTicks: number;
-    totalEvents: number;
-    exportedAt?: number | undefined;
-    name?: string | undefined;
-    description?: string | undefined;
-  } | undefined;
+  metadata?:
+    | {
+        clusterId: string;
+        totalTicks: number;
+        totalEvents: number;
+        exportedAt?: number | undefined;
+        name?: string | undefined;
+        description?: string | undefined;
+      }
+    | undefined;
 }
 
 /**

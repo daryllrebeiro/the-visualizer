@@ -325,4 +325,3 @@ describe('Authoritative Simulation Runner Tests', () => {
     simulationRunner.stopSession(testRoomId);
   });
 });
-

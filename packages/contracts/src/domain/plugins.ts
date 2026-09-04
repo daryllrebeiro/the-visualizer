@@ -41,7 +41,14 @@ export interface OracleAdapter<TInput = unknown, TOutput = unknown> {
 export interface DomainPlugin<TState = unknown, TEvent = unknown> {
   metadata: DomainPluginMetadata;
   createDefaultState: () => TState;
-  reduceState: (state: TState, event: TEvent, rngSeed?: number) => { nextState: TState; emittedEvents: TEvent[] };
-  validateInvariants: (state: TState) => { passed: boolean; violation?: { name: string; description: string } };
+  reduceState: (
+    state: TState,
+    event: TEvent,
+    rngSeed?: number,
+  ) => { nextState: TState; emittedEvents: TEvent[] };
+  validateInvariants: (state: TState) => {
+    passed: boolean;
+    violation?: { name: string; description: string };
+  };
   oracleAdapter?: OracleAdapter | undefined;
 }

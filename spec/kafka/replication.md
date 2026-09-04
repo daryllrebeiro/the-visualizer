@@ -6,6 +6,7 @@
 ---
 
 ## 1. Concept Summary
+
 In Kafka, partition durability is achieved by replicating partition logs across multiple brokers. The partition leader receives produce requests, writes them to its local log, and followers periodically issue `Fetch` requests to catch up.
 
 ---
@@ -26,10 +27,10 @@ export interface PartitionReplica {
 ## 3. High-Watermark (HW) Progression
 
 1. **Producer Write**:
-   * Record arrives at partition leader on tick $t$.
-   * Leader increments its local replica $\text{LEO}_{\text{leader}} \gets \text{LEO}_{\text{leader}} + 1$.
+   - Record arrives at partition leader on tick $t$.
+   - Leader increments its local replica $\text{LEO}_{\text{leader}} \gets \text{LEO}_{\text{leader}} + 1$.
 2. **Follower Catch-up**:
-   * Replicas on active brokers receive updates asynchronously:
+   - Replicas on active brokers receive updates asynchronously:
      $$\text{LEO}_{\text{follower}} \gets \text{LEO}_{\text{leader}}$$
      $$\text{lastCaughtUpTick} \gets t$$
      $$\text{isInSync} \gets \text{true}$$

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
 import { tokenRevocationStore } from '@the-visualizer/contracts';
+
 import { JWT_SECRET } from '../config.js';
 import { server } from '../index.js';
 import { roomManager } from './room-manager.js';
@@ -172,7 +173,12 @@ describe('WebSocket Gateway Integration Tests', () => {
           client.send(
             pack({
               type: 'INTENT_PRODUCE',
-              payload: { topic: 'orders', partition: 0, key: `k-${String(i)}`, value: `v-${String(i)}` },
+              payload: {
+                topic: 'orders',
+                partition: 0,
+                key: `k-${String(i)}`,
+                value: `v-${String(i)}`,
+              },
             }),
           );
         }

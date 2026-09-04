@@ -79,7 +79,11 @@ export class TransactionCoordinatorManager {
 
     session.state = 'Ongoing';
     for (const p of partitions) {
-      if (!session.partitionsInTxn.some((existing) => existing.topic === p.topic && existing.partition === p.partition)) {
+      if (
+        !session.partitionsInTxn.some(
+          (existing) => existing.topic === p.topic && existing.partition === p.partition,
+        )
+      ) {
         session.partitionsInTxn.push(p);
       }
     }
@@ -94,7 +98,10 @@ export class TransactionCoordinatorManager {
     producerId: number,
     producerEpoch: number,
     decision: 'COMMIT' | 'ABORT',
-  ): { success: boolean; controlMarkers: { topic: string; partition: number; markerType: 'COMMIT' | 'ABORT' }[] } {
+  ): {
+    success: boolean;
+    controlMarkers: { topic: string; partition: number; markerType: 'COMMIT' | 'ABORT' }[];
+  } {
     const session = this.sessions.get(transactionalId);
     if (!session || session.producerId !== producerId || session.producerEpoch !== producerEpoch) {
       return { success: false, controlMarkers: [] }; // Fenced

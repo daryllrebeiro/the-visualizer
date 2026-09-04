@@ -7,6 +7,7 @@ All notable changes and architectural upgrades implemented across the Modernizat
 ## [1.0.0] - Modernization & Hardening Release
 
 ### 🎯 Overview
+
 Upgraded TheVisualizer into a production-grade, multi-domain distributed systems laboratory with 8 simulation visualizers, unified application shell, golden determinism test suite, contract fuzzing, accessible table mode, and high-performance real-time telemetry.
 
 ---

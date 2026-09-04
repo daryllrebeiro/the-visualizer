@@ -1,6 +1,8 @@
-import { tokenRevocationStore } from '@the-visualizer/contracts';
 import { sign } from 'hono/jwt';
 import { describe, expect, it } from 'vitest';
+
+import { tokenRevocationStore } from '@the-visualizer/contracts';
+
 import app from '../index.js';
 
 describe('JWT Token Revocation & Session Invalidation', () => {

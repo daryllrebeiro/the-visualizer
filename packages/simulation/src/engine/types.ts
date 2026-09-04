@@ -171,12 +171,14 @@ export interface SimTraceBundle {
   description?: string | undefined;
   initialState: KafkaClusterState;
   events: SimEventLog[];
-  metadata?: {
-    totalTicks: number;
-    totalEvents: number;
-    generator?: string | undefined;
-    seed?: number | undefined;
-  } | undefined;
+  metadata?:
+    | {
+        totalTicks: number;
+        totalEvents: number;
+        generator?: string | undefined;
+        seed?: number | undefined;
+      }
+    | undefined;
 }
 
 export interface ScenarioDefinition {

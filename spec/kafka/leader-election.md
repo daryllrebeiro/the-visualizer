@@ -6,6 +6,7 @@
 ---
 
 ## 1. Concept Summary
+
 When a partition's leader broker fails or becomes degraded, a new leader must be elected from the In-Sync Replicas (ISR) set to resume client traffic without uncommitted data loss. The `leaderEpoch` monotonic counter fences stale requests from previously partitioned leaders.
 
 ---
@@ -39,5 +40,6 @@ When a partition's leader broker fails or becomes degraded, a new leader must be
 ---
 
 ## 3. Epoch Fencing
-* Every successful election increments `leaderEpoch` by 1.
-* Any client or follower request specifying an obsolete `leaderEpoch` is fenced to avoid split-brain log divergent writes.
+
+- Every successful election increments `leaderEpoch` by 1.
+- Any client or follower request specifying an obsolete `leaderEpoch` is fenced to avoid split-brain log divergent writes.

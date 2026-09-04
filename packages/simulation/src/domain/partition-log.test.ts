@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { PartitionLog } from './partition-log.js';
 import { InMemoryStorageAdapter } from './storage-adapter.js';
 
@@ -20,9 +21,7 @@ describe('PartitionLog pure domain model', () => {
     expect(result1.bytesAppended).toBeGreaterThan(0);
     expect(log.logEndOffset).toBe(2);
 
-    const result2 = log.append([
-      { key: 'k3', value: 'msg-3', timestamp: 1002, leaderEpoch: 1 },
-    ]);
+    const result2 = log.append([{ key: 'k3', value: 'msg-3', timestamp: 1002, leaderEpoch: 1 }]);
 
     expect(result2.firstOffset).toBe(2);
     expect(result2.lastOffset).toBe(2);

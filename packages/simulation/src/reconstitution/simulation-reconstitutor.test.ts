@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { SimEventLog, SimTraceBundle } from '../engine/types.js';
 
-import { createDefaultBaselineState, EventLogParser } from './event-log-parser.js';
+import type { SimEventLog, SimTraceBundle } from '../engine/types.js';
+import { EventLogParser, createDefaultBaselineState } from './event-log-parser.js';
 import { ScenarioGenerator } from './scenario-generator.js';
 import { SimulationReconstitutor } from './simulation-reconstitutor.js';
 

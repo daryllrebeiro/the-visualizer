@@ -1,4 +1,4 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import type {
   AMQPMessage,
   BindingSpec,
@@ -299,7 +299,7 @@ function findMatchingQueues(
   routingKey: string,
 ): string[] {
   const matchedQueues: string[] = [];
-  const bindings = Object.values(state.bindings) as BindingSpec[];
+  const bindings = Object.values(state.bindings);
 
   for (const b of bindings) {
     if (b.exchangeName !== exchange.name) continue;
@@ -432,7 +432,7 @@ function handleTick(state: RabbitClusterState, emittedEvents: RabbitSimEvent[]):
 }
 
 function dispatchMessagesToConsumers(state: RabbitClusterState): void {
-  const consumers = Object.values(state.consumers) as RabbitConsumer[];
+  const consumers = Object.values(state.consumers);
 
   for (const consumer of consumers) {
     if (consumer.status !== 'Active') continue;

@@ -167,7 +167,7 @@ export function pureIdGenTransition(
       const { conflictingWorkerId } = event.payload;
       // Intentionally configure worker 4 with the same workerId as worker 1
       if (nextState.workers[4]) {
-        nextState.workers[4]!.workerId = conflictingWorkerId;
+        nextState.workers[4].workerId = conflictingWorkerId;
         nextState.flawsDemonstrated.duplicateWorkerIdCollisionDetected = true;
       }
       break;

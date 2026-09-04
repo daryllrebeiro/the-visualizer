@@ -366,7 +366,7 @@ function handleHeartbeat(
     if (isIsolated(state, leaderId) && !isIsolated(state, peerId)) continue;
     if (!isIsolated(state, leaderId) && isIsolated(state, peerId)) continue;
 
-    const prevIndex = leader.nextIndex?.[peerId] ? leader.nextIndex[peerId]! - 1 : 0;
+    const prevIndex = leader.nextIndex?.[peerId] ? leader.nextIndex[peerId] - 1 : 0;
     const prevLog = prevIndex > 0 ? leader.log[prevIndex - 1] : undefined;
     const prevTerm = prevLog ? prevLog.term : 0;
 

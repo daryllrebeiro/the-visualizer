@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { DOMAIN_COLORS } from '../tokens.js';
-import { StatusPill, type ConnectionStatusType } from '../primitives/StatusPill.js';
+import React, { useEffect, useState } from 'react';
+
 import { Button } from '../primitives/Button.js';
-import { CommandPalette, type CommandItem } from './CommandPalette.js';
-import { OnboardingTour } from './OnboardingTour.js';
+import { type ConnectionStatusType, StatusPill } from '../primitives/StatusPill.js';
+import { DOMAIN_COLORS } from '../tokens.js';
+import { type CommandItem, CommandPalette } from './CommandPalette.js';
 import { DataTableModal, type DataTableRow } from './DataTableModal.js';
+import { OnboardingTour } from './OnboardingTour.js';
 
 export interface DomainMeta {
   id: string;
@@ -369,9 +370,7 @@ export const CanvasShell: React.FC<CanvasShellProps> = ({
                   {activeDomain.name}
                 </span>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-                {leftPanel}
-              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>{leftPanel}</div>
             </div>
           </aside>
         )}
@@ -386,9 +385,7 @@ export const CanvasShell: React.FC<CanvasShellProps> = ({
             flexDirection: 'column',
           }}
         >
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            {children}
-          </div>
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>{children}</div>
 
           {/* Bottom Bar: Timeline & Scrubbing Controls */}
           {bottomBar && (
@@ -453,26 +450,17 @@ export const CanvasShell: React.FC<CanvasShellProps> = ({
                   ✕
                 </button>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-                {rightPanel}
-              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>{rightPanel}</div>
             </div>
           </aside>
         )}
       </div>
 
       {/* Global Command Palette */}
-      <CommandPalette
-        isOpen={cmdOpen}
-        onClose={() => setCmdOpen(false)}
-        commands={allCommands}
-      />
+      <CommandPalette isOpen={cmdOpen} onClose={() => setCmdOpen(false)} commands={allCommands} />
 
       {/* Onboarding Feature Tour */}
-      <OnboardingTour
-        isOpen={tourOpen}
-        onClose={() => setTourOpen(false)}
-      />
+      <OnboardingTour isOpen={tourOpen} onClose={() => setTourOpen(false)} />
 
       {/* Accessible Non-Canvas Data Table View */}
       {accessibleRows && (

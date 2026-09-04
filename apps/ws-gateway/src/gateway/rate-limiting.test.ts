@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { checkConnectionRateLimit } from './ws-server.js';
 
 describe('Gateway Rate Limiting & Bucket Flood Throttling', () => {

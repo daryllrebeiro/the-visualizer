@@ -25,7 +25,10 @@ export class ScenarioGenerator {
     bundle: SimTraceBundle,
     options?: ScenarioGeneratorOptions,
   ): ScenarioDefinition {
-    const customTitle = bundle.name && bundle.name !== 'Reconstituted Kafka Simulation Trace' ? bundle.name : undefined;
+    const customTitle =
+      bundle.name && bundle.name !== 'Reconstituted Kafka Simulation Trace'
+        ? bundle.name
+        : undefined;
     return this.fromEventsAndState(bundle.initialState, bundle.events, {
       id: options?.id ?? `scenario-${Date.now()}`,
       title: options?.title ?? customTitle,
@@ -54,7 +57,10 @@ export class ScenarioGenerator {
     const steps =
       detectedMilestones.length > 0
         ? detectedMilestones
-        : [`1. Initial State: ${Object.keys(initialState.brokers).length} active brokers.`, `2. Process ${events.length} sequential event transitions.`];
+        : [
+            `1. Initial State: ${Object.keys(initialState.brokers).length} active brokers.`,
+            `2. Process ${events.length} sequential event transitions.`,
+          ];
 
     return {
       id: options?.id ?? `scenario-${Date.now()}`,
@@ -140,7 +146,8 @@ export class ScenarioGenerator {
     const tags = new Set<string>(['kafka', 'reconstitution']);
     for (const ev of events) {
       if (ev.type.startsWith('BROKER')) tags.add('brokers');
-      if (ev.type.startsWith('CONSUMER') || ev.type.startsWith('REBALANCE')) tags.add('consumer-groups');
+      if (ev.type.startsWith('CONSUMER') || ev.type.startsWith('REBALANCE'))
+        tags.add('consumer-groups');
       if (ev.type.startsWith('TRANSACTION')) tags.add('transactions');
       if (ev.type.startsWith('RECORD')) tags.add('records');
     }

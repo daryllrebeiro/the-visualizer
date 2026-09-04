@@ -15,11 +15,7 @@ export interface CommandPaletteProps {
   commands: CommandItem[];
 }
 
-export const CommandPalette: React.FC<CommandPaletteProps> = ({
-  isOpen,
-  onClose,
-  commands,
-}) => {
+export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, commands }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 

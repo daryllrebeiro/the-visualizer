@@ -1,4 +1,4 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import type {
   ConsistencyLevel,
   DBClusterState,
@@ -337,7 +337,7 @@ function handleNodeJoin(state: DBClusterState, event: DBSimEvent): void {
   state.ringTokens = [...ring.getRingTokens()];
 
   // Rebalance: copy keys responsible under new tokens
-  const existingNodes = Object.values(state.nodes) as DBNode[];
+  const existingNodes = Object.values(state.nodes);
   for (const existingNode of existingNodes) {
     if (existingNode.id === nodeId) continue;
     for (const [key, record] of Object.entries(existingNode.storage)) {
@@ -394,7 +394,7 @@ function handleHintDeliver(state: DBClusterState, event: DBSimEvent): void {
   const targetNode = state.nodes[targetNodeId];
   if (!targetNode || targetNode.status !== 'ALIVE') return;
 
-  const sourceNodes = Object.values(state.nodes) as DBNode[];
+  const sourceNodes = Object.values(state.nodes);
   for (const sourceNode of sourceNodes) {
     if (sourceNode.id === targetNodeId) continue;
     const remainingHints: HintedHandoffRecord[] = [];

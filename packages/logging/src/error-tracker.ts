@@ -1,4 +1,5 @@
 import client, { type Counter } from 'prom-client';
+
 import { logger } from './index.js';
 import { register } from './metrics.js';
 

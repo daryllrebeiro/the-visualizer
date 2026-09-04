@@ -7,9 +7,11 @@ This document tracks upcoming architectural initiatives, features, and roadmap i
 ## 1. Recreate Events and State from Given Event Log (Phase 2: Event-Driven Simulation Reconstitution)
 
 ### Objective
+
 Provide the capability to ingest a raw, serialized event log or JSON trace stream, and deterministically reconstruct the exact historical cluster topology, state transitions, partition offsets, consumer assignments, and animated packet flows without requiring live gateway communication.
 
 ### Core Architecture & Capabilities
+
 1. **Log Ingestion & Schema Normalization**:
    - Parse historical `SimEventLog[]` / `SimEvent[]` trace files.
    - Validate event sequence, timestamps, logical simulation ticks, and `involvedEntities` metadata against Zod contract schemas.
@@ -48,12 +50,12 @@ Before Integration 1 starts, `sim-kernel`, `sim-gateway-core`, and `sim-canvas-c
 
 ```typescript
 interface DomainPlugin {
-  id: string;                          // 'kafka' | 'raft' | 'cassandra' | ...
-  reducers: Record<string, Reducer>;   // domain-specific state transitions
+  id: string; // 'kafka' | 'raft' | 'cassandra' | ...
+  reducers: Record<string, Reducer>; // domain-specific state transitions
   validators: Record<string, Validator>;
-  entityRenderers: Record<string, CanvasRenderer>;  // how this domain's nodes draw themselves
+  entityRenderers: Record<string, CanvasRenderer>; // how this domain's nodes draw themselves
   scenarioLibrary: Scenario[];
-  oracleAdapter?: OracleAdapter;       // optional, if a real reference system exists
+  oracleAdapter?: OracleAdapter; // optional, if a real reference system exists
 }
 ```
 
@@ -68,6 +70,7 @@ This is what turns "rebuild a new visualizer" into "write a new plugin" — the 
 **Core concepts to model:** leader election with randomized timeouts (a genuine addition — KRaft's simplified deterministic election was explicitly flagged as a simplification; a real Raft visualizer should model this properly), log replication, commit index vs. applied index, term numbers, vote requests/grants, split-brain/network-partition scenarios, snapshot/log-compaction (Raft's own, distinct from Kafka's).
 
 **Reuse vs. new work:**
+
 - Reused directly: the discrete-event kernel, snapshot/replay, canvas camera/drag/zoom/particle system, room/gateway/auth infrastructure.
 - Generalized from Kafka: the metadata-log-replay concept, quorum/voter modeling, controller-epoch-style term tracking.
 - Genuinely new: randomized election timeouts (a real correctness-relevant mechanism Raft depends on that KRaft's simplification skipped), log-matching property enforcement, the specific RPC set (`RequestVote`, `AppendEntries`, `InstallSnapshot`).
@@ -87,6 +90,7 @@ This is what turns "rebuild a new visualizer" into "write a new plugin" — the 
 **Core concepts to model:** consistent hashing / hash-ring partitioning (genuinely new — Kafka uses static partition assignment, not a ring), quorum reads/writes (`N`, `R`, `W` tunable consistency, a new dimension Kafka doesn't have in the same form), read-repair and hinted handoff, vector clocks or last-write-wins conflict resolution, node addition/removal and data rebalancing across the ring.
 
 **Reuse vs. new work:**
+
 - Reused: replication/leader concepts generalize from Kafka's ISR and Integration 1's Raft work (if per-shard consensus is modeled).
 - Genuinely new: the hash ring itself (a distinct, very visual data structure — this is a great candidate for a dedicated ring-diagram view, different from Kafka's broker/partition cards), tunable consistency levels, conflict resolution on concurrent writes.
 
@@ -132,25 +136,25 @@ This is what turns "rebuild a new visualizer" into "write a new plugin" — the 
 
 Shorter treatment — these are real candidates but shouldn't be scheduled ahead of Integrations 1–4 without a specific reason (e.g., a customer/user request that changes the priority calculus):
 
-| Candidate | One-line scope | Oracle available? |
-|---|---|---|
-| **Message queue diversity** (RabbitMQ/AMQP, or SQS-style) | Different delivery-guarantee model (queues + exchanges vs. Kafka's log) — good contrast piece once Kafka's log-based model is well understood by users. | Yes — real RabbitMQ Docker image. |
-| **Networking fundamentals** (TCP handshake/congestion control, DNS resolution) | Packet-level timing rather than higher-level event state machines — may stress the kernel's assumptions in new ways; worth a small spike before committing. | Partial — can compare against real `tcpdump`/`Wireshark` captures rather than a live running oracle. |
-| **Storage engine internals** (B-tree vs. LSM-tree, similar to what Kafka's log-segment work already touched) | A "how does a database index actually work" visualizer — direct extension of work already done for Kafka's log storage. | Yes — SQLite (B-tree) and RocksDB/LevelDB (LSM) are both real, inspectable references. |
-| **Blockchain / alternative consensus** (PoW/PoS, fork resolution) | High public interest, but weaker fit with the "verify against a real production system" discipline the whole platform is built on — most public chains are too heavyweight to run as a lightweight oracle. | Weak — would likely mean building a toy reference rather than verifying against a real, widely-trusted implementation, which breaks the project's core methodology. |
+| Candidate                                                                                                    | One-line scope                                                                                                                                                                                             | Oracle available?                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Message queue diversity** (RabbitMQ/AMQP, or SQS-style)                                                    | Different delivery-guarantee model (queues + exchanges vs. Kafka's log) — good contrast piece once Kafka's log-based model is well understood by users.                                                    | Yes — real RabbitMQ Docker image.                                                                                                                                   |
+| **Networking fundamentals** (TCP handshake/congestion control, DNS resolution)                               | Packet-level timing rather than higher-level event state machines — may stress the kernel's assumptions in new ways; worth a small spike before committing.                                                | Partial — can compare against real `tcpdump`/`Wireshark` captures rather than a live running oracle.                                                                |
+| **Storage engine internals** (B-tree vs. LSM-tree, similar to what Kafka's log-segment work already touched) | A "how does a database index actually work" visualizer — direct extension of work already done for Kafka's log storage.                                                                                    | Yes — SQLite (B-tree) and RocksDB/LevelDB (LSM) are both real, inspectable references.                                                                              |
+| **Blockchain / alternative consensus** (PoW/PoS, fork resolution)                                            | High public interest, but weaker fit with the "verify against a real production system" discipline the whole platform is built on — most public chains are too heavyweight to run as a lightweight oracle. | Weak — would likely mean building a toy reference rather than verifying against a real, widely-trusted implementation, which breaks the project's core methodology. |
 
 ---
 
 ## Master sequencing
 
-| Order | Integration | Primary reuse source | Oracle | Relative effort vs. original Kafka build |
-|---|---|---|---|---|
-| 0 | Platform extraction | — | — | Small, one-time |
-| 1 | Raft/Paxos | KRaft | etcd raft library | Materially less |
-| 2 | Distributed DB (sharding) | Raft + Kafka replication | Cassandra/ScyllaDB | Moderate |
-| 3 | Distributed caching (Redis Cluster) | Integration 2 | Redis Cluster (real) | Least of all five |
-| 4 | Kubernetes scheduler/networking | Platform layer only | `kind` | Comparable to or more than original Kafka build (novel domain) |
-| 5+ | Message queues / storage engines / networking / blockchain | Varies | Varies (blockchain notably weak) | Case-by-case |
+| Order | Integration                                                | Primary reuse source     | Oracle                           | Relative effort vs. original Kafka build                       |
+| ----- | ---------------------------------------------------------- | ------------------------ | -------------------------------- | -------------------------------------------------------------- |
+| 0     | Platform extraction                                        | —                        | —                                | Small, one-time                                                |
+| 1     | Raft/Paxos                                                 | KRaft                    | etcd raft library                | Materially less                                                |
+| 2     | Distributed DB (sharding)                                  | Raft + Kafka replication | Cassandra/ScyllaDB               | Moderate                                                       |
+| 3     | Distributed caching (Redis Cluster)                        | Integration 2            | Redis Cluster (real)             | Least of all five                                              |
+| 4     | Kubernetes scheduler/networking                            | Platform layer only      | `kind`                           | Comparable to or more than original Kafka build (novel domain) |
+| 5+    | Message queues / storage engines / networking / blockchain | Varies                   | Varies (blockchain notably weak) | Case-by-case                                                   |
 
 ---
 

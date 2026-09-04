@@ -4,14 +4,8 @@
  * Kafka Oracle Verification Harness.
  * Validates deterministic simulation engine execution against Kafka reference semantics.
  */
-
 import { SimulationEngine } from '../engine/simulation-engine.js';
-import type {
-  BrokerNode,
-  KafkaClusterState,
-  SimEvent,
-  TopicPartition,
-} from '../engine/types.js';
+import type { BrokerNode, KafkaClusterState, SimEvent, TopicPartition } from '../engine/types.js';
 
 export interface OracleScenarioResult {
   readonly scenarioName: string;
@@ -109,7 +103,10 @@ export class KafkaOracleHarness implements OracleAdapter<void, OracleScenarioRes
     }
   }
 
-  public compareOutputs(simResult: OracleScenarioResult, oracleResult: OracleScenarioResult): OracleScenarioAssertion[] {
+  public compareOutputs(
+    simResult: OracleScenarioResult,
+    oracleResult: OracleScenarioResult,
+  ): OracleScenarioAssertion[] {
     return [
       {
         actionName: simResult.scenarioName,
@@ -155,7 +152,7 @@ export class KafkaOracleHarness implements OracleAdapter<void, OracleScenarioRes
       speedMultiplier: 1.0,
     });
 
-    let emittedEvents: SimEvent[] = [];
+    const emittedEvents: SimEvent[] = [];
     engine.registerCallbacks({
       onEventBatch: (events) => {
         emittedEvents.push(...events);
@@ -343,7 +340,9 @@ export class KafkaOracleHarness implements OracleAdapter<void, OracleScenarioRes
       ticksExecuted: 10,
       eventsEmitted: 4,
       assertionsEvaluated: 4,
-      error: passed ? undefined : `isStable=${String(isStable)}, gen=${String(group?.generationId)}, m1=${String(m1Partitions)}, m2=${String(m2Partitions)}`,
+      error: passed
+        ? undefined
+        : `isStable=${String(isStable)}, gen=${String(group?.generationId)}, m1=${String(m1Partitions)}, m2=${String(m2Partitions)}`,
     };
   }
 }

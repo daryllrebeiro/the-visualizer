@@ -79,7 +79,7 @@ describe('Raft Consensus Domain Fidelity Test Suite (Ongaro & Ousterhout 2014 & 
   describe('Log Compaction via InstallSnapshot RPC', () => {
     it('truncates follower log up to snapshotIndex when snapshot is installed', () => {
       const rng = new DeterministicRNG(42);
-      let state = createDefaultRaftCluster(3, 42);
+      let state = createDefaultRaftCluster('raft-cluster-1', 3, 42);
 
       // Follower 2 has stale log entries [index 1, 2, 3]
       const follower = state.nodes['2']!;
@@ -118,7 +118,7 @@ describe('Raft Consensus Domain Fidelity Test Suite (Ongaro & Ousterhout 2014 & 
   describe('Linearizable ReadIndex Query Handling', () => {
     it('responds to linearizable read query from active leader with current commitIndex', () => {
       const rng = new DeterministicRNG(42);
-      let state = createDefaultRaftCluster(3, 42);
+      let state = createDefaultRaftCluster('raft-cluster-1', 3, 42);
       state.nodes['1']!.role = 'LEADER';
       state.nodes['1']!.commitIndex = 42;
       state.activeLeaderId = '1';

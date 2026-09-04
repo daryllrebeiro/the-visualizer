@@ -1,7 +1,8 @@
-import { tokenRevocationStore } from '@the-visualizer/contracts';
 import type { MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { verify } from 'hono/jwt';
+
+import { tokenRevocationStore } from '@the-visualizer/contracts';
 
 import { JWT_SECRET } from '../config.js';
 import { userRepository } from '../repositories/user.repository.js';

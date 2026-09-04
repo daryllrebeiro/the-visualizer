@@ -1,5 +1,6 @@
 import http from 'http';
 import { describe, expect, it } from 'vitest';
+
 import { createWebSocketServer } from './ws-server.js';
 
 describe('WebSocket Server Configuration & Defense-in-Depth Regression', () => {

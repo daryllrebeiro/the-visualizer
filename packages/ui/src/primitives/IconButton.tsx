@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { Button, type ButtonProps } from './Button.js';
 
 export interface IconButtonProps extends Omit<ButtonProps, 'icon' | 'iconPosition'> {

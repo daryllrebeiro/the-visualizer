@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { UI_VERSION, GLOSSARY_TERMS, DEFAULT_TOUR_STEPS } from './index.js';
+
+import { DEFAULT_TOUR_STEPS, GLOSSARY_TERMS, UI_VERSION } from './index.js';
 
 describe('UI Package Design System & Exports', () => {
   it('exports UI version constant', () => {
@@ -8,10 +9,10 @@ describe('UI Package Design System & Exports', () => {
 
   it('contains valid glossary definitions for distributed systems', () => {
     expect(Object.keys(GLOSSARY_TERMS).length).toBeGreaterThanOrEqual(10);
-    expect(GLOSSARY_TERMS['ISR']).toBeDefined();
-    expect(GLOSSARY_TERMS['HW']).toBeDefined();
-    expect(GLOSSARY_TERMS['TERM']).toBeDefined();
-    expect(GLOSSARY_TERMS['QUORUM']).toBeDefined();
+    expect(GLOSSARY_TERMS.ISR).toBeDefined();
+    expect(GLOSSARY_TERMS.HW).toBeDefined();
+    expect(GLOSSARY_TERMS.TERM).toBeDefined();
+    expect(GLOSSARY_TERMS.QUORUM).toBeDefined();
   });
 
   it('contains onboarding tour steps', () => {

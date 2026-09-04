@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { kafkaMurmur2, partitionForKey, toPositive } from './murmur2.js';
 
 describe('Kafka Murmur2 Partitioner Tests', () => {
@@ -13,9 +14,17 @@ describe('Kafka Murmur2 Partitioner Tests', () => {
     // Reference test vectors matching org.apache.kafka.common.utils.Utils.murmur2(byte[] data)
     const testCases: { key: string; expectedHash: number; expectedPartition3: number }[] = [
       { key: '', expectedHash: 275646681, expectedPartition3: toPositive(275646681) % 3 },
-      { key: 'user-1001', expectedHash: -1052335918, expectedPartition3: toPositive(-1052335918) % 3 },
+      {
+        key: 'user-1001',
+        expectedHash: -1052335918,
+        expectedPartition3: toPositive(-1052335918) % 3,
+      },
       { key: 'k1', expectedHash: 1684045097, expectedPartition3: toPositive(1684045097) % 3 },
-      { key: 'order-xyz-987', expectedHash: 1354500271, expectedPartition3: toPositive(1354500271) % 3 },
+      {
+        key: 'order-xyz-987',
+        expectedHash: 1354500271,
+        expectedPartition3: toPositive(1354500271) % 3,
+      },
     ];
 
     for (const tc of testCases) {

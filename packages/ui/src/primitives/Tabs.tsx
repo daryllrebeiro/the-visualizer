@@ -99,11 +99,18 @@ export const Tabs: React.FC<TabsProps> = ({
               padding: isSm ? '6px 10px' : '10px 14px',
               fontSize: isSm ? '12px' : '13px',
               fontWeight: isActive ? 600 : 500,
-              color: isActive ? (variant === 'underline' ? domainColor : '#ffffff') : 'var(--text-muted, #64748b)',
+              color: isActive
+                ? variant === 'underline'
+                  ? domainColor
+                  : '#ffffff'
+                : 'var(--text-muted, #64748b)',
               background: variant === 'pills' && isActive ? domainColor : 'transparent',
               borderRadius: variant === 'pills' ? '6px' : '0',
               border: 'none',
-              borderBottom: variant === 'underline' ? `2px solid ${isActive ? domainColor : 'transparent'}` : 'none',
+              borderBottom:
+                variant === 'underline'
+                  ? `2px solid ${isActive ? domainColor : 'transparent'}`
+                  : 'none',
               marginBottom: variant === 'underline' ? '-1px' : '0',
               cursor: 'pointer',
               transition: 'all 150ms ease',

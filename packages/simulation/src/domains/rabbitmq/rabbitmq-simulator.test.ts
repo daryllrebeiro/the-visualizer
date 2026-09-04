@@ -71,7 +71,7 @@ describe('RabbitMQ AMQP 0-9-1 Exchanges & Queues Simulation', () => {
     };
     state = pureRabbitTransition(state, pubEv, rng).nextState;
 
-    const activeMsg = state.consumers['worker-eu-1']?.activeMessages[0]!;
+    const activeMsg = state.consumers['worker-eu-1']!.activeMessages[0]!;
     expect(activeMsg).toBeDefined();
 
     // Acknowledge message
@@ -108,7 +108,7 @@ describe('RabbitMQ AMQP 0-9-1 Exchanges & Queues Simulation', () => {
     };
     state = pureRabbitTransition(state, pubEv, rng).nextState;
 
-    const activeMsg = state.consumers['worker-eu-1']?.activeMessages[0]!;
+    const activeMsg = state.consumers['worker-eu-1']!.activeMessages[0]!;
     expect(activeMsg).toBeDefined();
 
     // Reject without requeue

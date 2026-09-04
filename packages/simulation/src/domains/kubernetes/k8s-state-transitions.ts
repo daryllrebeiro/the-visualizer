@@ -1,4 +1,4 @@
-import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import { reconcileCluster } from './k8s-reconciliation.js';
 import type { DeploymentSpec, K8sClusterState, K8sNode, K8sSimEvent } from './k8s-types.js';
 
@@ -168,7 +168,7 @@ export function pureK8sTransition(
     }
     case 'K8S_APPLY_PDB': {
       const pdb = event.payload['pdb'] as any;
-      if (pdb && pdb.id) {
+      if (pdb?.id) {
         nextState.podDisruptionBudgets[pdb.id] = pdb;
       }
       break;

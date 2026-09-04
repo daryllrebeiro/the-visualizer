@@ -1,14 +1,14 @@
+import { check } from 'k6';
 import http from 'k6/http';
 import ws from 'k6/ws';
-import { check } from 'k6';
 
 export const options = {
   vus: 10,
   duration: '10s',
   thresholds: {
-    'http_req_duration': ['p(95)<50'],   // 95% of auth requests must complete within 50ms
-    'http_req_failed': ['rate<0.01'],     // Error rate under 1%
-    'ws_connecting': ['p(95)<100'],       // 95% of WS handshakes under 100ms
+    http_req_duration: ['p(95)<50'], // 95% of auth requests must complete within 50ms
+    http_req_failed: ['rate<0.01'], // Error rate under 1%
+    ws_connecting: ['p(95)<100'], // 95% of WS handshakes under 100ms
   },
 };
 
@@ -43,7 +43,7 @@ export default function () {
         JSON.stringify({
           type: 'JOIN_ROOM',
           payload: { roomId: 'load-test-room-1' },
-        })
+        }),
       );
     });
 
@@ -59,7 +59,7 @@ export default function () {
             value: 'hello-world-load-test',
             acks: 1,
           },
-        })
+        }),
       );
 
       // Close the socket to complete the virtual user iteration cleanly

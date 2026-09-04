@@ -1,6 +1,7 @@
 import React from 'react';
 
-export type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'custom';
+export type BadgeVariant =
+  'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'custom';
 export type BadgeSize = 'xs' | 'sm' | 'md';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

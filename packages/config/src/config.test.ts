@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RESOURCE_LIMITS, BaseEnvSchema, parseEnv } from './index.js';
+
+import { BaseEnvSchema, RESOURCE_LIMITS, parseEnv } from './index.js';
 
 describe('Configuration & Resource Limits', () => {
   it('defines tier limits for FREE, PRO, and SYSTEM tiers', () => {

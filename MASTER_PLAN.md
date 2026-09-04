@@ -8,19 +8,19 @@
 
 ## Status of prior work (what this plan builds on)
 
-| Item | Status | Where it lives |
-|---|---|---|
-| `DomainPlugin` interface & `DomainRegistry` | ✅ Done | [`registry.ts`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/packages/simulation/src/domains/registry.ts) |
-| 8 domain reducers, invariant checkers, scenarios | ✅ Done | `packages/simulation/src/domains/*` |
-| 8 domain visualizer components | ✅ Done | `apps/web/src/components/{raft,database,redis,...}` |
-| Domain-parameterized fidelity tags | ✅ Done | `DomainPluginMetadata.fidelityDisplayName` |
-| `OracleAdapter` interface | ✅ Done | `oracle-harness.ts` |
-| Single-domain room locking | ✅ Done | `room-manager.ts` with `ERR_DOMAIN_LOCKED` |
-| Zod validation on all WS intents (including JOIN_ROOM, GAP_RECOVERY) | ✅ Done | `ws-server.ts` + `contracts/websocket/index.ts` |
-| Domain directory modal + domain switcher | ✅ Done | `DomainDirectoryModal.tsx` |
-| CI pipeline (lint, typecheck, build, test) | ✅ Done | `.github/workflows/ci.yml` |
-| Dockerfile (multi-stage, non-root user) | ✅ Done | `Dockerfile` |
-| Rate limiting (20 msg/sec free tier) | ✅ Done | `ws-server.ts` |
+| Item                                                                 | Status  | Where it lives                                                                                                   |
+| -------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
+| `DomainPlugin` interface & `DomainRegistry`                          | ✅ Done | [`registry.ts`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/packages/simulation/src/domains/registry.ts) |
+| 8 domain reducers, invariant checkers, scenarios                     | ✅ Done | `packages/simulation/src/domains/*`                                                                              |
+| 8 domain visualizer components                                       | ✅ Done | `apps/web/src/components/{raft,database,redis,...}`                                                              |
+| Domain-parameterized fidelity tags                                   | ✅ Done | `DomainPluginMetadata.fidelityDisplayName`                                                                       |
+| `OracleAdapter` interface                                            | ✅ Done | `oracle-harness.ts`                                                                                              |
+| Single-domain room locking                                           | ✅ Done | `room-manager.ts` with `ERR_DOMAIN_LOCKED`                                                                       |
+| Zod validation on all WS intents (including JOIN_ROOM, GAP_RECOVERY) | ✅ Done | `ws-server.ts` + `contracts/websocket/index.ts`                                                                  |
+| Domain directory modal + domain switcher                             | ✅ Done | `DomainDirectoryModal.tsx`                                                                                       |
+| CI pipeline (lint, typecheck, build, test)                           | ✅ Done | `.github/workflows/ci.yml`                                                                                       |
+| Dockerfile (multi-stage, non-root user)                              | ✅ Done | `Dockerfile`                                                                                                     |
+| Rate limiting (20 msg/sec free tier)                                 | ✅ Done | `ws-server.ts`                                                                                                   |
 
 ### What's NOT done yet (gaps this plan closes)
 
@@ -52,18 +52,19 @@
 
 ### Tasks
 
-| # | Task | Output artifact | Touches |
-|---|---|---|---|
-| 0.1 | Run `pnpm build && pnpm test` across monorepo, record pass/fail/coverage per package | `docs/audit/BASELINE.md` | CI config |
-| 0.2 | Wire `vitest --coverage` into CI; publish coverage badge per package | `vitest.config.ts`, `ci.yml` | Root config |
-| 0.3 | **Golden determinism fixtures**: for each of 8 domains, seed RNG, apply a fixed 50-event sequence, hash final state. Store as `.snap` fixtures in `packages/test-utils/golden/`. Wire `pnpm test:determinism` as required CI job. | `packages/test-utils/golden/*.snap` | New CI job |
-| 0.4 | Lighthouse audit (performance + a11y) on all 8 routes; log baseline scores | `docs/audit/BASELINE.md` | — |
-| 0.5 | `next build` bundle analysis per route; record sizes | `docs/audit/BASELINE.md` | — |
-| 0.6 | Threat model: enumerate every inbound message type in `ws-server.ts` and `apps/api`, every SSRF vector, auth/rate-limit gaps | `docs/security/THREAT_MODEL.md` | — |
-| 0.7 | Magic-number inventory: grep for hardcoded domain constants (16384, M=4, 5 nodes, etc.) in `apps/web`; classify as configurable vs. protocol-fixed | Section in `BASELINE.md` | — |
-| 0.8 | Dependency audit: `pnpm audit`, check Dockerfile base image pinning (currently `node:22-alpine`, should be digest-pinned), flag any high/critical CVEs | `docs/security/DEPENDENCY_AUDIT.md` | `Dockerfile` |
+| #   | Task                                                                                                                                                                                                                              | Output artifact                     | Touches      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------ |
+| 0.1 | Run `pnpm build && pnpm test` across monorepo, record pass/fail/coverage per package                                                                                                                                              | `docs/audit/BASELINE.md`            | CI config    |
+| 0.2 | Wire `vitest --coverage` into CI; publish coverage badge per package                                                                                                                                                              | `vitest.config.ts`, `ci.yml`        | Root config  |
+| 0.3 | **Golden determinism fixtures**: for each of 8 domains, seed RNG, apply a fixed 50-event sequence, hash final state. Store as `.snap` fixtures in `packages/test-utils/golden/`. Wire `pnpm test:determinism` as required CI job. | `packages/test-utils/golden/*.snap` | New CI job   |
+| 0.4 | Lighthouse audit (performance + a11y) on all 8 routes; log baseline scores                                                                                                                                                        | `docs/audit/BASELINE.md`            | —            |
+| 0.5 | `next build` bundle analysis per route; record sizes                                                                                                                                                                              | `docs/audit/BASELINE.md`            | —            |
+| 0.6 | Threat model: enumerate every inbound message type in `ws-server.ts` and `apps/api`, every SSRF vector, auth/rate-limit gaps                                                                                                      | `docs/security/THREAT_MODEL.md`     | —            |
+| 0.7 | Magic-number inventory: grep for hardcoded domain constants (16384, M=4, 5 nodes, etc.) in `apps/web`; classify as configurable vs. protocol-fixed                                                                                | Section in `BASELINE.md`            | —            |
+| 0.8 | Dependency audit: `pnpm audit`, check Dockerfile base image pinning (currently `node:22-alpine`, should be digest-pinned), flag any high/critical CVEs                                                                            | `docs/security/DEPENDENCY_AUDIT.md` | `Dockerfile` |
 
 ### Acceptance criteria
+
 - `pnpm test:determinism` required in CI, fails on any state hash drift.
 - `docs/security/THREAT_MODEL.md`, `docs/audit/BASELINE.md` committed.
 - Coverage badge visible in `README.md`.
@@ -75,16 +76,19 @@
 **Goal:** Extract the UI foundation so all 8 domains inherit consistent look and feel by default.
 
 ### Why this matters now
+
 [`page.tsx`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/apps/web/src/app/page.tsx) is 2,751 lines. Each domain visualizer manages its own layout, controls, and styling independently. Adding polish to one domain doesn't propagate to the others. This phase inverts that — build the shell once, domain plugins slot into it.
 
 ### Tasks
 
 **1.1 — Design tokens & primitives** (`packages/ui` already exists in the workspace)
+
 - CSS custom properties: color scales (light/dark + per-domain accents from `registry.ts` `color` field), spacing, radii, shadows, motion durations/easings.
 - Typography: Inter variable for UI, JetBrains Mono for state/log/hex data. No unstyled browser defaults.
 - Primitives: Button, IconButton, Badge/StatusPill, Tooltip, Popover, Drawer/Sheet, Modal, Tabs, Toast, Slider, Toggle, Select, Card, EmptyState, Skeleton, ProgressRing/Gauge.
 
 **1.2 — `CanvasShell` layout component**
+
 - Top nav: domain switcher dropdown (reads `DomainRegistry.list()`) + ⌘K command palette trigger.
 - Left rail: collapsible chaos controls / scenario picker.
 - Center: domain canvas (slot for domain-specific visualizer component).
@@ -92,22 +96,27 @@
 - Bottom: timeline/scrubber bar (shared component, already partially implemented).
 
 **1.3 — Route restructuring**
+
 - Move from monolith `page.tsx` to per-domain routes under `apps/web/src/app/[domain]/page.tsx` (directory already exists but barely used).
 - Each route lazy-loads only its domain visualizer + simulation logic → automatic code splitting.
 - Root `/` shows domain directory (replaces modal, becomes a proper landing page).
 
 **1.4 — Command palette** (`⌘K` / `Ctrl+K`)
+
 - Jump to domain, run chaos action, load scenario, toggle theme, import/export trace.
 - Data source: `DomainRegistry.list()` + current domain's `scenarioLibrary`.
 
 **1.5 — Motion system**
+
 - Standardize transitions: node state changes (150ms ease-out), particle travel (bezier), drawer open/close (200ms spring), page transitions (fade-slide 150ms).
 - Replace one-off CSS animations currently scattered across domain components.
 
 **1.6 — Responsive breakpoints**
+
 - Desktop: full shell. Tablet: collapsible side panels. Mobile: read-only "best on desktop" banner + simplified view.
 
 ### Acceptance criteria
+
 - `/design-system` route renders every primitive in light + dark themes.
 - Kafka domain fully migrated onto new shell as reference implementation.
 - `page.tsx` reduced from 2,751 lines to under 200 (a thin router).
@@ -133,18 +142,19 @@
 
 ### Domain-specific upgrades
 
-| Domain | Flagship upgrade | Secondary upgrades |
-|---|---|---|
-| **Kafka** | Murmur2 hash playground with step-by-step byte breakdown (syntax-highlighted computation, not just result) | ISR shrink/grow animation with "why" tooltip; consumer rebalance before/after diff view |
-| **Raft** | Election timeout as visible radial timers per node (the most-requested Raft visualization) | Draggable network-partition divider (not just multi-select); log matrix "why not committed" hover |
-| **Database** | Hovering a key → animated replica-placement path with running R/W ack tally | Side-by-side consistency-level comparison mode (ONE vs QUORUM vs ALL, same write) |
-| **Redis** | Zoomable slot minimap (16,384 slots can't be clicked at 1:1) | Eviction pipeline showing ranked candidates by policy with "why this one" |
-| **Kubernetes** | Scrubbable reconciliation loop (Observe→Diff→Act) with actual diff payload | "Why is this pod Pending" inline on pod badge (resource shortfall, taint mismatch) |
-| **RabbitMQ** | Interactive topic wildcard matcher (type routing key + binding, get live token-by-token match) | DLQ rejection reason as filterable field (TTL expired vs nack'd vs unroutable) |
-| **Storage** | Synchronized B+Tree/LSM dual mode: same workload, both engines, compare write-amp/read paths | Bloom filter bit-array visualization with live false-positive-rate counter |
-| **TCP** | AIMD curve with "no loss" ghost trace overlay for comparison | Sliding window with sequence-number labels on hover; click-to-drop chaos |
+| Domain         | Flagship upgrade                                                                                           | Secondary upgrades                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Kafka**      | Murmur2 hash playground with step-by-step byte breakdown (syntax-highlighted computation, not just result) | ISR shrink/grow animation with "why" tooltip; consumer rebalance before/after diff view           |
+| **Raft**       | Election timeout as visible radial timers per node (the most-requested Raft visualization)                 | Draggable network-partition divider (not just multi-select); log matrix "why not committed" hover |
+| **Database**   | Hovering a key → animated replica-placement path with running R/W ack tally                                | Side-by-side consistency-level comparison mode (ONE vs QUORUM vs ALL, same write)                 |
+| **Redis**      | Zoomable slot minimap (16,384 slots can't be clicked at 1:1)                                               | Eviction pipeline showing ranked candidates by policy with "why this one"                         |
+| **Kubernetes** | Scrubbable reconciliation loop (Observe→Diff→Act) with actual diff payload                                 | "Why is this pod Pending" inline on pod badge (resource shortfall, taint mismatch)                |
+| **RabbitMQ**   | Interactive topic wildcard matcher (type routing key + binding, get live token-by-token match)             | DLQ rejection reason as filterable field (TTL expired vs nack'd vs unroutable)                    |
+| **Storage**    | Synchronized B+Tree/LSM dual mode: same workload, both engines, compare write-amp/read paths               | Bloom filter bit-array visualization with live false-positive-rate counter                        |
+| **TCP**        | AIMD curve with "no loss" ghost trace overlay for comparison                                               | Sliding window with sequence-number labels on hover; click-to-drop chaos                          |
 
 ### Acceptance criteria per domain
+
 - Passes the common checklist (automated via shared Playwright script: open legend → run scenario → click entity → open drawer → scrub timeline → export trace, run against all 8 routes).
 - Golden-state determinism tests still pass (UI changes must not touch simulation reducers).
 
@@ -155,6 +165,7 @@
 **Goal:** Genuinely friendly to first-time users; WCAG 2.1 AA compliant.
 
 ### Tasks
+
 - [ ] **Onboarding tour**: first-run interactive walkthrough using Kafka domain — open inspector, run scenario, read invariant panel.
 - [ ] **Progressive disclosure**: default "Guided" mode with scenario buttons front-center; "Advanced" toggle reveals raw chaos controls.
 - [ ] **Contextual help**: every protocol term (ISR, LSO, cwnd, vnode, etc.) gets inline `?` with plain-English paragraph — sourced from `VISUALIZERS_DETAILS.md`.
@@ -168,6 +179,7 @@
 - [ ] **Perceived performance**: skeleton loaders matching final layout shape; optimistic UI for chaos actions.
 
 ### Acceptance criteria
+
 - Lighthouse a11y ≥ 95 on all 8 routes.
 - Screen-reader walkthrough documented with issues resolved or ticketed.
 
@@ -179,21 +191,22 @@
 
 ### Tasks
 
-| # | Task | Current state → Target |
-|---|---|---|
-| 4.1 | **Fuzz testing**: `fast-check` adversarial payloads against every WS message type and REST endpoint; assert graceful rejection | No fuzz tests → fuzz suite in CI |
-| 4.2 | **SSRF review**: test gateway SSRF validation against RFC1918, link-local, `0.0.0.0`, IPv6, DNS-rebinding bypasses | Partial validation → automated bypass test suite |
-| 4.3 | **AuthN/AuthZ**: audit JWT flow; add session-ownership checks so client A can't read/mutate client B's simulation via guessed ID | Basic auth → session-scoped validation |
-| 4.4 | **Rate limiting depth**: verify 20 msg/sec is per-identity AND per-IP; add global circuit breaker for connection floods; exponential backoff in client reconnect | Per-socket only → layered defense |
-| 4.5 | **Resource-exhaustion caps**: max cluster size, max trace history length, max concurrent sessions/user, max auto-produce cadence | Some caps → comprehensive, configurable limits in `packages/config` |
-| 4.6 | **Supply chain**: Dependabot/Renovate + `pnpm audit` as required CI check; pin Docker base by digest; add SBOM (Syft) | `node:22-alpine` unpinned → digest-pinned + SBOM |
-| 4.7 | **Secrets hygiene**: gitleaks/truffleHog in CI; verify `.env.example` has no real credentials | No scanning → CI-required scan |
-| 4.8 | **Security headers**: strict CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS on `apps/web` | None → full header suite |
-| 4.9 | **WS hardening**: `Origin` allow-list, message size cap, per-connection-per-second cap independent of app-level limiter | Partial → layered WS defense |
-| 4.10 | **Container hardening**: read-only root filesystem, drop capabilities, Trivy scan in CI | Non-root user done → full CIS benchmark pass |
-| 4.11 | **Data at rest**: TLS on Postgres/Redis connections; scrub infra details from exported traces | Unchecked → verified |
+| #    | Task                                                                                                                                                             | Current state → Target                                              |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 4.1  | **Fuzz testing**: `fast-check` adversarial payloads against every WS message type and REST endpoint; assert graceful rejection                                   | No fuzz tests → fuzz suite in CI                                    |
+| 4.2  | **SSRF review**: test gateway SSRF validation against RFC1918, link-local, `0.0.0.0`, IPv6, DNS-rebinding bypasses                                               | Partial validation → automated bypass test suite                    |
+| 4.3  | **AuthN/AuthZ**: audit JWT flow; add session-ownership checks so client A can't read/mutate client B's simulation via guessed ID                                 | Basic auth → session-scoped validation                              |
+| 4.4  | **Rate limiting depth**: verify 20 msg/sec is per-identity AND per-IP; add global circuit breaker for connection floods; exponential backoff in client reconnect | Per-socket only → layered defense                                   |
+| 4.5  | **Resource-exhaustion caps**: max cluster size, max trace history length, max concurrent sessions/user, max auto-produce cadence                                 | Some caps → comprehensive, configurable limits in `packages/config` |
+| 4.6  | **Supply chain**: Dependabot/Renovate + `pnpm audit` as required CI check; pin Docker base by digest; add SBOM (Syft)                                            | `node:22-alpine` unpinned → digest-pinned + SBOM                    |
+| 4.7  | **Secrets hygiene**: gitleaks/truffleHog in CI; verify `.env.example` has no real credentials                                                                    | No scanning → CI-required scan                                      |
+| 4.8  | **Security headers**: strict CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS on `apps/web`                                             | None → full header suite                                            |
+| 4.9  | **WS hardening**: `Origin` allow-list, message size cap, per-connection-per-second cap independent of app-level limiter                                          | Partial → layered WS defense                                        |
+| 4.10 | **Container hardening**: read-only root filesystem, drop capabilities, Trivy scan in CI                                                                          | Non-root user done → full CIS benchmark pass                        |
+| 4.11 | **Data at rest**: TLS on Postgres/Redis connections; scrub infra details from exported traces                                                                    | Unchecked → verified                                                |
 
 ### Acceptance criteria
+
 - All Phase 0 threat-model items have resolved or documented accepted-risk status.
 - CI blocks on: dependency vulnerabilities, secret scanning hits, fuzz test failures.
 
@@ -204,6 +217,7 @@
 **Goal:** The platform should behave like the well-run systems it simulates.
 
 ### Tasks
+
 - [ ] **Error boundaries**: per-domain React error boundaries with fallback UI ("report issue" pre-filled with session context, scrubbed of secrets).
 - [ ] **Session resumption**: client reconnects → rehydrates from last known tick, not full state loss. Already partially there with `GAP_RECOVERY`; formalize and test.
 - [ ] **Structured logging audit**: verify Pino + OTel traces cover full path (client action → gateway → reducer → broadcast) with correlation IDs; no PII logged.
@@ -213,6 +227,7 @@
 - [ ] **Graceful shutdown**: `ws-gateway` drains in-flight sessions and persists state on SIGTERM (relevant for Cloud Run rolling deploys).
 
 ### Acceptance criteria
+
 - Load test: 200 concurrent sessions, stable memory/latency for 30 minutes.
 - Documented chaos-test results for gateway crash, Redis failover, Postgres failover.
 
@@ -223,6 +238,7 @@
 **Goal:** Automated regression net for everything above.
 
 ### Tasks
+
 - [ ] **Unit coverage**: `packages/simulation` reducers + invariant verifiers to ≥ 90% (pure functions = highest ROI).
 - [ ] **Contract tests**: `packages/contracts` schemas tested against valid + adversarial payloads (ties into Phase 4 fuzz suite).
 - [ ] **Integration tests**: `apps/api` + `apps/ws-gateway` request/response flows including auth-failure and rate-limit paths.
@@ -233,6 +249,7 @@
 - [ ] **Cross-browser**: Playwright E2E on Chromium, Firefox, WebKit, one mobile viewport.
 
 ### Acceptance criteria
+
 - All gates above required on `main`.
 - Coverage trending upward from Phase 0 baseline.
 - No flaky tests (>1% flake rate = quarantine and fix).
@@ -244,6 +261,7 @@
 **Goal:** Modern UI polish must not cost responsiveness, especially for high-entity domains.
 
 ### Tasks
+
 - [ ] Profile canvas rendering; virtualize/cull off-screen entities (especially Redis slot bar).
 - [ ] Evaluate WebGL (`pixi.js`) for highest-entity views (Redis 16,384 slots, K8s pod grids) if SVG bottlenecks; keep SVG for low-density domains (accessibility).
 - [ ] Per-domain code splitting confirmed (Phase 1 routing change) — measure TTI per route.
@@ -252,6 +270,7 @@
 - [ ] Re-run Lighthouse/bundle baselines, confirm improvement over Phase 0.
 
 ### Acceptance criteria
+
 - Lighthouse perf ≥ Phase 0 baseline on all 8 routes.
 - Before/after metrics (TTI, bundle size, FPS under load) in `docs/audit/PERFORMANCE_RESULTS.md`.
 
@@ -260,6 +279,7 @@
 ## Phase 8 — Documentation, Rollout & Handoff
 
 ### Tasks
+
 - [ ] Update `README.md`, `HOW_TO_USE.md`, `VISUALIZERS_DETAILS.md`, `features_and_functionalities.md` with new UI screenshots/GIFs.
 - [ ] `docs/design-system/README.md`: token system, component guidelines.
 - [ ] `docs/security/HARDENING_SUMMARY.md`: Phase 4 changes for security review/compliance.
@@ -292,6 +312,7 @@ Phase 0 ─── BLOCKING, DO FIRST ──────────────�
 ```
 
 **Key parallel lanes:**
+
 - **Lane A (frontend):** Phase 1 → Phase 2 → Phase 3 → Phase 7
 - **Lane B (backend/security):** Phase 4 → Phase 5
 - **Lane C (quality):** Phase 6 runs continuously alongside both lanes
@@ -302,12 +323,12 @@ Phases 1, 4, 5 can start simultaneously after Phase 0 — they touch different l
 
 ## Relation to existing plans
 
-| Existing document | Relationship to this plan |
-|---|---|
-| [`TO_DO_PLANS.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/TO_DO_PLANS.md) | Future integration roadmap (Raft/Paxos, DB, Redis, K8s) — orthogonal to this plan. This plan modernizes the *current* 8 domains; `TO_DO_PLANS.md` adds *new* domains. Cross-cutting platform work items (fidelity tags ✅, oracle adapter ✅, room scope ✅) are already done. Remaining item (domain directory/landing page) is Phase 1.3 here. |
-| [`VISUALIZERS_DETAILS.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/VISUALIZERS_DETAILS.md) | Technical reference per domain — Phase 3's contextual help pulls `?` tooltip content from this. Phase 2's invariant panel uses the invariant IDs defined here. |
-| [`IMPLEMENTATION_PLAN.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/IMPLEMENTATION_PLAN.md) | Original build plan — now historical. This document supersedes it for modernization scope. |
-| [`features_and_functionalities.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/features_and_functionalities.md) | Feature inventory — Phase 8 updates it to reflect modernized state. |
+| Existing document                                                                                                        | Relationship to this plan                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`TO_DO_PLANS.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/TO_DO_PLANS.md)                                   | Future integration roadmap (Raft/Paxos, DB, Redis, K8s) — orthogonal to this plan. This plan modernizes the _current_ 8 domains; `TO_DO_PLANS.md` adds _new_ domains. Cross-cutting platform work items (fidelity tags ✅, oracle adapter ✅, room scope ✅) are already done. Remaining item (domain directory/landing page) is Phase 1.3 here. |
+| [`VISUALIZERS_DETAILS.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/VISUALIZERS_DETAILS.md)                   | Technical reference per domain — Phase 3's contextual help pulls `?` tooltip content from this. Phase 2's invariant panel uses the invariant IDs defined here.                                                                                                                                                                                   |
+| [`IMPLEMENTATION_PLAN.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/IMPLEMENTATION_PLAN.md)                   | Original build plan — now historical. This document supersedes it for modernization scope.                                                                                                                                                                                                                                                       |
+| [`features_and_functionalities.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/features_and_functionalities.md) | Feature inventory — Phase 8 updates it to reflect modernized state.                                                                                                                                                                                                                                                                              |
 
 ---
 
@@ -327,13 +348,12 @@ When slicing a phase for a coding agent:
 
 With General Availability (GA) hardening complete and Scorecard V4 certified at 94/100, the platform is expanding to 13 domains to cover the modern Generative AI Infrastructure stack:
 
-| Domain Key | Subsystem | Focus Area | Phased Milestone |
-| :--- | :--- | :--- | :---: |
-| `/rag` | Retrieval-Augmented Generation | Chunking, hybrid BM25/vector search, cross-encoder re-ranking | Phase N.1 - N.6 |
-| `/agents` | Multi-Agent Orchestration & MCP | ReAct loops, Model Context Protocol tools, hierarchical supervision | Phase N.1 - N.6 |
-| `/llm-serving` | LLM Inference & PagedAttention | Virtual KV-cache block allocator, continuous batching, speculative decoding | Phase N.1 - N.6 |
-| `/vectordb` | Vector DB & ANN Search | Multi-layer HNSW graphs, IVF-PQ quantization, greedy beam routing | Phase N.1 - N.6 |
-| `/gpu-cluster` | GPU Scheduling & 3D Parallelism | 1F1B pipeline schedule, Tensor Parallelism, DeepSpeed ZeRO-3 sharding | Phase N.1 - N.6 |
+| Domain Key     | Subsystem                       | Focus Area                                                                  | Phased Milestone |
+| :------------- | :------------------------------ | :-------------------------------------------------------------------------- | :--------------: |
+| `/rag`         | Retrieval-Augmented Generation  | Chunking, hybrid BM25/vector search, cross-encoder re-ranking               | Phase N.1 - N.6  |
+| `/agents`      | Multi-Agent Orchestration & MCP | ReAct loops, Model Context Protocol tools, hierarchical supervision         | Phase N.1 - N.6  |
+| `/llm-serving` | LLM Inference & PagedAttention  | Virtual KV-cache block allocator, continuous batching, speculative decoding | Phase N.1 - N.6  |
+| `/vectordb`    | Vector DB & ANN Search          | Multi-layer HNSW graphs, IVF-PQ quantization, greedy beam routing           | Phase N.1 - N.6  |
+| `/gpu-cluster` | GPU Scheduling & 3D Parallelism | 1F1B pipeline schedule, Tensor Parallelism, DeepSpeed ZeRO-3 sharding       | Phase N.1 - N.6  |
 
-*See full architectural specifications, invariants, and phased implementation schedule in [`docs/architecture/AI_INFRA_EXPANSION_PLAN.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/docs/architecture/AI_INFRA_EXPANSION_PLAN.md).*
-
+_See full architectural specifications, invariants, and phased implementation schedule in [`docs/architecture/AI_INFRA_EXPANSION_PLAN.md`](file:///c:/Users/Lenovo%20Laptop/dev/the-visualizer/docs/architecture/AI_INFRA_EXPANSION_PLAN.md)._

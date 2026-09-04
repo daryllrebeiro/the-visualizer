@@ -1,6 +1,4 @@
 import jsonpatch from 'fast-json-patch';
-
-const compare = (jsonpatch.compare || (jsonpatch as any).default?.compare) as typeof jsonpatch.compare;
 import { Redis } from 'ioredis';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
@@ -19,6 +17,9 @@ import { SimulationEngine } from '@the-visualizer/simulation';
 import { config } from '../config.js';
 import { roomManager } from './room-manager.js';
 import { DEFAULT_TOPOLOGY } from './ws-server.js';
+
+const compare = (jsonpatch.compare ||
+  (jsonpatch as any).default?.compare) as typeof jsonpatch.compare;
 
 export interface AutoProducerSchedule {
   producerId: string;
@@ -159,7 +160,8 @@ export class SimulationRunner {
               engineEventPayload = {
                 groupId: intent.payload.groupId,
                 clientId: intent.payload.clientId,
-                memberId: intent.payload.memberId || `member-${Math.random().toString(36).substring(7)}`,
+                memberId:
+                  intent.payload.memberId || `member-${Math.random().toString(36).substring(7)}`,
                 topics: intent.payload.topics || ['orders'],
               };
             } else if (normalizedType === 'INTENT_CONSUMER_LEAVE') {
@@ -308,7 +310,10 @@ export class SimulationRunner {
             }
           }
         } catch (err) {
-          logger.warn({ err, roomId, rawSnippet: raw.substring(0, 100) }, 'Failed to parse or execute client intent');
+          logger.warn(
+            { err, roomId, rawSnippet: raw.substring(0, 100) },
+            'Failed to parse or execute client intent',
+          );
           captureException(err, { service: 'ws-gateway', roomId });
         }
       }
@@ -361,12 +366,15 @@ export class SimulationRunner {
             entry.nextFireTick = session.tickCount + entry.intervalTicks;
 
             const partitions = engine.state.topics[entry.topic] ?? [];
-            const activePartitions = partitions.filter(
-              (p: (typeof partitions)[number]) => Boolean(p.leaderBrokerId && engine.state?.brokers[p.leaderBrokerId]?.status === 'ALIVE'),
+            const activePartitions = partitions.filter((p: (typeof partitions)[number]) =>
+              Boolean(
+                p.leaderBrokerId && engine.state?.brokers[p.leaderBrokerId]?.status === 'ALIVE',
+              ),
             );
 
             if (activePartitions.length > 0) {
-              const targetPart = activePartitions[Math.floor(Math.random() * activePartitions.length)]!;
+              const targetPart =
+                activePartitions[Math.floor(Math.random() * activePartitions.length)]!;
               engine.scheduleEvent(
                 engine.currentTick,
                 `auto-${entry.producerId}-${String(session.tickCount)}`,

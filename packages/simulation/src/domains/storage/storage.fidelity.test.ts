@@ -12,7 +12,6 @@ import {
   calculateTheoreticalBloomFpRate,
   compactLevel,
   createInitialLSMTree,
-  flushMemTable,
   generateBloomFilter,
   optimalHashCount,
   testBloomFilter,
@@ -43,8 +42,6 @@ describe('Storage Engine Domain Fidelity Test Suite', () => {
       expect(btree.totalPageSplits).toBeGreaterThan(0);
 
       // Delete a key from a leaf
-      const initialRedist = btree.totalRedistributions;
-      const initialMerges = btree.totalMerges;
 
       const deleted = deleteBTree(btree, 70);
       expect(deleted).toBe(true);

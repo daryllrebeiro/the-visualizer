@@ -1,21 +1,24 @@
-import './otel-init.js';
-
 import * as http from 'http';
-
-import { initGlobalExceptionHandling, logger, register } from '@the-visualizer/logging';
-
-initGlobalExceptionHandling('ws-gateway');
-
 import { Redis } from 'ioredis';
+
 import { tokenRevocationStore } from '@the-visualizer/contracts';
+import { initGlobalExceptionHandling, logger, register } from '@the-visualizer/logging';
 
 import { config } from './config.js';
 import { roomManager } from './gateway/room-manager.js';
 import { simulationRunner } from './gateway/runner.js';
 import { createWebSocketServer } from './gateway/ws-server.js';
+import './otel-init.js';
 
-const revocationRedis = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
-revocationRedis.on('error', (err) => logger.warn({ err: String(err) }, 'Revocation Redis connection error'));
+initGlobalExceptionHandling('ws-gateway');
+
+const revocationRedis = new Redis(config.REDIS_URL, {
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+});
+revocationRedis.on('error', (err) =>
+  logger.warn({ err: String(err) }, 'Revocation Redis connection error'),
+);
 tokenRevocationStore.setBackend(revocationRedis);
 
 const server = http.createServer((req, res) => {
