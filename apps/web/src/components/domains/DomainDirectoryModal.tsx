@@ -3,7 +3,20 @@
 import React from 'react';
 
 export interface DomainCardInfo {
-  id: 'kafka' | 'raft' | 'database' | 'redis' | 'kubernetes' | 'rabbitmq' | 'storage' | 'networking';
+  id:
+    | 'kafka'
+    | 'raft'
+    | 'database'
+    | 'redis'
+    | 'kubernetes'
+    | 'rabbitmq'
+    | 'storage'
+    | 'networking'
+    | 'rate-limiter'
+    | 'distributed-lock'
+    | 'cdn-cache'
+    | 'id-gen'
+    | 'transactions';
   name: string;
   category: string;
   icon: string;
@@ -21,103 +34,241 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
     name: 'Apache Kafka',
     category: 'STREAMING',
     icon: '⚡',
-    tagline: 'Log partitioning, consumer group rebalances, ISR replication, exactly-once transactions.',
+    tagline:
+      'Log partitioning, consumer group rebalances, ISR replication, exactly-once transactions.',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'Kafka-tested',
     oracleSystem: 'apache/kafka:4.3 (Testcontainers Oracle Harness)',
     color: '#6366f1',
-    highlights: ['Deterministic Discrete-Event Engine', 'Murmur2 Partitioning', 'Two-Phase Commit Txn Coordinator', 'Log Compaction & Segments'],
+    highlights: [
+      'Deterministic Discrete-Event Engine',
+      'Murmur2 Partitioning',
+      'Two-Phase Commit Txn Coordinator',
+      'Log Compaction & Segments',
+    ],
   },
   {
     id: 'raft',
     name: 'Raft Consensus',
     category: 'CONSENSUS',
     icon: '🛡️',
-    tagline: 'Leader elections, term counters, randomized election timers, quorum log replication, split-brain safety.',
+    tagline:
+      'Leader elections, term counters, randomized election timers, quorum log replication, split-brain safety.',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'Raft-tested',
     oracleSystem: 'etcd-io/raft Reference Oracle',
     color: '#a855f7',
-    highlights: ['Term Invariant Assertion', 'Quorum Disjointness Election Safety', 'Asymmetric Network Partitions', 'Heartbeat Countdowns'],
+    highlights: [
+      'Term Invariant Assertion',
+      'Quorum Disjointness Election Safety',
+      'Asymmetric Network Partitions',
+      'Heartbeat Countdowns',
+    ],
   },
   {
     id: 'database',
     name: 'Distributed Database (ScyllaDB / Cassandra)',
     category: 'DATABASE',
     icon: '🗄️',
-    tagline: 'Consistent hashing with vnodes, tunable quorum consistency (R+W>N), hinted handoffs, background read-repair.',
+    tagline:
+      'Consistent hashing with vnodes, tunable quorum consistency (R+W>N), hinted handoffs, background read-repair.',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'Cassandra-tested',
     oracleSystem: 'cassandra:4.1 / scylladb Architecture Model',
     color: '#10b981',
-    highlights: ['32-Bit FNV-1a Hash Ring', 'PACELC Eventual vs Strong Quorums', 'Zero-Downtime Scale-Out Joins', 'Vector Clock Version Reconciliation'],
+    highlights: [
+      '32-Bit FNV-1a Hash Ring',
+      'PACELC Eventual vs Strong Quorums',
+      'Zero-Downtime Scale-Out Joins',
+      'Vector Clock Version Reconciliation',
+    ],
   },
   {
     id: 'redis',
     name: 'Redis Cluster',
     category: 'CACHE',
     icon: '⚡',
-    tagline: '16,384 hash slots with CRC16 hashtags, primary/replica pairs, MOVED/ASK client redirects, and LRU/LFU/TTL eviction.',
+    tagline:
+      '16,384 hash slots with CRC16 hashtags, primary/replica pairs, MOVED/ASK client redirects, and LRU/LFU/TTL eviction.',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'Redis-tested',
     oracleSystem: 'redis:7.2 Cluster Protocol',
     color: '#ef4444',
-    highlights: ['16,384 Slot Allocation Bar', 'CRC16 Hashtag {user:id} Parser', 'Multi-Policy Eviction Sandbox', 'Master-to-Replica Failover'],
+    highlights: [
+      '16,384 Slot Allocation Bar',
+      'CRC16 Hashtag {user:id} Parser',
+      'Multi-Policy Eviction Sandbox',
+      'Master-to-Replica Failover',
+    ],
   },
   {
     id: 'kubernetes',
     name: 'Kubernetes',
     category: 'ORCHESTRATION',
     icon: '☸️',
-    tagline: 'Two-phase pod scheduling (predicates/scoring), CPU/Memory bin-packing, rolling updates, and declarative reconciliation loops.',
+    tagline:
+      'Two-phase pod scheduling (predicates/scoring), CPU/Memory bin-packing, rolling updates, and declarative reconciliation loops.',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'K8s-tested',
     oracleSystem: 'kind/k8s:v1.30 Control Plane Model',
     color: '#3b82f6',
-    highlights: ['Two-Phase Scheduler Filter & Score', 'Why is this Pod Pending? Diagnostics', 'Zero-Downtime Rolling Updates', 'Node Cordon & Drain Eviction'],
+    highlights: [
+      'Two-Phase Scheduler Filter & Score',
+      'Why is this Pod Pending? Diagnostics',
+      'Zero-Downtime Rolling Updates',
+      'Node Cordon & Drain Eviction',
+    ],
   },
   {
     id: 'rabbitmq',
     name: 'RabbitMQ',
     category: 'STREAMING',
     icon: '🐇',
-    tagline: 'Direct/Fanout/Topic exchange routing with wildcards (*, #), Dead-Letter Exchanges (DLX), and prefetch QoS.',
+    tagline:
+      'Direct/Fanout/Topic exchange routing with wildcards (*, #), Dead-Letter Exchanges (DLX), and prefetch QoS.',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'RabbitMQ-tested',
     oracleSystem: 'rabbitmq:3.13 AMQP 0-9-1 Protocol',
     color: '#f97316',
-    highlights: ['Topic Pattern Wildcards (*, #)', 'Dead-Letter Exchange (DLX) Routing', 'Message Rejection & Poison Pill Isolation', 'Competing Consumer Prefetch QoS'],
+    highlights: [
+      'Topic Pattern Wildcards (*, #)',
+      'Dead-Letter Exchange (DLX) Routing',
+      'Message Rejection & Poison Pill Isolation',
+      'Competing Consumer Prefetch QoS',
+    ],
   },
   {
     id: 'storage',
     name: 'Storage Engine Internals',
     category: 'DATABASE',
     icon: '💾',
-    tagline: 'B+ Tree page splits/balancing (SQLite) vs. LSM-Tree MemTable flushes, immutable SSTables, Bloom filters, and Leveled Compaction (RocksDB).',
+    tagline:
+      'B+ Tree page splits/balancing (SQLite) vs. LSM-Tree MemTable flushes, immutable SSTables, Bloom filters, and Leveled Compaction (RocksDB).',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'SQLite-tested',
     oracleSystem: 'sqlite3 / rocksdb:v8 Storage Layer Model',
     color: '#14b8a6',
-    highlights: ['Order-B B+ Tree Page Split & Root Balancing', 'Append-Only WAL & MemTable Threshold Flush', '16-Bit Bloom Filter Key Membership Bitsets', 'Multi-Level SSTable Merging & Compaction'],
+    highlights: [
+      'Order-B B+ Tree Page Split & Root Balancing',
+      'Append-Only WAL & MemTable Threshold Flush',
+      '16-Bit Bloom Filter Key Membership Bitsets',
+      'Multi-Level SSTable Merging & Compaction',
+    ],
   },
   {
     id: 'networking',
     name: 'Networking Fundamentals',
     category: 'NETWORKING',
     icon: '🌐',
-    tagline: 'Packet-level simulation of TCP 3-way handshake (SYN -> SYN-ACK -> ACK), sliding window sequence numbering, and AIMD congestion control.',
+    tagline:
+      'Packet-level simulation of TCP 3-way handshake (SYN -> SYN-ACK -> ACK), sliding window sequence numbering, and AIMD congestion control.',
     fidelityTag: 'ORACLE_TESTED',
     fidelityDisplayName: 'RFC-tested',
     oracleSystem: 'RFC 793 / RFC 5681 TCP Protocol Model',
     color: '#06b6d4',
-    highlights: ['3-Way Handshake Connection Sequence Ladder', 'Sliding Window Sequence Numbering & Buffering', 'In-Flight Packet Drop Simulation', 'Slow Start & Congestion Avoidance AIMD Curve'],
+    highlights: [
+      '3-Way Handshake Connection Sequence Ladder',
+      'Sliding Window Sequence Numbering & Buffering',
+      'In-Flight Packet Drop Simulation',
+      'Slow Start & Congestion Avoidance AIMD Curve',
+    ],
+  },
+  {
+    id: 'rate-limiter',
+    name: 'Rate Limiter',
+    category: 'GATEWAY',
+    icon: '⏱️',
+    tagline:
+      'Token Bucket, Leaky Bucket, Fixed Window boundary bursts, Sliding Window Log, and Cloudflare Sliding Counter approximation.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'RFC/Cloudflare',
+    oracleSystem: 'RFC 2697 / Cloudflare Rate Limiting Spec',
+    color: '#f59e0b',
+    highlights: [
+      '5-Algorithm Side-by-Side Comparison',
+      'RFC 2697 Token Bucket Fill/Drain',
+      'RL-3 Fixed Window Boundary Burst Spotlight',
+      'Cloudflare Weighted Average Approximation',
+    ],
+  },
+  {
+    id: 'distributed-lock',
+    name: 'Distributed Lock Manager',
+    category: 'CONSENSUS',
+    icon: '🔒',
+    tagline:
+      'Redlock multi-node quorum vs Raft leases, demonstrating Kleppmann GC-pause hazards and downstream fencing token enforcement.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Redlock/Kleppmann',
+    oracleSystem: 'Redis Redlock Spec / Kleppmann Analysis',
+    color: '#ef4444',
+    highlights: [
+      'N-Node Redlock Majority Quorum',
+      'Martin Kleppmann GC Pause Race Condition',
+      'Monotonic Fencing Token Ledger',
+      'Downstream Stale-Write Protection',
+    ],
+  },
+  {
+    id: 'cdn-cache',
+    name: 'CDN & Multi-Tier Caching',
+    category: 'CACHE',
+    icon: '⚡',
+    tagline:
+      'Edge-to-Origin tiered caching with RFC 9111 HTTP semantics (max-age, stale-while-revalidate, ETag), coalescing, and purge waves.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'RFC 9111',
+    oracleSystem: 'RFC 9111 / RFC 5861 HTTP Caching Spec',
+    color: '#3b82f6',
+    highlights: [
+      'Multi-Tier Edge -> Regional -> Origin Waterfall',
+      'RFC 5861 Stale-While-Revalidate Window',
+      'Single-Flight Request Coalescing (CDN-2)',
+      'Fleet-Wide Purge Wave Propagation',
+    ],
+  },
+  {
+    id: 'id-gen',
+    name: 'Distributed ID Generation',
+    category: 'DATABASE',
+    icon: '🆔',
+    tagline:
+      '64-bit Twitter Snowflake ID generation with bit-field decomposition, RFC 9562 UUIDv7 sortability, and NTP backward skew guards.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Snowflake/RFC 9562',
+    oracleSystem: 'Twitter Snowflake / RFC 9562 UUIDv7',
+    color: '#8b5cf6',
+    highlights: [
+      '64-Bit Interactive Bit-Field Decomposition',
+      'NTP Clock Regression Safety Refusal (ID-3)',
+      '12-Bit Sequence Rollover (>4096 IDs/ms)',
+      'UUIDv4 Random vs UUIDv7 Monotonic Comparison',
+    ],
+  },
+  {
+    id: 'transactions',
+    name: 'Distributed Transactions (2PC & Saga)',
+    category: 'CONSENSUS',
+    icon: '💳',
+    tagline:
+      'Two-Phase Commit (2PC) with coordinator-crash blocking hazard demonstration vs Saga forward orchestration and reverse LIFO compensation.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Gray 1978 / Sagas',
+    oracleSystem: 'Gray (1978) 2PC / Garcia-Molina (1987) Sagas',
+    color: '#10b981',
+    highlights: [
+      '2PC Coordinator/Participant Swimlane',
+      'TXN-2 Coordinator Crash Blocking Hazard',
+      'Saga Checkout Forward Orchestration',
+      'Strict Reverse LIFO Compensating Actions',
+    ],
   },
 ];
 
 interface DomainDirectoryModalProps {
   isOpen: boolean;
-  activeDomain: 'kafka' | 'raft' | 'database' | 'redis' | 'kubernetes' | 'rabbitmq' | 'storage' | 'networking';
-  onSelectDomain: (id: 'kafka' | 'raft' | 'database' | 'redis' | 'kubernetes' | 'rabbitmq' | 'storage' | 'networking') => void;
+  activeDomain: DomainCardInfo['id'];
+  onSelectDomain: (id: DomainCardInfo['id']) => void;
   onClose: () => void;
 }
 
@@ -174,7 +325,8 @@ export function DomainDirectoryModal({
               🌐 Distributed Systems Simulator Catalog
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
-              Explore real-time deterministic interactive visualizers across 5 core distributed systems domains.
+              Explore real-time deterministic interactive visualizers across 5 core distributed
+              systems domains.
             </p>
           </div>
           <button
@@ -224,10 +376,14 @@ export function DomainDirectoryModal({
                 }}
               >
                 {/* Domain Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '1.3rem' }}>{dom.icon}</span>
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f8fafc' }}>{dom.name}</span>
+                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f8fafc' }}>
+                      {dom.name}
+                    </span>
                   </div>
                   <span
                     style={{
@@ -244,14 +400,33 @@ export function DomainDirectoryModal({
                   </span>
                 </div>
 
-                <p style={{ margin: 0, fontSize: '0.72rem', color: '#cbd5e1', lineHeight: '1.3', flex: 1 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.72rem',
+                    color: '#cbd5e1',
+                    lineHeight: '1.3',
+                    flex: 1,
+                  }}
+                >
                   {dom.tagline}
                 </p>
 
                 {/* Highlights */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: '4px 0' }}>
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: '4px 0' }}
+                >
                   {dom.highlights.map((h, i) => (
-                    <div key={i} style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div
+                      key={i}
+                      style={{
+                        fontSize: '0.65rem',
+                        color: '#94a3b8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
                       <span style={{ color: dom.color }}>✓</span> {h}
                     </div>
                   ))}
