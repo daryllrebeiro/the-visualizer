@@ -28,7 +28,9 @@ export default function () {
   // 2. Hit public share topologies lookup endpoint
   // Use a mock 32-character alphanumeric share token
   const shareToken = '1234567890abcdef1234567890abcdef';
-  const shareRes = http.get(`${BASE_URL}/topologies/share/${shareToken}`);
+  const shareRes = http.get(`${BASE_URL}/topologies/share/${shareToken}`, {
+    responseCallback: http.expectedStatuses(200, 404),
+  });
   check(shareRes, {
     'share token returns 404 or 200': (r) => r.status === 404 || r.status === 200,
     'latency is low': (r) => r.timings.duration < 100,

@@ -10,16 +10,17 @@ import crypto from 'crypto';
 import http from 'http';
 import WebSocket from '../apps/ws-gateway/node_modules/ws/index.js';
 import { pack, unpack } from '../apps/ws-gateway/node_modules/msgpackr/index.js';
-import { createWebSocketServer } from '../apps/ws-gateway/dist/gateway/ws-server.js';
 
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 process.env.SESSION_SECRET =
   process.env.SESSION_SECRET || 'test_session_secret_at_least_32_characters_long_123456';
 process.env.JWT_SECRET =
-  process.env.JWT_SECRET || 'test_jwt_secret_at_least_32_characters_long_123456';
+  process.env.JWT_SECRET || process.env.SESSION_SECRET || 'test_session_secret_at_least_32_characters_long_123456';
+
+const { createWebSocketServer } = await import('../apps/ws-gateway/dist/gateway/ws-server.js');
 
 const PORT = 4055;
-const SECRET = process.env.SESSION_SECRET;
+const SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET;
 
 function makeJWT(payload, secret) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -169,4 +170,18 @@ async function runVerification() {
   return results;
 }
 
-runVerification().catch(console.error);
+runVerification()
+  .then((results) => {
+    if (
+      !results.softRateLimit.triggered ||
+      !results.hardRateLimit.terminated ||
+      !results.payloadCap.triggered
+    ) {
+      process.exit(1);
+    }
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
