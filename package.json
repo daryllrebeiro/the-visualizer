@@ -13,6 +13,7 @@
     "test": "vitest run packages/simulation",
     "test:determinism": "vitest run packages/simulation/src/golden-determinism.test.ts",
     "test:all": "vitest run",
+    "test:integration": "vitest run apps/api apps/ws-gateway",
     "sim": "node scripts/sim-cli.mjs",
     "create:domain": "node scripts/create-domain.mjs",
     "lint": "pnpm --recursive lint",

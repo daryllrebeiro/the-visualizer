@@ -78,6 +78,8 @@ jobs:
           key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install (fallback)
         run: pnpm install --frozen-lockfile
+      - name: Build workspace packages
+        run: pnpm turbo run build --filter=./packages/*
       - name: Check formatting
         run: pnpm format:check
       - name: Run lint
@@ -122,6 +124,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: install
     services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: visualizer
+          POSTGRES_PASSWORD: visualizer_test
+          POSTGRES_DB: visualizer_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       redis:
         image: redis:7-alpine
         ports:
@@ -154,6 +169,13 @@ jobs:
         run: pnpm turbo run build --filter=./packages/*
       - name: Run unit tests
         run: pnpm test:all
+        env:
+          DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
+          REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
+          JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
+          PORT: 3000
+          NODE_ENV: test
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
         if: always()

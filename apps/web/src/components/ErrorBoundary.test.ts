@@ -19,6 +19,13 @@ describe('Canvas ErrorBoundary Component', () => {
         resetCalled = true;
       },
     });
+    (
+      boundary as unknown as { updater: { enqueueSetState: (_inst: unknown, p: unknown) => void } }
+    ).updater = {
+      enqueueSetState: (_inst: unknown, p: unknown) => {
+        Object.assign(boundary.state, p);
+      },
+    };
 
     // Simulate error state
     boundary.state = {

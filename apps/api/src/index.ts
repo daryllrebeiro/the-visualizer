@@ -46,7 +46,9 @@ app.onError((err, c) => {
 
 // 1. Global Middlewares
 app.use('*', secureHeaders());
-app.use('*', rateLimiter({ limit: 60, refillRate: 1 }));
+if (process.env.NODE_ENV !== 'test') {
+  app.use('*', rateLimiter({ limit: 60, refillRate: 1 }));
+}
 app.use('*', requestLogger());
 
 app.use(
