@@ -38,6 +38,8 @@ The Visualizer makes invisible distributed system behaviors visible, allowing de
 
 ## 🛠️ Monorepo Architecture
 
+> 📖 **System Design Deep-Dive**: See [Production System Design Patterns](docs/SYSTEM_DESIGN.md) for Mermaid sequence, state, and dataflow diagrams analyzing Saga workflow orchestration, idempotency keys, multi-tier rate limiting, CQRS polyglot persistence, and circuit breakers grounded in our verified codebase.
+
 ```text
 the-visualizer/
 ├── apps/
