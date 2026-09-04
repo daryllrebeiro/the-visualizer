@@ -14,12 +14,16 @@
 import http from 'http';
 import crypto from 'crypto';
 
-process.env.SESSION_SECRET = '01234567890123456789012345678901';
-process.env.JWT_SECRET = '01234567890123456789012345678901';
-process.env.DATABASE_URL = 'postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test';
-process.env.REDIS_URL = 'redis://:redis_local_secret@localhost:6379';
-process.env.REDIS_PASSWORD = 'redis_local_secret';
-process.env.NODE_ENV = 'test';
+process.env.SESSION_SECRET =
+  process.env.SESSION_SECRET || 'test_session_secret_at_least_32_characters_long_123456';
+process.env.JWT_SECRET =
+  process.env.JWT_SECRET || 'test_jwt_secret_at_least_32_characters_long_123456';
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ||
+  'postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+process.env.REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
+process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 
 const { default: app } = await import('../apps/api/dist/index.js');
 const { tokenRevocationStore } = await import('../packages/contracts/dist/index.js');
@@ -235,7 +239,11 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('❌ Test failed:', err);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error('❌ Test failed:', err);
+    process.exit(1);
+  });

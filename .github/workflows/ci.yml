@@ -409,17 +409,15 @@ jobs:
           DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
       - name: Start API and WS-Gateway in Background
         run: |
-          node apps/api/dist/index.js &
-          node apps/ws-gateway/dist/index.js &
+          PORT=3000 ENABLE_RATE_LIMITER=false node apps/api/dist/index.js &
+          PORT=3001 node apps/ws-gateway/dist/index.js &
           sleep 5
         env:
-          PORT: 3000
-          WS_GATEWAY_PORT: 3001
           DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
           REDIS_URL: redis://localhost:6379
-          SESSION_SECRET: super-secret-key-that-is-at-least-32-chars-long
-          JWT_SECRET: super-secret-key-that-is-at-least-32-chars-long
-          NODE_ENV: test
+          SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
+          JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
+          NODE_ENV: production
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
       - name: Execute k6 API Load Test
@@ -492,13 +490,18 @@ jobs:
           node apps/ws-gateway/dist/index.js &
           sleep 4
         env:
-          WS_GATEWAY_PORT: 4001
+          PORT: 4001
           REDIS_URL: redis://localhost:6379
-          SESSION_SECRET: 01234567890123456789012345678901
-          JWT_SECRET: 01234567890123456789012345678901
-          NODE_ENV: test
+          SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
+          JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
+          NODE_ENV: production
       - name: Verify Live Rate Limits & Oversized Frame Rejection
         run: node scripts/verify-rate-limiting.mjs
+        env:
+          REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
+          JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
+          NODE_ENV: test
 
   # ─────────────────────────────────────────
   # Job 13: Live WebSocket Concurrency & Memory Gate
@@ -527,8 +530,10 @@ jobs:
       - name: Execute Live Load Test Suite
         run: node scripts/run-load-test-suite.mjs
         env:
-          SESSION_SECRET: 01234567890123456789012345678901
-          JWT_SECRET: 01234567890123456789012345678901
+          REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
+          JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
+          NODE_ENV: test
 
   # ─────────────────────────────────────────
   # Job 14: WCAG 2.1 AA Accessibility Gate (axe-core)
@@ -547,6 +552,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build workspace packages
+        run: pnpm turbo run build --filter=./packages/*
       - name: Build Web App
         run: pnpm --filter @the-visualizer/web build
       - name: Start Web Server in Background
@@ -573,6 +580,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build workspace packages
+        run: pnpm turbo run build --filter=./packages/*
       - name: Build Web App
         run: pnpm --filter @the-visualizer/web build
       - name: Start Web Server in Background
@@ -608,3 +617,8 @@ jobs:
         run: pnpm build
       - name: Verify Live Token Revocation (API + WS Handshake)
         run: node scripts/verify-live-token-revocation.mjs
+        env:
+          REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
+          JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
+          NODE_ENV: test

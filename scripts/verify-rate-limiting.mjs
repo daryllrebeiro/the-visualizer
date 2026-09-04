@@ -12,8 +12,14 @@ import WebSocket from '../apps/ws-gateway/node_modules/ws/index.js';
 import { pack, unpack } from '../apps/ws-gateway/node_modules/msgpackr/index.js';
 import { createWebSocketServer } from '../apps/ws-gateway/dist/gateway/ws-server.js';
 
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+process.env.SESSION_SECRET =
+  process.env.SESSION_SECRET || 'test_session_secret_at_least_32_characters_long_123456';
+process.env.JWT_SECRET =
+  process.env.JWT_SECRET || 'test_jwt_secret_at_least_32_characters_long_123456';
+
 const PORT = 4055;
-const SECRET = process.env.SESSION_SECRET || '01234567890123456789012345678901';
+const SECRET = process.env.SESSION_SECRET;
 
 function makeJWT(payload, secret) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');

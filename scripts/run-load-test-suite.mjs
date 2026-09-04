@@ -8,8 +8,8 @@ import { createWebSocketServer } from '../apps/ws-gateway/dist/gateway/ws-server
 
 const PORT = 4077;
 const CONCURRENT_CLIENTS = 50;
-const DURATION_SECONDS = 120;
-const SECRET = process.env.SESSION_SECRET || '01234567890123456789012345678901';
+const DURATION_SECONDS = process.env.DURATION_SECONDS ? Number(process.env.DURATION_SECONDS) : 10;
+const SECRET = process.env.SESSION_SECRET || 'test_session_secret_at_least_32_characters_long_123456';
 
 function makeJWT(payload, secret) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
