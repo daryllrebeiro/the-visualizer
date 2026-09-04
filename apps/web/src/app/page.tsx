@@ -511,7 +511,23 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       }
       setLiveState(res.nextState as unknown as KafkaClusterState);
       setRenderedState(res.nextState as unknown as KafkaClusterState);
-      addLog(`[${targetProd.id}] Produced record to ${finalTopic}/p-${String(partition)} (Offset #${nextOffset})`, 'SUCCESS');
+
+      const failedEv = res.emittedEvents.find((e) => e.type === ('RECORD_PRODUCED_FAILED' as any));
+      const dupEv = res.emittedEvents.find((e) => e.type === ('RECORD_PRODUCED_DUPLICATE_IGNORED' as any));
+
+      if (failedEv) {
+        addLog(
+          `[${targetProd.id}] ❌ Produce REJECTED: ${String(failedEv.payload['error'])} (|ISR|=${String(failedEv.payload['isrLength'])} < min.insync.replicas=${String(failedEv.payload['minInsyncReplicas'])})`,
+          'WARN',
+        );
+      } else if (dupEv) {
+        addLog(
+          `[${targetProd.id}] ⚠️ Record ignored: duplicate sequence number #${String(dupEv.payload['sequenceNumber'])} (KIP-98 deduplication)`,
+          'WARN',
+        );
+      } else {
+        addLog(`[${targetProd.id}] Produced record to ${finalTopic}/p-${String(partition)} (Offset #${nextOffset})`, 'SUCCESS');
+      }
     }
   };
 
@@ -1346,7 +1362,9 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       const res = pureRedisTransition(prev, ev, redisRngRef.current);
       for (const emitted of res.emittedEvents) {
         if (emitted.type === 'REDIS_MOVED_REDIRECT') {
-          addLog(`[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Redirect to Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+          addLog(`[Redis -MOVED] Slot ${String(emitted.payload['slot'])} -> Permanent route cache update to Master #${String(emitted.payload['targetMasterId'])}`, 'WARN');
+        } else if (emitted.type === 'REDIS_ASK_REDIRECT') {
+          addLog(`[Redis -ASK] Slot ${String(emitted.payload['slot'])} migrating -> Transient single-request redirect to Master #${String(emitted.payload['targetMasterId'])} (no cache update)`, 'WARN');
         }
       }
       addLog(`[Redis] GET "${key}"`, 'INFO');
@@ -1668,6 +1686,20 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
     });
   };
 
+  const handleStorageConfigureFidelity = (fidelityMode: 'TEXTBOOK' | 'REALISTIC'): void => {
+    setStorageState((prev) => {
+      const ev: StorageSimEvent = {
+        id: `storage-fid-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'STORAGE_CONFIGURE_FIDELITY',
+        payload: { fidelityMode },
+      };
+      const res = pureStorageTransition(prev, ev, storageRngRef.current);
+      addLog(`[Storage Fidelity] Switched mode to ${fidelityMode} (B+Tree Order ${fidelityMode === 'REALISTIC' ? '170' : '4'})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
   /* ── Networking Domain Handlers ── */
   const handleNetworkingStartHandshake = (): void => {
     setNetworkingState((prev) => {
@@ -1712,6 +1744,20 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
       };
       const res = pureNetworkingTransition(prev, ev, networkingRngRef.current);
       addLog(`[TCP Packet Loss] In-flight packet dropped! AIMD cwnd reset to 1`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleNetworkingConfigureFidelity = (algorithm: 'RENO' | 'CUBIC'): void => {
+    setNetworkingState((prev) => {
+      const ev: NetworkSimEvent = {
+        id: `net-fid-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'TCP_CONFIGURE_FIDELITY',
+        payload: { algorithm },
+      };
+      const res = pureNetworkingTransition(prev, ev, networkingRngRef.current);
+      addLog(`[TCP Fidelity] Congestion control set to ${algorithm} (${algorithm === 'CUBIC' ? 'RFC 8312 cubic window growth' : 'Classic AIMD'})`, 'INFO');
       return res.nextState;
     });
   };
@@ -2764,6 +2810,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 onSwitchEngine={handleStorageSwitchEngine}
                 onTriggerFlush={handleStorageTriggerFlush}
                 onTriggerCompaction={handleStorageTriggerCompaction}
+                onConfigureFidelity={handleStorageConfigureFidelity}
               />
             ) : (
               <NetworkingVisualizer
@@ -2771,6 +2818,7 @@ export default function Page({ initialDomain = 'kafka' }: { initialDomain?: Doma
                 onStartHandshake={handleNetworkingStartHandshake}
                 onSendData={handleNetworkingSendData}
                 onDropPacket={handleNetworkingDropPacket}
+                onConfigureFidelity={handleNetworkingConfigureFidelity}
               />
             )}
           </ErrorBoundary>

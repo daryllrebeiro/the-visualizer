@@ -256,6 +256,34 @@ export function RedisClusterVisualizer({
               </button>
             </div>
           </form>
+
+          {/* Resharding & Slot Migration Card */}
+          <div
+            style={{
+              backgroundColor: '#0f172a',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #1e293b',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc' }}>
+              🔄 Slot Migration & Resharding (ASK vs MOVED)
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              Migrate slot range to test transient <code>ASK</code> vs permanent <code>MOVED</code> redirects.
+            </div>
+            <button
+              type="button"
+              onClick={() => onReshard('1', '2', 0, 500)}
+              className="btn btn--secondary"
+              style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+            >
+              ⚡ Reshard Slots 0-500 (Master 1 → 2)
+            </button>
+          </div>
         </div>
 
         {/* Right: Master / Replica Shard Pairs Grid */}

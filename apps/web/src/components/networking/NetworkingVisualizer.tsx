@@ -10,6 +10,7 @@ interface NetworkingVisualizerProps {
   onStartHandshake: () => void;
   onSendData: () => void;
   onDropPacket: () => void;
+  onConfigureFidelity?: (algorithm: 'RENO' | 'CUBIC') => void;
 }
 
 export function NetworkingVisualizer({
@@ -17,6 +18,7 @@ export function NetworkingVisualizer({
   onStartHandshake,
   onSendData,
   onDropPacket,
+  onConfigureFidelity,
 }: NetworkingVisualizerProps): React.JSX.Element {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', gap: '16px' }}>
@@ -41,13 +43,47 @@ export function NetworkingVisualizer({
               Networking Fundamentals (TCP Handshake, Sliding Window & AIMD Congestion Control)
             </h2>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Client: <strong style={{ color: state.clientState === 'ESTABLISHED' ? '#4ade80' : '#fbbf24' }}>{state.clientState}</strong> · Server: <strong style={{ color: state.serverState === 'ESTABLISHED' ? '#4ade80' : '#fbbf24' }}>{state.serverState}</strong> · cwnd: <strong style={{ color: '#06b6d4' }}>{state.congestion.cwnd.toFixed(1)} MSS</strong> · ssthresh: <strong style={{ color: '#a855f7' }}>{state.congestion.ssthresh}</strong> · Phase: <strong style={{ color: state.congestion.phase === 'SlowStart' ? '#38bdf8' : '#f59e0b' }}>{state.congestion.phase}</strong>
+              Client: <strong style={{ color: state.clientState === 'ESTABLISHED' ? '#4ade80' : '#fbbf24' }}>{state.clientState}</strong> · Server: <strong style={{ color: state.serverState === 'ESTABLISHED' ? '#4ade80' : '#fbbf24' }}>{state.serverState}</strong> · Algorithm: <strong style={{ color: state.congestion.algorithm === 'CUBIC' ? '#ec4899' : '#38bdf8' }}>{state.congestion.algorithm}</strong> · cwnd: <strong style={{ color: '#06b6d4' }}>{state.congestion.cwnd.toFixed(1)} MSS</strong> · ssthresh: <strong style={{ color: '#a855f7' }}>{state.congestion.ssthresh}</strong> · Phase: <strong style={{ color: state.congestion.phase === 'SlowStart' ? '#38bdf8' : '#f59e0b' }}>{state.congestion.phase}</strong>
             </span>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {onConfigureFidelity && (
+            <div style={{ display: 'flex', border: '1px solid #334155', borderRadius: '4px', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => onConfigureFidelity('RENO')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.7rem',
+                  backgroundColor: state.congestion.algorithm === 'RENO' ? '#38bdf8' : '#1e293b',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                📖 Reno (AIMD)
+              </button>
+              <button
+                type="button"
+                onClick={() => onConfigureFidelity('CUBIC')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.7rem',
+                  backgroundColor: state.congestion.algorithm === 'CUBIC' ? '#ec4899' : '#1e293b',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                ⚙️ CUBIC (Linux)
+              </button>
+            </div>
+          )}
           <button
             onClick={onStartHandshake}
             disabled={state.clientState !== 'CLOSED'}

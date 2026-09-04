@@ -14,6 +14,7 @@ interface StorageEngineVisualizerProps {
   onSwitchEngine: (engine: StorageEngineType) => void;
   onTriggerFlush: () => void;
   onTriggerCompaction: (level: number) => void;
+  onConfigureFidelity?: (mode: 'TEXTBOOK' | 'REALISTIC') => void;
 }
 
 export function StorageEngineVisualizer({
@@ -23,6 +24,7 @@ export function StorageEngineVisualizer({
   onSwitchEngine,
   onTriggerFlush,
   onTriggerCompaction,
+  onConfigureFidelity,
 }: StorageEngineVisualizerProps): React.JSX.Element {
   const [keyInput, setKeyInput] = useState<string>('25');
   const [valueInput, setValueInput] = useState<string>('user_record_25');
@@ -66,7 +68,7 @@ export function StorageEngineVisualizer({
               Storage Engine Internals (B+ Tree vs. LSM-Tree & Compaction)
             </h2>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Engine: <strong style={{ color: state.activeEngine === 'B_TREE' ? '#14b8a6' : '#f59e0b' }}>{state.activeEngine}</strong> · Writes: <strong style={{ color: '#38bdf8' }}>{state.totalWrites}</strong> · Reads: <strong style={{ color: '#4ade80' }}>{state.totalReads}</strong> · Page Splits: <strong style={{ color: '#ec4899' }}>{state.btree.totalPageSplits}</strong> · Compactions: <strong style={{ color: '#a855f7' }}>{state.lsm.totalCompactions}</strong>
+              Engine: <strong style={{ color: state.activeEngine === 'B_TREE' ? '#14b8a6' : '#f59e0b' }}>{state.activeEngine}</strong> · Writes: <strong style={{ color: '#38bdf8' }}>{state.totalWrites}</strong> · Reads: <strong style={{ color: '#4ade80' }}>{state.totalReads}</strong> · Page Splits: <strong style={{ color: '#ec4899' }}>{state.btree.totalPageSplits}</strong> · Compactions: <strong style={{ color: '#a855f7' }}>{state.lsm.totalCompactions}</strong> · WAF: <strong style={{ color: '#f43f5e' }}>{state.lsm.writeAmplification.toFixed(2)}x</strong> · <span style={{ color: '#64748b' }}>SQLite Format §1.3 / RocksDB Leveled Compaction</span>
             </span>
           </div>
         </div>
@@ -103,6 +105,42 @@ export function StorageEngineVisualizer({
               ⚡ LSM-Tree (RocksDB)
             </button>
           </div>
+
+          {/* Mode Switcher: Textbook vs. Realistic */}
+          {onConfigureFidelity && (
+            <div style={{ display: 'flex', border: '1px solid #334155', borderRadius: '4px', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => onConfigureFidelity('TEXTBOOK')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.7rem',
+                  backgroundColor: state.fidelityMode === 'TEXTBOOK' ? '#38bdf8' : '#1e293b',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                📖 Textbook (M=4)
+              </button>
+              <button
+                type="button"
+                onClick={() => onConfigureFidelity('REALISTIC')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.7rem',
+                  backgroundColor: state.fidelityMode === 'REALISTIC' ? '#ec4899' : '#1e293b',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                ⚙️ Realistic (M≈170)
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleWriteSubmit} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             <input
