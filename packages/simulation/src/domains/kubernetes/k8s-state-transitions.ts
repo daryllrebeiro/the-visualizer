@@ -67,13 +67,16 @@ export function createDefaultK8sCluster(clusterId = 'k8s-cluster-1'): K8sCluster
     clusterId,
     tick: 0,
     rngState: 42,
+    fidelityMode: 'TEXTBOOK',
     nodes,
     deployments: { [defaultDep.id]: defaultDep },
     replicaSets: {},
     pods: {},
+    podDisruptionBudgets: {},
     totalReconciliations: 0,
     totalPodsScheduled: 0,
     totalPodsEvicted: 0,
+    totalPdbViolationsBlocked: 0,
   };
 
   // Run initial reconciliation
@@ -166,6 +169,77 @@ export function pureK8sTransition(
     }
     case 'K8S_RECONCILE_TICK': {
       reconcileCluster(nextState);
+      break;
+    }
+    case 'K8S_APPLY_PDB': {
+      const pdb = event.payload['pdb'] as any;
+      if (pdb && pdb.id) {
+        nextState.podDisruptionBudgets[pdb.id] = pdb;
+      }
+      break;
+    }
+    case 'K8S_EVICT_UNDER_PRESSURE': {
+      const targetId = String(event.payload['nodeId'] ?? '');
+      const node = nextState.nodes[targetId] ?? Object.values(nextState.nodes).find((n) => n.name === targetId);
+      if (node) {
+        // Collect pods on node and sort by QoS priority (BestEffort -> Burstable -> Guaranteed)
+        const nodePods = node.podIds
+          .map((id) => nextState.pods[id])
+          .filter((p): p is typeof nextState.pods[string] => p !== undefined && p.status === 'Running');
+
+        const qosOrder: Record<string, number> = {
+          BestEffort: 0,
+          Burstable: 1,
+          Guaranteed: 2,
+        };
+
+        nodePods.sort((a, b) => {
+          const qosA = a.qosClass ?? 'Burstable';
+          const qosB = b.qosClass ?? 'Burstable';
+          return (qosOrder[qosA] ?? 1) - (qosOrder[qosB] ?? 1);
+        });
+
+        for (const victim of nodePods) {
+          // Check PDB
+          let canEvict = true;
+          if (victim.deploymentId) {
+            const pdb = Object.values(nextState.podDisruptionBudgets).find(
+              (b) => b.deploymentId === victim.deploymentId,
+            );
+            if (pdb) {
+              const activeCount = Object.values(nextState.pods).filter(
+                (p) => p.deploymentId === victim.deploymentId && p.status === 'Running',
+              ).length;
+              if (activeCount <= pdb.minAvailable) {
+                canEvict = false;
+                nextState.totalPdbViolationsBlocked++;
+              }
+            }
+          }
+
+          if (canEvict) {
+            victim.status = 'Failed';
+            victim.pendingReason = 'Evicted under memory pressure';
+            node.podIds = node.podIds.filter((id) => id !== victim.id);
+            node.allocated.cpuMillis = Math.max(0, node.allocated.cpuMillis - victim.resources.cpuMillis);
+            node.allocated.memoryMb = Math.max(0, node.allocated.memoryMb - victim.resources.memoryMb);
+            nextState.totalPodsEvicted++;
+            emittedEvents.push({
+              id: `evict-${victim.id}-${String(nextState.tick)}`,
+              tick: nextState.tick,
+              type: 'K8S_POD_TERMINATED',
+              payload: { podId: victim.id, qosClass: victim.qosClass, reason: 'PressureEviction' },
+            });
+            break; // Evicted one candidate for this pressure tick
+          }
+        }
+      }
+      break;
+    }
+    case 'K8S_CONFIGURE_FIDELITY': {
+      if (event.payload['fidelityMode'] !== undefined) {
+        nextState.fidelityMode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
+      }
       break;
     }
   }

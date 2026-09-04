@@ -44,6 +44,9 @@ export function pureStateTransition(
     case 'REBALANCE_STARTED':
       handleConsumerRebalance(nextState, event, rng, emittedEvents);
       break;
+    case 'REPLICA_LAG_CHECK' as any:
+      handleReplicaLagCheck(nextState, event, emittedEvents);
+      break;
     default:
       // Unknown or unhandled event types do not modify state
       break;
@@ -200,8 +203,46 @@ function triggerLeaderElectionForCrashedBroker(
               reason: 'Broker crashed',
             },
           });
+        } else if (partition.uncleanLeaderElectionEnabled) {
+          // Unclean leader election: pick any alive replica outside the ISR
+          const aliveNonIsr = partition.replicas.find(
+            (r) => r.brokerId !== crashedBrokerId && state.brokers[r.brokerId]?.status === 'ALIVE',
+          );
+          if (aliveNonIsr) {
+            partition.leaderBrokerId = aliveNonIsr.brokerId;
+            partition.leaderEpoch += 1;
+            partition.isr = [aliveNonIsr.brokerId];
+
+            emittedEvents.push({
+              id: `unclean-elect-${topicName}-${String(partition.partition)}-${String(tick)}`,
+              tick,
+              type: 'PARTITION_LEADER_ELECTED',
+              payload: {
+                topic: topicName,
+                partition: partition.partition,
+                leaderBrokerId: aliveNonIsr.brokerId,
+                leaderEpoch: partition.leaderEpoch,
+                unclean: true,
+              },
+            });
+
+            emittedEvents.push({
+              id: `isr-unclean-${topicName}-${String(partition.partition)}-${String(tick)}`,
+              tick,
+              type: 'ISR_CHANGED',
+              payload: {
+                topic: topicName,
+                partition: partition.partition,
+                isr: partition.isr,
+                reason: 'Unclean leader election enabled',
+              },
+            });
+          } else {
+            partition.leaderBrokerId = null;
+            partition.leaderEpoch += 1;
+          }
         } else {
-          // No active replicas in ISR! Partition is offline
+          // No active replicas in ISR and unclean election disabled! Partition is offline
           partition.leaderBrokerId = null;
           partition.leaderEpoch += 1;
 
@@ -235,7 +276,42 @@ function handleRecordProduced(
 
   const partition = partitions.find((p) => p.partition === partitionId);
   if (partition === undefined) return;
-  if (partition.leaderBrokerId === null) return;
+  // 1. Idempotent Producer Check (KIP-98): reject duplicate sequence numbers
+  const producerId = event.payload.producerId as string | undefined;
+  const seqNum = event.payload.sequenceNumber as number | undefined;
+  if (producerId !== undefined && seqNum !== undefined) {
+    const pAny = partition as any;
+    pAny.lastProducedSequence ??= {};
+    const lastSeq = pAny.lastProducedSequence[producerId];
+    if (lastSeq !== undefined && seqNum <= lastSeq) {
+      emittedEvents.push({
+        id: `dup-${topic}-${String(partitionId)}-${String(event.tick)}`,
+        tick: event.tick,
+        type: 'RECORD_PRODUCED_DUPLICATE_IGNORED' as any,
+        payload: { topic, partition: partitionId, producerId, sequenceNumber: seqNum, lastSeq },
+      });
+      return;
+    }
+    pAny.lastProducedSequence[producerId] = seqNum;
+  }
+
+  // 2. min.insync.replicas enforcement: block if acks=-1/'all' and |ISR| < minInsyncReplicas
+  const acks = event.payload.acks;
+  if ((acks === -1 || acks === 'all') && partition.isr.length < (partition.minInsyncReplicas ?? 1)) {
+    emittedEvents.push({
+      id: `produce-failed-${topic}-${String(partitionId)}-${String(event.tick)}`,
+      tick: event.tick,
+      type: 'RECORD_PRODUCED_FAILED' as any,
+      payload: {
+        topic,
+        partition: partitionId,
+        error: 'NOT_ENOUGH_REPLICAS',
+        isrLength: partition.isr.length,
+        minInsyncReplicas: partition.minInsyncReplicas,
+      },
+    });
+    return;
+  }
 
   // Append record to LEO (Log End Offset) of leader replica
   const leaderReplica = partition.replicas.find((r) => r.brokerId === partition.leaderBrokerId);
@@ -484,5 +560,47 @@ function handleTopicCreated(state: any, event: any): void {
   }
 
   state.topics[topicName] = partitionsArray;
+}
+
+function handleReplicaLagCheck(
+  state: KafkaClusterState,
+  event: SimEvent,
+  emittedEvents: SimEvent[],
+): void {
+  for (const topicName in state.topics) {
+    const partitions = state.topics[topicName];
+    if (!partitions) continue;
+    for (const partition of partitions) {
+      const maxLag = (partition as any).replicaLagTimeMaxTicks ?? 10;
+      const newIsr = partition.isr.filter((brokerId) => {
+        if (brokerId === partition.leaderBrokerId) return true;
+        const replica = partition.replicas.find((r) => r.brokerId === brokerId);
+        if (!replica) return false;
+        const broker = state.brokers[brokerId];
+        if (broker?.status !== 'ALIVE') return false;
+        const lagTicks = event.tick - replica.lastCaughtUpTick;
+        if (lagTicks > maxLag) {
+          replica.isInSync = false;
+          return false;
+        }
+        return true;
+      });
+
+      if (newIsr.length !== partition.isr.length) {
+        partition.isr = newIsr;
+        emittedEvents.push({
+          id: `isr-shrink-lag-${topicName}-${String(partition.partition)}-${String(event.tick)}`,
+          tick: event.tick,
+          type: 'ISR_CHANGED',
+          payload: {
+            topic: topicName,
+            partition: partition.partition,
+            isr: partition.isr,
+            reason: 'Replica lag exceeded replica.lag.time.max.ms',
+          },
+        });
+      }
+    }
+  }
 }
 

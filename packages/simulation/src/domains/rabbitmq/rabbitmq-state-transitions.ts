@@ -161,11 +161,15 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     clusterId,
     tick: 0,
     rngState: 42,
+    fidelityMode: 'TEXTBOOK',
+    publisherConfirmsEnabled: false,
     exchanges,
     queues,
     bindings,
     consumers,
     totalPublished: 0,
+    totalConfirmed: 0,
+    totalUnroutableToAlternate: 0,
     totalAcked: 0,
     totalNacked: 0,
     totalDeadLettered: 0,
@@ -196,6 +200,15 @@ export function pureRabbitTransition(
     case 'RABBIT_TICK':
       handleTick(nextState, emittedEvents);
       break;
+    case 'RABBIT_CONFIGURE_FIDELITY': {
+      if (event.payload['fidelityMode'] !== undefined) {
+        nextState.fidelityMode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
+      }
+      if (event.payload['publisherConfirmsEnabled'] !== undefined) {
+        nextState.publisherConfirmsEnabled = Boolean(event.payload['publisherConfirmsEnabled']);
+      }
+      break;
+    }
   }
 
   // Dispatch queued messages to waiting consumers
@@ -230,8 +243,20 @@ function handlePublish(
   state.totalPublished++;
 
   // Find matching queues
-  const matchingQueueNames = findMatchingQueues(state, exchange, p.routingKey);
+  let matchingQueueNames = findMatchingQueues(state, exchange, p.routingKey);
 
+  // Alternate Exchange handling (AMQP 0-9-1)
+  if (
+    matchingQueueNames.length === 0 &&
+    exchange.alternateExchange &&
+    state.exchanges[exchange.alternateExchange]
+  ) {
+    const altEx = state.exchanges[exchange.alternateExchange]!;
+    matchingQueueNames = findMatchingQueues(state, altEx, p.routingKey);
+    state.totalUnroutableToAlternate++;
+  }
+
+  let routedCount = 0;
   for (const qName of matchingQueueNames) {
     const q = state.queues[qName];
     if (q) {
@@ -242,6 +267,7 @@ function handlePublish(
       };
       if (q.messages.length < q.maxQueueLength) {
         q.messages.push(qMsg);
+        routedCount++;
         emittedEvents.push({
           id: `deliv-${qMsg.id}`,
           tick: state.tick,
@@ -253,6 +279,17 @@ function handlePublish(
         routeToDLX(state, q, qMsg, 'QueueLengthOverflow', emittedEvents);
       }
     }
+  }
+
+  // Publisher Confirms
+  if (state.publisherConfirmsEnabled && routedCount > 0) {
+    state.totalConfirmed++;
+    emittedEvents.push({
+      id: `confirm-${msgId}`,
+      tick: state.tick + 1,
+      type: 'RABBIT_BASIC_ACK',
+      payload: { deliveryTag: state.totalPublished, multiple: false },
+    });
   }
 }
 

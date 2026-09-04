@@ -1,4 +1,4 @@
-export type RaftRole = 'LEADER' | 'CANDIDATE' | 'FOLLOWER';
+export type RaftRole = 'LEADER' | 'CANDIDATE' | 'FOLLOWER' | 'PRE_CANDIDATE';
 export type RaftNodeStatus = 'ALIVE' | 'CRASHED' | 'ISOLATED';
 
 export interface RaftLogEntry {
@@ -17,11 +17,15 @@ export interface RaftNode {
   log: RaftLogEntry[];
   commitIndex: number;
   lastApplied: number;
+  snapshotIndex: number; // Log compaction index
+  snapshotTerm: number;
   leaderId: string | null;
   electionTimeoutTicks: number;
   currentElectionCountdown: number;
   heartbeatIntervalTicks: number;
   votesReceived: string[];
+  preVotesReceived?: string[];
+  leaseValidUntilTick?: number; // Leader lease linearizable reads
   nextIndex?: Record<string, number> | undefined;
   matchIndex?: Record<string, number> | undefined;
 }
@@ -30,6 +34,10 @@ export interface RaftClusterState {
   clusterId: string;
   tick: number;
   rngState: number;
+  fidelityMode: 'TEXTBOOK' | 'REALISTIC';
+  preVoteEnabled: boolean;
+  minTimeoutTicks: number;
+  maxTimeoutTicks: number;
   nodes: Record<string, RaftNode>;
   isolatedNodeIds: string[];
   activeLeaderId: string | null;
@@ -41,14 +49,19 @@ export type RaftEventType =
   | 'RAFT_ELECTION_TIMEOUT'
   | 'RAFT_REQUEST_VOTE'
   | 'RAFT_VOTE_REPLY'
+  | 'RAFT_PRE_VOTE_REQUEST'
+  | 'RAFT_PRE_VOTE_REPLY'
   | 'RAFT_HEARTBEAT'
   | 'RAFT_APPEND_ENTRIES'
   | 'RAFT_APPEND_REPLY'
+  | 'RAFT_INSTALL_SNAPSHOT'
+  | 'RAFT_LINEARIZABLE_READ'
   | 'RAFT_CLIENT_PROPOSE'
   | 'RAFT_NODE_CRASH'
   | 'RAFT_NODE_RECOVER'
   | 'RAFT_NETWORK_PARTITION'
-  | 'RAFT_NETWORK_HEAL';
+  | 'RAFT_NETWORK_HEAL'
+  | 'RAFT_CONFIGURE_FIDELITY';
 
 export interface RaftSimEvent {
   id: string;
@@ -63,6 +76,7 @@ export interface RequestVotePayload {
   lastLogIndex: number;
   lastLogTerm: number;
   targetNodeId: string;
+  isPreVote?: boolean;
 }
 
 export interface VoteReplyPayload {
@@ -70,6 +84,7 @@ export interface VoteReplyPayload {
   voteGranted: boolean;
   fromNodeId: string;
   candidateId: string;
+  isPreVote?: boolean;
 }
 
 export interface AppendEntriesPayload {
@@ -88,4 +103,12 @@ export interface AppendReplyPayload {
   matchIndex: number;
   fromNodeId: string;
   leaderId: string;
+}
+
+export interface InstallSnapshotPayload {
+  term: number;
+  leaderId: string;
+  lastIncludedIndex: number;
+  lastIncludedTerm: number;
+  targetNodeId: string;
 }

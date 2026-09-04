@@ -6,6 +6,7 @@ export interface ExchangeSpec {
   type: ExchangeType;
   durable: boolean;
   autoDelete: boolean;
+  alternateExchange?: string | null | undefined; // AMQP alternate-exchange
   color: string;
 }
 
@@ -35,9 +36,12 @@ export interface AMQPMessage {
   assignedConsumerId: string | null;
 }
 
+export type RabbitQueueType = 'classic' | 'quorum';
+
 export interface RabbitQueue {
   id: string;
   name: string;
+  queueType?: RabbitQueueType | undefined;
   durable: boolean;
   deadLetterExchange: string | null;
   deadLetterRoutingKey: string | null;
@@ -61,11 +65,15 @@ export interface RabbitClusterState {
   clusterId: string;
   tick: number;
   rngState: number;
+  fidelityMode: 'TEXTBOOK' | 'REALISTIC';
+  publisherConfirmsEnabled: boolean;
   exchanges: Record<string, ExchangeSpec>;
   queues: Record<string, RabbitQueue>;
   bindings: Record<string, BindingSpec>;
   consumers: Record<string, RabbitConsumer>;
   totalPublished: number;
+  totalConfirmed: number;
+  totalUnroutableToAlternate: number;
   totalAcked: number;
   totalNacked: number;
   totalDeadLettered: number;
@@ -82,7 +90,9 @@ export type RabbitEventType =
   | 'RABBIT_REGISTER_CONSUMER'
   | 'RABBIT_TICK'
   | 'RABBIT_MESSAGE_DELIVERED'
-  | 'RABBIT_MESSAGE_DEAD_LETTERED';
+  | 'RABBIT_MESSAGE_DEAD_LETTERED'
+  | 'RABBIT_BASIC_ACK'
+  | 'RABBIT_CONFIGURE_FIDELITY';
 
 export interface RabbitSimEvent {
   id: string;
@@ -95,6 +105,6 @@ export interface RabbitPublishPayload {
   exchangeName: string;
   routingKey: string;
   payload: string;
-  ttl?: number | null | undefined;
   headers?: Record<string, string> | undefined;
+  ttl?: number | undefined;
 }

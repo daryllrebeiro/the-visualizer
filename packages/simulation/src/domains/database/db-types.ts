@@ -1,4 +1,12 @@
-export type ConsistencyLevel = 'ONE' | 'QUORUM' | 'ALL' | 'LOCAL_QUORUM';
+export type ConsistencyLevel =
+  | 'ONE'
+  | 'TWO'
+  | 'THREE'
+  | 'QUORUM'
+  | 'ALL'
+  | 'LOCAL_QUORUM'
+  | 'EACH_QUORUM';
+
 export type DBNodeStatus = 'ALIVE' | 'DOWN' | 'JOINING' | 'LEAVING';
 
 export interface DBValueRecord {
@@ -36,6 +44,9 @@ export interface DBClusterState {
   clusterId: string;
   tick: number;
   rngState: number;
+  fidelityMode: 'TEXTBOOK' | 'REALISTIC';
+  vnodesPerNode: number; // 3 for visual textbook, 256 for realistic Cassandra
+  hintedHandoffEnabled: boolean;
   replicationFactor: number;
   writeConsistency: ConsistencyLevel;
   readConsistency: ConsistencyLevel;
@@ -56,7 +67,8 @@ export type DBEventType =
   | 'DB_NODE_LEAVE'
   | 'DB_NODE_CRASH'
   | 'DB_NODE_RECOVER'
-  | 'DB_UPDATE_CONSISTENCY';
+  | 'DB_UPDATE_CONSISTENCY'
+  | 'DB_CONFIGURE_FIDELITY';
 
 export interface DBSimEvent {
   id: string;

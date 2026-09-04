@@ -2,6 +2,7 @@ import { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import type {
   AppendEntriesPayload,
   AppendReplyPayload,
+  InstallSnapshotPayload,
   RaftClusterState,
   RaftLogEntry,
   RaftNode,
@@ -36,11 +37,14 @@ export function createDefaultRaftCluster(
       log: [],
       commitIndex: 0,
       lastApplied: 0,
+      snapshotIndex: 0,
+      snapshotTerm: 0,
       leaderId: null,
       electionTimeoutTicks: timeout,
       currentElectionCountdown: timeout,
       heartbeatIntervalTicks: 50,
       votesReceived: [],
+      preVotesReceived: [],
     };
   }
 
@@ -48,6 +52,10 @@ export function createDefaultRaftCluster(
     clusterId,
     tick: 0,
     rngState: rng.getState(),
+    fidelityMode: 'TEXTBOOK',
+    preVoteEnabled: false,
+    minTimeoutTicks: 150,
+    maxTimeoutTicks: 300,
     nodes,
     isolatedNodeIds: [],
     activeLeaderId: null,
@@ -72,6 +80,12 @@ export function pureRaftTransition(
     case 'RAFT_ELECTION_TIMEOUT':
       handleElectionTimeout(nextState, event, rng, emittedEvents);
       break;
+    case 'RAFT_PRE_VOTE_REQUEST':
+      handlePreVoteRequest(nextState, event, emittedEvents);
+      break;
+    case 'RAFT_PRE_VOTE_REPLY':
+      handlePreVoteReply(nextState, event, rng, emittedEvents);
+      break;
     case 'RAFT_REQUEST_VOTE':
       handleRequestVote(nextState, event, emittedEvents);
       break;
@@ -86,6 +100,12 @@ export function pureRaftTransition(
       break;
     case 'RAFT_APPEND_REPLY':
       handleAppendReply(nextState, event);
+      break;
+    case 'RAFT_INSTALL_SNAPSHOT':
+      handleInstallSnapshot(nextState, event, emittedEvents);
+      break;
+    case 'RAFT_LINEARIZABLE_READ':
+      handleLinearizableRead(nextState, event, emittedEvents);
       break;
     case 'RAFT_CLIENT_PROPOSE':
       handleClientPropose(nextState, event, emittedEvents);
@@ -102,6 +122,15 @@ export function pureRaftTransition(
     case 'RAFT_NETWORK_HEAL':
       handleNetworkHeal(nextState);
       break;
+    case 'RAFT_CONFIGURE_FIDELITY': {
+      if (event.payload['preVoteEnabled'] !== undefined) {
+        nextState.preVoteEnabled = Boolean(event.payload['preVoteEnabled']);
+      }
+      if (event.payload['fidelityMode'] !== undefined) {
+        nextState.fidelityMode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
+      }
+      break;
+    }
   }
 
   nextState.rngState = rng.getState();
@@ -154,6 +183,37 @@ function handleElectionTimeout(
   const candidateId = String(event.payload['candidateId'] ?? '');
   const node = state.nodes[candidateId];
   if (!node || node.status !== 'ALIVE') return;
+
+  if (state.preVoteEnabled) {
+    node.role = 'PRE_CANDIDATE';
+    node.preVotesReceived = [candidateId];
+    node.currentElectionCountdown = node.electionTimeoutTicks + rng.nextInt(0, 50);
+
+    const lastLog = node.log[node.log.length - 1];
+    const lastLogIndex = lastLog ? lastLog.index : (node.snapshotIndex ?? 0);
+    const lastLogTerm = lastLog ? lastLog.term : (node.snapshotTerm ?? 0);
+
+    for (const peerId of Object.keys(state.nodes)) {
+      if (peerId === candidateId) continue;
+      if (isIsolated(state, candidateId) && !isIsolated(state, peerId)) continue;
+      if (!isIsolated(state, candidateId) && isIsolated(state, peerId)) continue;
+
+      emittedEvents.push({
+        id: `prevote-req-${candidateId}-${peerId}-${node.currentTerm + 1}`,
+        tick: state.tick + 1,
+        type: 'RAFT_PRE_VOTE_REQUEST',
+        payload: {
+          term: node.currentTerm + 1,
+          candidateId,
+          lastLogIndex,
+          lastLogTerm,
+          targetNodeId: peerId,
+          isPreVote: true,
+        },
+      });
+    }
+    return;
+  }
 
   node.role = 'CANDIDATE';
   node.currentTerm += 1;
@@ -491,4 +551,150 @@ function handleNetworkPartition(state: RaftClusterState, event: RaftSimEvent): v
 
 function handleNetworkHeal(state: RaftClusterState): void {
   state.isolatedNodeIds = [];
+}
+
+function handlePreVoteRequest(
+  state: RaftClusterState,
+  event: RaftSimEvent,
+  emittedEvents: RaftSimEvent[],
+): void {
+  const p = event.payload as unknown as RequestVotePayload;
+  const receiver = state.nodes[p.targetNodeId];
+  if (!receiver || receiver.status !== 'ALIVE') return;
+
+  const receiverLastLog = receiver.log[receiver.log.length - 1];
+  const receiverLastTerm = receiverLastLog ? receiverLastLog.term : (receiver.snapshotTerm ?? 0);
+  const receiverLastIndex = receiverLastLog ? receiverLastLog.index : (receiver.snapshotIndex ?? 0);
+
+  const candidateLogUpToDate =
+    p.lastLogTerm > receiverLastTerm ||
+    (p.lastLogTerm === receiverLastTerm && p.lastLogIndex >= receiverLastIndex);
+
+  // In PreVote: peer grants pre-vote only if candidate log is up to date and term >= receiver term
+  const voteGranted = candidateLogUpToDate && p.term >= receiver.currentTerm;
+
+  emittedEvents.push({
+    id: `prevote-reply-${p.targetNodeId}-${p.candidateId}-${String(p.term)}`,
+    tick: state.tick + 1,
+    type: 'RAFT_PRE_VOTE_REPLY',
+    payload: {
+      term: p.term,
+      voteGranted,
+      fromNodeId: p.targetNodeId,
+      candidateId: p.candidateId,
+      isPreVote: true,
+    },
+  });
+}
+
+function handlePreVoteReply(
+  state: RaftClusterState,
+  event: RaftSimEvent,
+  rng: DeterministicRNG,
+  emittedEvents: RaftSimEvent[],
+): void {
+  const p = event.payload as unknown as VoteReplyPayload;
+  const candidate = state.nodes[p.candidateId];
+  if (!candidate || candidate.status !== 'ALIVE' || candidate.role !== 'PRE_CANDIDATE') return;
+
+  if (p.voteGranted) {
+    if (!candidate.preVotesReceived) candidate.preVotesReceived = [candidate.id];
+    if (!candidate.preVotesReceived.includes(p.fromNodeId)) {
+      candidate.preVotesReceived.push(p.fromNodeId);
+    }
+
+    const quorum = Math.floor(Object.keys(state.nodes).length / 2) + 1;
+    if (candidate.preVotesReceived.length >= quorum) {
+      // Pre-vote granted by quorum! Transition to official candidate
+      candidate.role = 'CANDIDATE';
+      candidate.currentTerm += 1;
+      candidate.votedFor = candidate.id;
+      candidate.votesReceived = [candidate.id];
+      candidate.currentElectionCountdown = candidate.electionTimeoutTicks + rng.nextInt(0, 50);
+
+      if (candidate.currentTerm > state.highestTerm) {
+        state.highestTerm = candidate.currentTerm;
+      }
+
+      const lastLog = candidate.log[candidate.log.length - 1];
+      const lastLogIndex = lastLog ? lastLog.index : (candidate.snapshotIndex ?? 0);
+      const lastLogTerm = lastLog ? lastLog.term : (candidate.snapshotTerm ?? 0);
+
+      for (const peerId of Object.keys(state.nodes)) {
+        if (peerId === candidate.id) continue;
+        if (isIsolated(state, candidate.id) && !isIsolated(state, peerId)) continue;
+        if (!isIsolated(state, candidate.id) && isIsolated(state, peerId)) continue;
+
+        emittedEvents.push({
+          id: `req-vote-${candidate.id}-${peerId}-${candidate.currentTerm}`,
+          tick: state.tick + 1,
+          type: 'RAFT_REQUEST_VOTE',
+          payload: {
+            term: candidate.currentTerm,
+            candidateId: candidate.id,
+            lastLogIndex,
+            lastLogTerm,
+            targetNodeId: peerId,
+          },
+        });
+      }
+    }
+  }
+}
+
+function handleInstallSnapshot(
+  state: RaftClusterState,
+  event: RaftSimEvent,
+  emittedEvents: RaftSimEvent[],
+): void {
+  const p = event.payload as unknown as InstallSnapshotPayload;
+  const receiver = state.nodes[p.targetNodeId];
+  if (!receiver || receiver.status !== 'ALIVE') return;
+
+  if (p.term >= receiver.currentTerm) {
+    receiver.currentTerm = p.term;
+    receiver.role = 'FOLLOWER';
+    receiver.leaderId = p.leaderId;
+    receiver.snapshotIndex = p.lastIncludedIndex;
+    receiver.snapshotTerm = p.lastIncludedTerm;
+
+    // Discard log entries covered by snapshot
+    receiver.log = receiver.log.filter((entry) => entry.index > p.lastIncludedIndex);
+    receiver.commitIndex = Math.max(receiver.commitIndex, p.lastIncludedIndex);
+    receiver.lastApplied = Math.max(receiver.lastApplied, p.lastIncludedIndex);
+
+    emittedEvents.push({
+      id: `snapshot-installed-${receiver.id}-${String(state.tick)}`,
+      tick: state.tick,
+      type: 'RAFT_APPEND_REPLY',
+      payload: {
+        term: receiver.currentTerm,
+        success: true,
+        matchIndex: p.lastIncludedIndex,
+        fromNodeId: receiver.id,
+        leaderId: p.leaderId,
+      },
+    });
+  }
+}
+
+function handleLinearizableRead(
+  state: RaftClusterState,
+  event: RaftSimEvent,
+  emittedEvents: RaftSimEvent[],
+): void {
+  const leaderId = String(event.payload['leaderId'] ?? state.activeLeaderId ?? '');
+  const leader = state.nodes[leaderId];
+  if (!leader || leader.status !== 'ALIVE' || leader.role !== 'LEADER') return;
+
+  emittedEvents.push({
+    id: `lin-read-resp-${leader.id}-${String(state.tick)}`,
+    tick: state.tick,
+    type: 'RAFT_CLIENT_PROPOSE',
+    payload: {
+      success: true,
+      linearizable: true,
+      readIndex: leader.commitIndex,
+    },
+  });
 }
