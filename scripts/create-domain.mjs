@@ -24,7 +24,10 @@ if (!domainId) {
   process.exit(1);
 }
 
-const PascalName = domainId.charAt(0).toUpperCase() + domainId.slice(1);
+const PascalName = domainId
+  .split('-')
+  .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+  .join('');
 const simDomainDir = path.join(rootDir, 'packages', 'simulation', 'src', 'domains', domainId);
 const webComponentDir = path.join(rootDir, 'apps', 'web', 'src', 'components', domainId);
 

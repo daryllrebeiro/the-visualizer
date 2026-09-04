@@ -237,3 +237,34 @@ export type {
   KafkaClusterState,
 } from './engine/types.js';
 export type { StorageAdapter } from './domain/storage-adapter.js';
+
+// Domain: Rate Limiter
+export * from './domains/rate-limiter/rate-limiter-types.js';
+export * from './domains/rate-limiter/rate-limiter-state-transitions.js';
+export * from './domains/rate-limiter/rate-limiter-invariants.js';
+export * from './domains/rate-limiter/rate-limiter-algorithms.js';
+
+// Domain: Distributed Lock Manager
+export * from './domains/distributed-lock/distributed-lock-types.js';
+export * from './domains/distributed-lock/distributed-lock-state-transitions.js';
+export * from './domains/distributed-lock/distributed-lock-invariants.js';
+export * from './domains/distributed-lock/distributed-lock-algorithms.js';
+
+// Domain: CDN & Multi-Tier Caching
+export * from './domains/cdn-cache/cdn-cache-types.js';
+export * from './domains/cdn-cache/cdn-cache-state-transitions.js';
+export * from './domains/cdn-cache/cdn-cache-invariants.js';
+export * from './domains/cdn-cache/http-cache-semantics.js';
+
+// Domain: Distributed ID Generation
+export * from './domains/id-gen/id-gen-types.js';
+export * from './domains/id-gen/id-gen-state-transitions.js';
+export * from './domains/id-gen/id-gen-invariants.js';
+export * from './domains/id-gen/snowflake-generator.js';
+
+// Domain: Distributed Transactions
+export * from './domains/transactions/transactions-types.js';
+export * from './domains/transactions/transactions-state-transitions.js';
+export * from './domains/transactions/transactions-invariants.js';
+export * from './domains/transactions/two-phase-commit.js';
+export * from './domains/transactions/saga-orchestrator.js';

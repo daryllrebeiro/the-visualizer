@@ -66,19 +66,24 @@ const GOLDEN_TICKS = 10;
 describe('Golden Determinism Suite', () => {
   const domains = DomainRegistry.list();
 
-  // Verify all 8 domains are registered
-  it('should have all 8 domains registered', () => {
-    expect(domains.length).toBe(8);
+  // Verify all 13 domains are registered
+  it('should have all 13 domains registered', () => {
+    expect(domains.length).toBe(13);
     const ids = domains.map((d) => d.id).sort();
     expect(ids).toEqual([
+      'cdn-cache',
       'database',
+      'distributed-lock',
+      'id-gen',
       'kafka',
       'kubernetes',
       'networking',
       'rabbitmq',
       'raft',
+      'rate-limiter',
       'redis',
       'storage',
+      'transactions',
     ]);
   });
 
@@ -334,6 +339,132 @@ describe('Golden Determinism Suite', () => {
 
     const h1 = runK8sFidelity();
     const h2 = runK8sFidelity();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Rate Limiter (Token Bucket & Sliding Window)
+  it('[rate-limiter] produces deterministic state hash across token refill, bursts, and sliding window evaluation', () => {
+    const plugin = DomainRegistry.get('rate-limiter')!;
+    const runRateLimiterPipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Requests across multiple clients and ticks
+      for (let t = 1; t <= 15; t++) {
+        const req = {
+          id: `rl-req-${t}`,
+          tick: t,
+          type: 'RATE_LIMITER_REQUEST' as any,
+          payload: { clientId: t % 2 === 0 ? 'client-1' : 'client-2' },
+        };
+        state = plugin.reduceState(state, req, rng).nextState;
+      }
+      return stableHash(state);
+    };
+
+    const h1 = runRateLimiterPipeline();
+    const h2 = runRateLimiterPipeline();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Distributed Lock (Redlock Quorum & Fencing)
+  it('[distributed-lock] produces deterministic state hash across Redlock quorum, GC pause, and fencing validation', () => {
+    const plugin = DomainRegistry.get('distributed-lock')!;
+    const runLockPipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Client A acquires
+      state = plugin.reduceState(state, { id: 'acq-a', tick: 1, type: 'LOCK_ACQUIRE' as any, payload: { clientId: 'client-A' } }, rng).nextState;
+      // Client A writes
+      state = plugin.reduceState(state, { id: 'wr-a', tick: 2, type: 'LOCK_WRITE_PROTECTED_RESOURCE' as any, payload: { clientId: 'client-A', data: 'DATA_A' } }, rng).nextState;
+      // Client A GC pause
+      state = plugin.reduceState(state, { id: 'gc-a', tick: 3, type: 'LOCK_INJECT_GC_PAUSE' as any, payload: { clientId: 'client-A', durationTicks: 5 } }, rng).nextState;
+      // Tick advance to expire lease
+      for (let t = 4; t <= 15; t++) {
+        state = plugin.reduceState(state, { id: `t-${t}`, tick: t, type: 'LOCK_TICK' as any, payload: {} }, rng).nextState;
+      }
+      return stableHash(state);
+    };
+
+    const h1 = runLockPipeline();
+    const h2 = runLockPipeline();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: CDN & Multi-Tier Caching
+  it('[cdn-cache] produces deterministic state hash across tiered cache hits, request coalescing, and purge waves', () => {
+    const plugin = DomainRegistry.get('cdn-cache')!;
+    const runCdnPipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Flash crowd with coalescing
+      state = plugin.reduceState(state, { id: 'flash-1', tick: 1, type: 'CDN_FLASH_CROWD' as any, payload: { key: '/app.js', requestCount: 15 } }, rng).nextState;
+      // Subsequent requests across edge pops
+      state = plugin.reduceState(state, { id: 'req-eu', tick: 2, type: 'CDN_REQUEST' as any, payload: { key: '/app.js', clientRegion: 'EU_WEST' } }, rng).nextState;
+      // Purge key
+      state = plugin.reduceState(state, { id: 'purge-1', tick: 3, type: 'CDN_PURGE_KEY' as any, payload: { key: '/app.js' } }, rng).nextState;
+      return stableHash(state);
+    };
+
+    const h1 = runCdnPipeline();
+    const h2 = runCdnPipeline();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Distributed ID Generation
+  it('[id-gen] produces deterministic state hash across Snowflake bit-packing, sequence overflow, and UUID generation', () => {
+    const plugin = DomainRegistry.get('id-gen')!;
+    const runIdGenPipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Generate Snowflake IDs across workers
+      for (let w = 1; w <= 4; w++) {
+        state = plugin.reduceState(state, { id: `gen-${w}`, tick: w, type: 'ID_GEN_GENERATE' as any, payload: { workerId: w, count: 5 } }, rng).nextState;
+      }
+      // Clock skew injection
+      state = plugin.reduceState(state, { id: 'skew-1', tick: 5, type: 'ID_GEN_INJECT_CLOCK_SKEW' as any, payload: { workerId: 1, backwardSkewMs: 20 } }, rng).nextState;
+      return stableHash(state);
+    };
+
+    const h1 = runIdGenPipeline();
+    const h2 = runIdGenPipeline();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Fidelity-specific golden pipeline: Distributed Transactions
+  it('[transactions] produces deterministic state hash across 2PC voting, coordinator crash, and reverse Saga compensation', () => {
+    const plugin = DomainRegistry.get('transactions')!;
+    const runTxnPipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Start 2PC
+      state = plugin.reduceState(state, { id: 'tx-1', tick: 1, type: 'TXN_2PC_START' as any, payload: { transactionId: 'tx-gold' } }, rng).nextState;
+      // Votes
+      state = plugin.reduceState(state, { id: 'v-1', tick: 2, type: 'TXN_2PC_PARTICIPANT_VOTE' as any, payload: { participantId: 'part-order-svc', vote: 'VOTE_COMMIT' } }, rng).nextState;
+      state = plugin.reduceState(state, { id: 'v-2', tick: 2, type: 'TXN_2PC_PARTICIPANT_VOTE' as any, payload: { participantId: 'part-payment-svc', vote: 'VOTE_COMMIT' } }, rng).nextState;
+      // Crash coordinator after prepare
+      state = plugin.reduceState(state, { id: 'crash-c', tick: 3, type: 'TXN_2PC_CRASH_COORDINATOR' as any, payload: { crashTiming: 'AFTER_PREPARE' } }, rng).nextState;
+
+      // Start and unwind Saga
+      state = plugin.reduceState(state, { id: 's-start', tick: 4, type: 'TXN_SAGA_START' as any, payload: { sagaId: 'saga-gold' } }, rng).nextState;
+      state = plugin.reduceState(state, { id: 's-1', tick: 5, type: 'TXN_SAGA_STEP_OUTCOME' as any, payload: { stepIndex: 0, success: true } }, rng).nextState;
+      state = plugin.reduceState(state, { id: 's-2', tick: 6, type: 'TXN_SAGA_STEP_OUTCOME' as any, payload: { stepIndex: 1, success: true } }, rng).nextState;
+      state = plugin.reduceState(state, { id: 's-3', tick: 7, type: 'TXN_SAGA_STEP_OUTCOME' as any, payload: { stepIndex: 2, success: false } }, rng).nextState;
+
+      return stableHash(state);
+    };
+
+    const h1 = runTxnPipeline();
+    const h2 = runTxnPipeline();
     expect(h1).toBe(h2);
     expect(h1).toBeGreaterThan(0);
   });
