@@ -109,6 +109,7 @@ if (process.env.NODE_ENV !== 'test') {
     {
       fetch: app.fetch,
       port: config.PORT,
+      hostname: '0.0.0.0',
     },
     (info) => {
       console.log(`🚀 Stateless REST API listening on port ${info.port}`);

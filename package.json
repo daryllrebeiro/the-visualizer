@@ -1,8 +1,8 @@
 {
   "name": "the-visualizer",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
-  "description": "Production-grade Kafka distributed systems visualization and simulation platform",
+  "description": "Interactive deterministic simulation, visualization, and chaos engineering platform for 18 distributed systems and AI infrastructure architectures",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
@@ -14,6 +14,12 @@
     "test:determinism": "vitest run packages/simulation/src/golden-determinism.test.ts",
     "test:all": "vitest run",
     "test:integration": "vitest run apps/api apps/ws-gateway",
+    "test:e2e": "node scripts/run-playwright-e2e.mjs",
+    "verify:all": "node scripts/verify-all-18-domains.mjs",
+    "benchmark:canvas": "node scripts/benchmark-canvas-fps.mjs",
+    "deploy:replit": "node scripts/deploy-replit.mjs",
+    "smoke:replit": "node scripts/replit-smoke-test.mjs",
+    "replit:start": "node scripts/replit-supervisor.mjs",
     "sim": "node scripts/sim-cli.mjs",
     "create:domain": "node scripts/create-domain.mjs",
     "lint": "pnpm --recursive lint",

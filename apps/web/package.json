@@ -1,12 +1,12 @@
 {
   "name": "@the-visualizer/web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Next.js 15 frontend — canvas visualization, graph editor, and real-time simulation UI",
   "scripts": {
     "dev": "next dev -p 3002",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0 -p 3002",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",

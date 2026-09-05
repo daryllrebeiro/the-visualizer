@@ -13,6 +13,7 @@ import './otel-init.js';
 initGlobalExceptionHandling('ws-gateway');
 
 const revocationRedis = new Redis(config.REDIS_URL, {
+  password: config.REDIS_PASSWORD || undefined,
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
 });
@@ -62,7 +63,7 @@ server.maxHeadersCount = 100;
 const wss = createWebSocketServer(server);
 
 if (process.env.NODE_ENV !== 'test') {
-  server.listen(config.PORT, () => {
+  server.listen(config.PORT, '0.0.0.0', () => {
     logger.info(`🚀 WebSocket Realtime Gateway listening on port ${String(config.PORT)}`);
   });
 }

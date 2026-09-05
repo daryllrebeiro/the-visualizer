@@ -1,0 +1,28 @@
+modules = ["nodejs-20"]
+run = "node scripts/replit-supervisor.mjs"
+entrypoint = "scripts/replit-supervisor.mjs"
+
+[deployment]
+build = ["node", "scripts/replit-build.mjs"]
+run = ["node", "scripts/replit-supervisor.mjs"]
+deploymentTarget = "vm"
+
+[[ports]]
+localPort = 8080
+externalPort = 80
+exposeLocalhost = true
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+exposeLocalhost = false
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
+exposeLocalhost = false
+
+[[ports]]
+localPort = 3002
+externalPort = 3002
+exposeLocalhost = false
