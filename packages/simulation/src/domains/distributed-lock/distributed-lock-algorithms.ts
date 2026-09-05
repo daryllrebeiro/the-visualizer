@@ -1,8 +1,57 @@
+import type { RaftClusterState } from '../raft/raft-types.js';
 import type {
   LockNodeRecord,
   ProtectedResourceState,
   ProtectedResourceWrite,
 } from './distributed-lock-types.js';
+
+/**
+ * Evaluates Raft-backed Lease Acquisition.
+ * Requires active Raft leader consensus.
+ */
+export function evaluateRaftLeaseAcquisition(
+  raftCluster: RaftClusterState | undefined,
+  _clientId: string,
+  _currentTick: number,
+  leaseTtlTicks: number,
+): {
+  success: boolean;
+  leaderId: string | null;
+  term: number;
+  remainingValidityTicks: number;
+  reason?: string;
+} {
+  if (!raftCluster) {
+    return {
+      success: false,
+      leaderId: null,
+      term: 0,
+      remainingValidityTicks: 0,
+      reason: 'RAFT_CLUSTER_UNINITIALIZED',
+    };
+  }
+
+  const nodes = Object.values(raftCluster.nodes);
+  const leader = nodes.find((n) => n.role === 'LEADER' && n.status === 'ALIVE');
+
+  if (!leader) {
+    return {
+      success: false,
+      leaderId: null,
+      term: 0,
+      remainingValidityTicks: 0,
+      reason: 'NO_ACTIVE_RAFT_LEADER',
+    };
+  }
+
+  // Active leader holds lease authority
+  return {
+    success: true,
+    leaderId: leader.id,
+    term: leader.currentTerm,
+    remainingValidityTicks: leaseTtlTicks,
+  };
+}
 
 /**
  * Evaluates Redlock Quorum across independent nodes.

@@ -1,5 +1,10 @@
 import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import {
+  createDefaultRaftCluster,
+  pureRaftTransition,
+} from '../raft/raft-state-transitions.js';
+import {
+  evaluateRaftLeaseAcquisition,
   evaluateRedlockAcquisition,
   writeToProtectedResource,
 } from './distributed-lock-algorithms.js';
@@ -44,6 +49,15 @@ export function createDefaultDistributedLockCluster(
     },
   };
 
+  const raft = createDefaultRaftCluster('raft-lock-cluster', 5);
+  raft.nodes['1']!.role = 'LEADER';
+  raft.nodes['1']!.currentTerm = 1;
+  raft.nodes['1']!.leaderId = '1';
+  for (let i = 2; i <= 5; i++) {
+    raft.nodes[String(i)]!.leaderId = '1';
+    raft.nodes[String(i)]!.currentTerm = 1;
+  }
+
   return {
     clusterId,
     tick: 0,
@@ -63,6 +77,8 @@ export function createDefaultDistributedLockCluster(
       corruptedWritesCount: 0,
       safelyRejectedCount: 0,
     },
+    raftCluster: raft,
+    raftLease: null,
     flawsDemonstrated: {
       kleppmannGcPauseHazardDetected: false,
       mutualExclusionViolated: false,
@@ -86,6 +102,31 @@ export function pureDistributedLockTransition(
       const { clientId } = event.payload;
       const client = nextState.clients[clientId];
       if (!client) break;
+
+      if (nextState.backend === 'RAFT_LEASE') {
+        const evalResult = evaluateRaftLeaseAcquisition(
+          nextState.raftCluster,
+          clientId,
+          event.tick,
+          nextState.leaseTtlTicks,
+        );
+
+        if (evalResult.success) {
+          const token = nextState.nextFencingToken++;
+          const expiresAt = event.tick + evalResult.remainingValidityTicks;
+          client.state = 'HOLDING';
+          client.acquiredAtTick = event.tick;
+          client.leaseExpiresAtTick = expiresAt;
+          client.assignedFencingToken = token;
+          nextState.raftLease = {
+            leaderId: evalResult.leaderId,
+            term: evalResult.term,
+            grantedAtTick: event.tick,
+            expiresAtTick: expiresAt,
+          };
+        }
+        break;
+      }
 
       const evalResult = evaluateRedlockAcquisition(
         nextState.nodes,
@@ -121,6 +162,12 @@ export function pureDistributedLockTransition(
       const { clientId } = event.payload;
       const client = nextState.clients[clientId];
       if (!client) break;
+
+      if (nextState.backend === 'RAFT_LEASE') {
+        nextState.raftLease = null;
+        client.state = 'RELEASED';
+        break;
+      }
 
       for (const node of Object.values(nextState.nodes)) {
         if (node.heldByClient === clientId) {
@@ -192,6 +239,32 @@ export function pureDistributedLockTransition(
 
     case 'TICK' as any:
     case 'LOCK_TICK': {
+      // Step embedded Raft cluster if in RAFT_LEASE mode
+      if (nextState.backend === 'RAFT_LEASE' && nextState.raftCluster) {
+        const raftTickEvt = {
+          id: `raft-tick-${event.tick}`,
+          tick: event.tick,
+          type: 'TICK' as const,
+          payload: {},
+        };
+        const raftRes = pureRaftTransition(nextState.raftCluster, raftTickEvt as any, _rng);
+        nextState.raftCluster = raftRes.nextState;
+
+        if (nextState.raftLease) {
+          const leaderNode = nextState.raftCluster.nodes[nextState.raftLease.leaderId ?? ''];
+          const leaderAlive =
+            leaderNode &&
+            leaderNode.role === 'LEADER' &&
+            leaderNode.status === 'ALIVE' &&
+            leaderNode.currentTerm === nextState.raftLease.term;
+          const isExpired = nextState.raftLease.expiresAtTick <= event.tick;
+
+          if (!leaderAlive || isExpired) {
+            nextState.raftLease = null;
+          }
+        }
+      }
+
       // Advance GC pause counters
       for (const client of Object.values(nextState.clients)) {
         if (client.state === 'PAUSED_GC') {
@@ -203,7 +276,7 @@ export function pureDistributedLockTransition(
         }
       }
 
-      // Check for node lease expiry
+      // Check for node lease expiry (Redlock mode)
       for (const node of Object.values(nextState.nodes)) {
         if (node.heldByClient && node.expiresAtTick <= event.tick) {
           node.heldByClient = null;

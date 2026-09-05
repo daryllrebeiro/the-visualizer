@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '**/.next/**'],
     env: {
       NODE_ENV: 'test',
       DATABASE_URL:

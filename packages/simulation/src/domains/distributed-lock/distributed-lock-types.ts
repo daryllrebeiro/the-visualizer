@@ -44,6 +44,8 @@ export interface ProtectedResourceState {
   safelyRejectedCount: number;
 }
 
+import type { RaftClusterState } from '../raft/raft-types.js';
+
 export interface DistributedLockClusterState {
   clusterId: string;
   tick: number;
@@ -57,6 +59,13 @@ export interface DistributedLockClusterState {
   nodes: Record<string, LockNodeRecord>;
   clients: Record<string, LockClientState>;
   protectedResource: ProtectedResourceState;
+  raftCluster?: RaftClusterState;
+  raftLease?: {
+    leaderId: string | null;
+    term: number;
+    grantedAtTick: number;
+    expiresAtTick: number;
+  } | null;
   flawsDemonstrated: {
     kleppmannGcPauseHazardDetected: boolean;
     mutualExclusionViolated: boolean;

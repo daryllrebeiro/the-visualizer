@@ -1,4 +1,8 @@
 import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import {
+  createDefaultRaftCluster,
+  pureRaftTransition,
+} from '../raft/raft-state-transitions.js';
 import type {
   GeneratedIdRecord,
   IdGenClusterState,
@@ -25,10 +29,27 @@ export function createDefaultWorker(workerId: number, name: string): IdWorkerSta
 }
 
 export function createDefaultIdGenCluster(clusterId = 'id-gen-cluster-1'): IdGenClusterState {
+  const raft = createDefaultRaftCluster('raft-idgen-cluster', 5);
+  raft.nodes['1']!.role = 'LEADER';
+  raft.nodes['1']!.currentTerm = 1;
+  raft.nodes['1']!.leaderId = '1';
+  for (let i = 2; i <= 5; i++) {
+    raft.nodes[String(i)]!.leaderId = '1';
+    raft.nodes[String(i)]!.currentTerm = 1;
+  }
+
+  const registeredWorkerIds: Record<number, { registeredAtTick: number; term: number; status: 'ACTIVE' | 'REVOKED' }> = {
+    1: { registeredAtTick: 0, term: 1, status: 'ACTIVE' },
+    2: { registeredAtTick: 0, term: 1, status: 'ACTIVE' },
+    3: { registeredAtTick: 0, term: 1, status: 'ACTIVE' },
+    4: { registeredAtTick: 0, term: 1, status: 'ACTIVE' },
+  };
+
   return {
     clusterId,
     tick: 0,
     generatorType: 'SNOWFLAKE',
+    workerRegistryMode: 'STATIC',
     customEpochMs: 1704067200000, // Jan 1, 2024
     refuseOnBackwardClock: true,
     workers: {
@@ -37,6 +58,8 @@ export function createDefaultIdGenCluster(clusterId = 'id-gen-cluster-1'): IdGen
       3: createDefaultWorker(3, 'worker-eu-west-1'),
       4: createDefaultWorker(4, 'worker-ap-south-1'),
     },
+    registeredWorkerIds,
+    raftCluster: raft,
     generatedIds: [],
     flawsDemonstrated: {
       duplicateIdDetected: false,
@@ -60,6 +83,17 @@ export function pureIdGenTransition(
       const { workerId, count = 1 } = event.payload;
       const worker = nextState.workers[workerId];
       if (!worker) break;
+
+      if (nextState.workerRegistryMode === 'RAFT_CONSENSUS') {
+        const leader = Object.values(nextState.raftCluster?.nodes ?? {}).find(
+          (n) => n.role === 'LEADER' && n.status === 'ALIVE',
+        );
+        const reg = nextState.registeredWorkerIds[workerId];
+        if (!leader || !reg || reg.status !== 'ACTIVE') {
+          // Cannot generate IDs without Raft consensus registry approval
+          break;
+        }
+      }
 
       for (let i = 0; i < count; i++) {
         // Check clock regression guard
@@ -137,6 +171,27 @@ export function pureIdGenTransition(
       break;
     }
 
+    case 'ID_GEN_REGISTER_WORKER_RAFT': {
+      const { workerId, workerName } = event.payload;
+      const leader = Object.values(nextState.raftCluster?.nodes ?? {}).find(
+        (n) => n.role === 'LEADER' && n.status === 'ALIVE',
+      );
+      if (leader) {
+        nextState.registeredWorkerIds[workerId] = {
+          registeredAtTick: event.tick,
+          term: leader.currentTerm,
+          status: 'ACTIVE',
+        };
+        if (!nextState.workers[workerId]) {
+          nextState.workers[workerId] = createDefaultWorker(
+            workerId,
+            workerName ?? `worker-${workerId}`,
+          );
+        }
+      }
+      break;
+    }
+
     case 'ID_GEN_INJECT_CLOCK_SKEW': {
       const { workerId, backwardSkewMs } = event.payload;
       const worker = nextState.workers[workerId];
@@ -176,6 +231,7 @@ export function pureIdGenTransition(
     case 'ID_GEN_UPDATE_CONFIG': {
       const p = event.payload;
       if (p.generatorType !== undefined) nextState.generatorType = p.generatorType;
+      if (p.workerRegistryMode !== undefined) nextState.workerRegistryMode = p.workerRegistryMode;
       if (p.refuseOnBackwardClock !== undefined)
         nextState.refuseOnBackwardClock = p.refuseOnBackwardClock;
       break;
@@ -183,6 +239,18 @@ export function pureIdGenTransition(
 
     case 'TICK' as any:
     case 'ID_GEN_TICK': {
+      // Step embedded Raft cluster if present
+      if (nextState.raftCluster) {
+        const raftTick = {
+          id: `raft-tick-${event.tick}`,
+          tick: event.tick,
+          type: 'TICK' as const,
+          payload: {},
+        };
+        const res = pureRaftTransition(nextState.raftCluster, raftTick as any, rng);
+        nextState.raftCluster = res.nextState;
+      }
+
       // Advance clock milliseconds across all workers
       for (const worker of Object.values(nextState.workers)) {
         worker.currentTickMs += 1;

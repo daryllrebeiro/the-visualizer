@@ -31,6 +31,8 @@ export interface AMQPMessage {
   assignedConsumerId: string | null;
 }
 
+import type { RaftClusterState } from '../raft/raft-types.js';
+
 export type RabbitQueueType = 'classic' | 'quorum';
 
 export interface RabbitQueue {
@@ -45,6 +47,8 @@ export interface RabbitQueue {
   messages: AMQPMessage[];
   consumerCount: number;
   color: string;
+  raftCluster?: RaftClusterState | undefined;
+  quorumLog?: Array<{ index: number; term: number; messageId: string; committed: boolean }> | undefined;
 }
 
 export interface RabbitConsumer {
@@ -66,6 +70,7 @@ export interface RabbitClusterState {
   queues: Record<string, RabbitQueue>;
   bindings: Record<string, BindingSpec>;
   consumers: Record<string, RabbitConsumer>;
+  raftCluster?: RaftClusterState;
   totalPublished: number;
   totalConfirmed: number;
   totalUnroutableToAlternate: number;

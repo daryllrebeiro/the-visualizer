@@ -81,6 +81,26 @@ import type {
   TransactionsSimEvent,
 } from './transactions/transactions-types.js';
 
+import { RAGInvariantChecker } from './rag/rag-invariants.js';
+import { createDefaultRAGCluster, pureRAGTransition } from './rag/rag-state-transitions.js';
+import type { RAGClusterState, RAGSimEvent } from './rag/rag-types.js';
+
+import { AgentsInvariantChecker } from './agents/agents-invariants.js';
+import { createDefaultAgentsCluster, pureAgentsTransition } from './agents/agents-state-transitions.js';
+import type { AgentsClusterState, AgentsSimEvent } from './agents/agents-types.js';
+
+import { LLMServingInvariantChecker } from './llm-serving/llm-serving-invariants.js';
+import { createDefaultLLMServingCluster, pureLLMServingTransition } from './llm-serving/llm-serving-state-transitions.js';
+import type { LLMServingClusterState, LLMServingSimEvent } from './llm-serving/llm-serving-types.js';
+
+import { VectorDBInvariantChecker } from './vectordb/vectordb-invariants.js';
+import { createDefaultVectorDBCluster, pureVectorDBTransition } from './vectordb/vectordb-state-transitions.js';
+import type { VectorDBClusterState, VectorDBSimEvent } from './vectordb/vectordb-types.js';
+
+import { GPUClusterInvariantChecker } from './gpu-cluster/gpu-cluster-invariants.js';
+import { createDefaultGPUCluster, pureGPUClusterTransition } from './gpu-cluster/gpu-cluster-state-transitions.js';
+import type { GPUClusterState, GPUClusterSimEvent } from './gpu-cluster/gpu-cluster-types.js';
+
 export interface DomainPluginMetadata {
   id: string;
   name: string;
@@ -93,7 +113,8 @@ export interface DomainPluginMetadata {
     | 'ORCHESTRATION'
     | 'NETWORKING'
     | 'GATEWAY'
-    | 'SYSTEM_DESIGN';
+    | 'SYSTEM_DESIGN'
+    | 'AI_INFRA';
   description: string;
   fidelityTag:
     'CONCEPTUAL' | 'BEHAVIORAL' | 'ORACLE_TESTED' | 'PROTOCOL_COMPATIBLE' | 'VERSION_COMPATIBLE';
@@ -519,6 +540,151 @@ export const TransactionsDomainPlugin: DomainPlugin<
   scenarioLibrary: [],
 };
 
+export const RAGDomainPlugin: DomainPlugin<RAGClusterState, RAGSimEvent> = {
+  metadata: {
+    id: 'rag',
+    name: 'Retrieval-Augmented Generation (RAG)',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Modular RAG with Dense Passage Retrieval, sparse BM25 lexical matching, Reciprocal Rank Fusion (RRF), Cross-Encoder re-ranking, and Lost-in-the-Middle context packing.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Modular RAG / RRF',
+    icon: '📚',
+    color: '#3b82f6',
+  },
+  createDefaultState: () => createDefaultRAGCluster(),
+  reduceState: (state, event, rng) => pureRAGTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new RAGInvariantChecker();
+    const violation = checker.check(state);
+    if (violation && !violation.isPedagogicalFlaw) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const AgentsDomainPlugin: DomainPlugin<AgentsClusterState, AgentsSimEvent> = {
+  metadata: {
+    id: 'agents',
+    name: 'Multi-Agent MCP Swarms',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Multi-agent ReAct orchestration, Model Context Protocol (MCP) JSON-RPC 2.0 tool transport, hierarchical supervision, and acyclic loop cycle guards.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'MCP 2024-11-05 / ReAct',
+    icon: '🤖',
+    color: '#8b5cf6',
+  },
+  createDefaultState: () => createDefaultAgentsCluster(),
+  reduceState: (state, event, rng) => pureAgentsTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new AgentsInvariantChecker();
+    const violation = checker.check(state);
+    if (violation && !violation.isPedagogicalFlaw) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const LLMServingDomainPlugin: DomainPlugin<LLMServingClusterState, LLMServingSimEvent> = {
+  metadata: {
+    id: 'llm-serving',
+    name: 'LLM Inference Serving (PagedAttention)',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'vLLM PagedAttention GPU KV-cache virtual memory allocator, Orca continuous batching prefill/decode scheduling, and Speculative Decoding verifier.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'vLLM / Orca SOSP \'23',
+    icon: '⚡',
+    color: '#10b981',
+  },
+  createDefaultState: () => createDefaultLLMServingCluster(),
+  reduceState: (state, event, rng) => pureLLMServingTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new LLMServingInvariantChecker();
+    const violation = checker.check(state);
+    if (violation && !violation.isPedagogicalFlaw) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const VectorDBDomainPlugin: DomainPlugin<VectorDBClusterState, VectorDBSimEvent> = {
+  metadata: {
+    id: 'vectordb',
+    name: 'Vector Database (HNSW & IVF-PQ)',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Multi-layer Hierarchical Navigable Small World (HNSW) graph with greedy beam routing, Inverted File Product Quantization (IVF-PQ) Voronoi cell space partitioning, and recall gauges.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'HNSW / IVF-PQ',
+    icon: '🧭',
+    color: '#f59e0b',
+  },
+  createDefaultState: () => createDefaultVectorDBCluster(),
+  reduceState: (state, event, rng) => pureVectorDBTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new VectorDBInvariantChecker();
+    const violation = checker.check(state);
+    if (violation && !violation.isPedagogicalFlaw) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const GPUClusterDomainPlugin: DomainPlugin<GPUClusterState, GPUClusterSimEvent> = {
+  metadata: {
+    id: 'gpu-cluster',
+    name: 'GPU Cluster & 3D Parallelism',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Megatron-LM 3D Parallelism (TP x PP x DP), DeepSpeed ZeRO-1/2/3 memory sharding, 1F1B pipeline microbatch schedule Gantt waterfall, and Ring-AllReduce circular gradient sync.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Megatron-LM / ZeRO',
+    icon: '🖥️',
+    color: '#ec4899',
+  },
+  createDefaultState: () => createDefaultGPUCluster(),
+  reduceState: (state, event, rng) => pureGPUClusterTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new GPUClusterInvariantChecker();
+    const violation = checker.check(state);
+    if (violation && !violation.isPedagogicalFlaw) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
 export class DomainRegistry {
   private static readonly plugins = new Map<string, DomainPlugin>([
     ['kafka', KafkaDomainPlugin],
@@ -534,6 +700,11 @@ export class DomainRegistry {
     ['cdn-cache', CdnCacheDomainPlugin],
     ['id-gen', IdGenDomainPlugin],
     ['transactions', TransactionsDomainPlugin],
+    ['rag', RAGDomainPlugin],
+    ['agents', AgentsDomainPlugin],
+    ['llm-serving', LLMServingDomainPlugin],
+    ['vectordb', VectorDBDomainPlugin],
+    ['gpu-cluster', GPUClusterDomainPlugin],
   ]);
 
   public static register(plugin: DomainPlugin): void {

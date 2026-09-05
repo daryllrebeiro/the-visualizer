@@ -273,3 +273,30 @@ export * from './domains/transactions/transactions-state-transitions.js';
 export * from './domains/transactions/transactions-invariants.js';
 export * from './domains/transactions/two-phase-commit.js';
 export * from './domains/transactions/saga-orchestrator.js';
+
+// Domain: Retrieval-Augmented Generation
+export * from './domains/rag/rag-types.js';
+export * from './domains/rag/rag-state-transitions.js';
+export * from './domains/rag/rag-invariants.js';
+export * from './domains/rag/rag-algorithms.js';
+
+// Domain: Multi-Agent MCP Swarm
+export * from './domains/agents/agents-types.js';
+export * from './domains/agents/agents-state-transitions.js';
+export * from './domains/agents/agents-invariants.js';
+
+// Domain: LLM Inference Serving
+export * from './domains/llm-serving/llm-serving-types.js';
+export * from './domains/llm-serving/llm-serving-state-transitions.js';
+export * from './domains/llm-serving/llm-serving-invariants.js';
+
+// Domain: Vector Database & ANN Search
+export * from './domains/vectordb/vectordb-types.js';
+export * from './domains/vectordb/vectordb-state-transitions.js';
+export * from './domains/vectordb/vectordb-invariants.js';
+export * from './domains/vectordb/vectordb-algorithms.js';
+
+// Domain: GPU Cluster & 3D Parallelism
+export * from './domains/gpu-cluster/gpu-cluster-types.js';
+export * from './domains/gpu-cluster/gpu-cluster-state-transitions.js';
+export * from './domains/gpu-cluster/gpu-cluster-invariants.js';

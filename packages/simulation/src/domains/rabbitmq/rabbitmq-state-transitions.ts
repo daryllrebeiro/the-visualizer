@@ -1,4 +1,8 @@
-import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import {
+  createDefaultRaftCluster,
+  pureRaftTransition,
+} from '../raft/raft-state-transitions.js';
 import type {
   AMQPMessage,
   BindingSpec,
@@ -56,6 +60,7 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     'orders.eu': {
       id: 'q-orders-eu',
       name: 'orders.eu',
+      queueType: 'classic',
       durable: true,
       deadLetterExchange: 'dlx.exchange',
       deadLetterRoutingKey: null,
@@ -68,6 +73,7 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     'orders.all': {
       id: 'q-orders-all',
       name: 'orders.all',
+      queueType: 'classic',
       durable: true,
       deadLetterExchange: null,
       deadLetterRoutingKey: null,
@@ -80,6 +86,7 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     notifications: {
       id: 'q-notif',
       name: 'notifications',
+      queueType: 'classic',
       durable: true,
       deadLetterExchange: null,
       deadLetterRoutingKey: null,
@@ -92,6 +99,7 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     'dlx.dead-letter': {
       id: 'q-dlx',
       name: 'dlx.dead-letter',
+      queueType: 'classic',
       durable: true,
       deadLetterExchange: null,
       deadLetterRoutingKey: null,
@@ -157,6 +165,15 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     },
   };
 
+  const raft = createDefaultRaftCluster('rabbit-raft-cluster', 5);
+  raft.nodes['1']!.role = 'LEADER';
+  raft.nodes['1']!.currentTerm = 1;
+  raft.nodes['1']!.leaderId = '1';
+  for (let i = 2; i <= 5; i++) {
+    raft.nodes[String(i)]!.leaderId = '1';
+    raft.nodes[String(i)]!.currentTerm = 1;
+  }
+
   return {
     clusterId,
     tick: 0,
@@ -167,6 +184,7 @@ export function createDefaultRabbitCluster(clusterId = 'rabbit-cluster-1'): Rabb
     queues,
     bindings,
     consumers,
+    raftCluster: raft,
     totalPublished: 0,
     totalConfirmed: 0,
     totalUnroutableToAlternate: 0,
@@ -200,6 +218,39 @@ export function pureRabbitTransition(
     case 'RABBIT_TICK':
       handleTick(nextState, emittedEvents);
       break;
+    case 'RABBIT_DECLARE_QUEUE': {
+      const p = event.payload;
+      const qName = String(p['name'] ?? '');
+      if (qName && !nextState.queues[qName]) {
+        const qType = (p['queueType'] as any) ?? 'classic';
+        nextState.queues[qName] = {
+          id: `q-${qName}`,
+          name: qName,
+          queueType: qType,
+          durable: Boolean(p['durable'] ?? true),
+          deadLetterExchange: (p['deadLetterExchange'] as string) ?? null,
+          deadLetterRoutingKey: (p['deadLetterRoutingKey'] as string) ?? null,
+          maxQueueLength: Number(p['maxQueueLength'] ?? 50),
+          messageTtl: p['messageTtl'] ? Number(p['messageTtl']) : null,
+          messages: [],
+          consumerCount: 0,
+          color: (p['color'] as string) ?? '#ec4899',
+          quorumLog: qType === 'quorum' ? [] : undefined,
+        };
+      }
+      break;
+    }
+    case 'RABBIT_BIND_QUEUE': {
+      const p = event.payload;
+      const bId = `b-${String(p['exchangeName'])}-${String(p['queueName'])}`;
+      nextState.bindings[bId] = {
+        id: bId,
+        exchangeName: String(p['exchangeName']),
+        queueName: String(p['queueName']),
+        routingKeyPattern: String(p['routingKeyPattern'] ?? ''),
+      };
+      break;
+    }
     case 'RABBIT_CONFIGURE_FIDELITY': {
       if (event.payload['fidelityMode'] !== undefined) {
         nextState.fidelityMode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
@@ -265,7 +316,31 @@ function handlePublish(
         id: `${msgId}-${q.name}`,
         state: 'InQueue',
       };
-      if (q.messages.length < q.maxQueueLength) {
+
+      if (q.queueType === 'quorum') {
+        if (!q.quorumLog) q.quorumLog = [];
+        const leader = Object.values(state.raftCluster?.nodes ?? {}).find(
+          (n) => n.role === 'LEADER' && n.status === 'ALIVE',
+        );
+        const term = leader?.currentTerm ?? 1;
+        const index = q.quorumLog.length + 1;
+        const aliveNodes = Object.values(state.raftCluster?.nodes ?? {}).filter(
+          (n) => n.status === 'ALIVE',
+        );
+        const committed = aliveNodes.length >= 3; // Majority of 5 = 3
+        q.quorumLog.push({ index, term, messageId: qMsg.id, committed });
+
+        if (committed && q.messages.length < q.maxQueueLength) {
+          q.messages.push(qMsg);
+          routedCount++;
+          emittedEvents.push({
+            id: `deliv-${qMsg.id}`,
+            tick: state.tick,
+            type: 'RABBIT_MESSAGE_DELIVERED',
+            payload: { messageId: qMsg.id, queueName: q.name, routingKey: p.routingKey },
+          });
+        }
+      } else if (q.messages.length < q.maxQueueLength) {
         q.messages.push(qMsg);
         routedCount++;
         emittedEvents.push({
@@ -413,6 +488,18 @@ function routeToDLX(
 }
 
 function handleTick(state: RabbitClusterState, emittedEvents: RabbitSimEvent[]): void {
+  if (state.raftCluster) {
+    const raftTick = {
+      id: `rabbit-raft-tick-${state.tick}`,
+      tick: state.tick,
+      type: 'TICK' as const,
+      payload: {},
+    };
+    const rng = new DeterministicRNG(42 + state.tick);
+    const raftRes = pureRaftTransition(state.raftCluster, raftTick as any, rng);
+    state.raftCluster = raftRes.nextState;
+  }
+
   for (const q of Object.values(state.queues)) {
     const remainingMsgs: AMQPMessage[] = [];
     for (const msg of q.messages) {

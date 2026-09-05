@@ -1,4 +1,10 @@
 import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import { getClusterSlot } from '../redis/crc16.js';
+import {
+  createDefaultRedisCluster,
+  findMasterForSlot,
+  pureRedisTransition,
+} from '../redis/redis-state-transitions.js';
 import {
   stepFixedWindow,
   stepLeakyBucket,
@@ -111,6 +117,13 @@ export function createDefaultRateLimiterCluster(
       ),
     },
     recentRequests: [],
+    redisCluster: createDefaultRedisCluster('redis-ratelimit-cluster'),
+    redisMetrics: {
+      totalCommands: 0,
+      commandsByOp: { INCR: 0, EXPIRE: 0, ZADD: 0, ZREMRANGEBYSCORE: 0 },
+      lastRoutedNodeId: null,
+      lastSlot: null,
+    },
     flawsDemonstrated: {
       fixedWindowBoundaryBurstDetected: false,
       localMemoryClusterMultiplierDetected: false,
@@ -185,6 +198,41 @@ export function pureRateLimiterTransition(
         }
       }
 
+      // If SHARED_REDIS mode: route through Redis cluster by CRC16 hash slot
+      if (nextState.backendMode === 'SHARED_REDIS' && nextState.redisCluster) {
+        const slot = getClusterSlot(clientId);
+        const master = findMasterForSlot(nextState.redisCluster, slot);
+        if (master) {
+          if (!nextState.redisMetrics) {
+            nextState.redisMetrics = {
+              totalCommands: 0,
+              commandsByOp: { INCR: 0, EXPIRE: 0, ZADD: 0, ZREMRANGEBYSCORE: 0 },
+              lastRoutedNodeId: null,
+              lastSlot: null,
+            };
+          }
+          nextState.redisMetrics.totalCommands += 2;
+          nextState.redisMetrics.commandsByOp['INCR'] =
+            (nextState.redisMetrics.commandsByOp['INCR'] ?? 0) + 1;
+          nextState.redisMetrics.commandsByOp['EXPIRE'] =
+            (nextState.redisMetrics.commandsByOp['EXPIRE'] ?? 0) + 1;
+          nextState.redisMetrics.lastRoutedNodeId = master.id;
+          nextState.redisMetrics.lastSlot = slot;
+
+          const key = `ratelimit:${clientId}`;
+          const existing = master.storage[key];
+          const newCount = (existing ? Number(existing.value) : 0) + cost;
+          master.storage[key] = {
+            key,
+            value: String(newCount),
+            sizeBytes: 64,
+            ttl: null,
+            lastAccessedTick: event.tick,
+            accessCount: (existing?.accessCount ?? 0) + 1,
+          };
+        }
+      }
+
       // Record recent request
       nextState.recentRequests.push({
         id: event.id,
@@ -255,6 +303,18 @@ export function pureRateLimiterTransition(
 
     case 'TICK' as any:
     case 'RATE_LIMITER_TICK': {
+      // Step embedded Redis cluster if present
+      if (nextState.backendMode === 'SHARED_REDIS' && nextState.redisCluster) {
+        const redisTick = {
+          id: `redis-tick-${event.tick}`,
+          tick: event.tick,
+          type: 'TICK' as const,
+          payload: {},
+        };
+        const res = pureRedisTransition(nextState.redisCluster, redisTick as any, _rng);
+        nextState.redisCluster = res.nextState;
+      }
+
       // Periodic clock advance: update token refilling and leaky queue drains
       for (const client of Object.values(nextState.clients)) {
         const tbElapsed = Math.max(0, event.tick - client.tokenBucket.lastRefillTick);

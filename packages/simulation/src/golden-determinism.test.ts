@@ -65,24 +65,29 @@ const GOLDEN_TICKS = 10;
 describe('Golden Determinism Suite', () => {
   const domains = DomainRegistry.list();
 
-  // Verify all 13 domains are registered
-  it('should have all 13 domains registered', () => {
-    expect(domains.length).toBe(13);
+  // Verify all 18 domains are registered
+  it('should have all 18 domains registered', () => {
+    expect(domains.length).toBe(18);
     const ids = domains.map((d) => d.id).sort();
     expect(ids).toEqual([
+      'agents',
       'cdn-cache',
       'database',
       'distributed-lock',
+      'gpu-cluster',
       'id-gen',
       'kafka',
       'kubernetes',
+      'llm-serving',
       'networking',
       'rabbitmq',
       'raft',
+      'rag',
       'rate-limiter',
       'redis',
       'storage',
       'transactions',
+      'vectordb',
     ]);
   });
 
@@ -605,4 +610,674 @@ describe('Golden Determinism Suite', () => {
     expect(h1).toBe(h2);
     expect(h1).toBeGreaterThan(0);
   });
+
+  // Dedicated Cross-Domain Golden Fixture 1: Distributed Lock + Raft Lease Authority
+  it('[distributed-lock:raft-lease] produces deterministic state hash across Raft leader election, lease grant, and follower rejection', () => {
+    const plugin = DomainRegistry.get('distributed-lock')!;
+    const runRaftLock = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Switch to RAFT_LEASE backend
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'cfg-raft-lock',
+          tick: 1,
+          type: 'LOCK_UPDATE_CONFIG' as any,
+          payload: { backend: 'RAFT_LEASE' },
+        },
+        rng,
+      ).nextState;
+
+      // Acquire lock from Client A via Raft leader authority
+      state = plugin.reduceState(
+        state,
+        { id: 'acq-raft-a', tick: 2, type: 'LOCK_ACQUIRE' as any, payload: { clientId: 'client-A' } },
+        rng,
+      ).nextState;
+
+      // Write protected resource
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'wr-raft-a',
+          tick: 3,
+          type: 'LOCK_WRITE_PROTECTED_RESOURCE' as any,
+          payload: { clientId: 'client-A', data: 'RAFT_CONSENSUS_LEASE_DATA' },
+        },
+        rng,
+      ).nextState;
+
+      // Step simulation clock
+      for (let t = 4; t <= 10; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'LOCK_TICK' as any, payload: {} },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runRaftLock();
+    const h2 = runRaftLock();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated Cross-Domain Golden Fixture 2: ID-Gen + Raft Worker Registry
+  it('[id-gen:raft-registry] produces deterministic state hash across concurrent worker registration and partition quorum check', () => {
+    const plugin = DomainRegistry.get('id-gen')!;
+    const runRaftIdGen = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Configure RAFT_CONSENSUS registry mode
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'cfg-raft-idgen',
+          tick: 1,
+          type: 'ID_GEN_UPDATE_CONFIG' as any,
+          payload: { workerRegistryMode: 'RAFT_CONSENSUS' },
+        },
+        rng,
+      ).nextState;
+
+      // Dynamically register new worker 5 through Raft consensus
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'reg-w5',
+          tick: 2,
+          type: 'ID_GEN_REGISTER_WORKER_RAFT' as any,
+          payload: { workerId: 5, workerName: 'worker-eu-central-1' },
+        },
+        rng,
+      ).nextState;
+
+      // Generate IDs from registered workers
+      for (let t = 3; t <= 8; t++) {
+        state = plugin.reduceState(
+          state,
+          {
+            id: `gen-${t}`,
+            tick: t,
+            type: 'ID_GEN_GENERATE' as any,
+            payload: { workerId: t % 2 === 0 ? 1 : 5, count: 2 },
+          },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runRaftIdGen();
+    const h2 = runRaftIdGen();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated Cross-Domain Golden Fixture 3: Rate Limiter + Redis Cluster Storage
+  it('[rate-limiter:redis-cluster] produces deterministic state hash across CRC16 slot dispatch and distributed counter mutation', () => {
+    const plugin = DomainRegistry.get('rate-limiter')!;
+    const runRedisRateLimiter = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Configure SHARED_REDIS backend mode
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'cfg-redis-rl',
+          tick: 1,
+          type: 'RATE_LIMITER_UPDATE_CONFIG' as any,
+          payload: { backendMode: 'SHARED_REDIS' },
+        },
+        rng,
+      ).nextState;
+
+      // Route requests across diverse client keys to exercise multiple hash slots
+      const clientIds = ['client-alpha', 'client-beta', 'client-gamma', 'client-delta'];
+      for (let t = 2; t <= 12; t++) {
+        const clientId = clientIds[t % clientIds.length]!;
+        state = plugin.reduceState(
+          state,
+          {
+            id: `req-redis-${t}`,
+            tick: t,
+            type: 'RATE_LIMITER_REQUEST' as any,
+            payload: { clientId, cost: 1 },
+          },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runRedisRateLimiter();
+    const h2 = runRedisRateLimiter();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated Cross-Domain Golden Fixture 4: RabbitMQ + Raft Quorum Replication
+  it('[rabbitmq:raft-quorum] produces deterministic state hash across quorum queue message append and Raft majority commit', () => {
+    const plugin = DomainRegistry.get('rabbitmq')!;
+    const runRabbitQuorum = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Declare quorum queue
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'decl-quorum-q',
+          tick: 1,
+          type: 'RABBIT_DECLARE_QUEUE' as any,
+          payload: { name: 'orders.quorum.high-value', queueType: 'quorum' },
+        },
+        rng,
+      ).nextState;
+
+      // Bind quorum queue to direct exchange
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'bind-quorum-q',
+          tick: 2,
+          type: 'RABBIT_BIND_QUEUE' as any,
+          payload: {
+            exchangeName: 'amq.direct',
+            queueName: 'orders.quorum.high-value',
+            routingKeyPattern: 'orders.critical',
+          },
+        },
+        rng,
+      ).nextState;
+
+      // Publish messages to quorum queue
+      for (let t = 3; t <= 8; t++) {
+        state = plugin.reduceState(
+          state,
+          {
+            id: `pub-quorum-${t}`,
+            tick: t,
+            type: 'RABBIT_PUBLISH' as any,
+            payload: {
+              exchangeName: 'amq.direct',
+              routingKey: 'orders.critical',
+              payload: `{"txId":"${t * 100}","amount":500}`,
+            },
+          },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runRabbitQuorum();
+    const h2 = runRabbitQuorum();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated High-Risk Chaos Fixture 1: Distributed Lock Kleppmann Corruption (Fencing Disabled)
+  it('[distributed-lock:kleppmann-corruption] demonstrates silent data corruption when fencing is disabled', () => {
+    const plugin = DomainRegistry.get('distributed-lock')!;
+    const runCorruption = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Disable fencing
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'cfg-no-fencing',
+          tick: 1,
+          type: 'LOCK_UPDATE_CONFIG' as any,
+          payload: { fencingEnabled: false },
+        },
+        rng,
+      ).nextState;
+
+      // Client A acquires
+      state = plugin.reduceState(
+        state,
+        { id: 'acq-a', tick: 2, type: 'LOCK_ACQUIRE' as any, payload: { clientId: 'client-A' } },
+        rng,
+      ).nextState;
+
+      // Inject GC pause on Client A
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'gc-a',
+          tick: 3,
+          type: 'LOCK_INJECT_GC_PAUSE' as any,
+          payload: { clientId: 'client-A', durationTicks: 10 },
+        },
+        rng,
+      ).nextState;
+
+      // Advance past lease expiration
+      for (let t = 4; t <= 12; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `t-${t}`, tick: t, type: 'LOCK_TICK' as any, payload: {} },
+          rng,
+        ).nextState;
+      }
+
+      // Client B acquires and writes legitimate data
+      state = plugin.reduceState(
+        state,
+        { id: 'acq-b', tick: 12, type: 'LOCK_ACQUIRE' as any, payload: { clientId: 'client-B' } },
+        rng,
+      ).nextState;
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'wr-b',
+          tick: 13,
+          type: 'LOCK_WRITE_PROTECTED_RESOURCE' as any,
+          payload: { clientId: 'client-B', data: 'LEGITIMATE_UPDATE_FROM_B' },
+        },
+        rng,
+      ).nextState;
+
+      // Client A wakes up at tick 14 and writes stale payload without fencing validation
+      state = plugin.reduceState(
+        state,
+        { id: 't-14', tick: 14, type: 'LOCK_TICK' as any, payload: {} },
+        rng,
+      ).nextState;
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'wr-a-stale',
+          tick: 15,
+          type: 'LOCK_WRITE_PROTECTED_RESOURCE' as any,
+          payload: { clientId: 'client-A', data: 'STALE_CORRUPTED_OVERWRITE_FROM_A' },
+        },
+        rng,
+      ).nextState;
+
+      // Verify corruption was recorded
+      expect((state as any).flawsDemonstrated.dataCorruptedWithoutFencing).toBe(true);
+
+      return stableHash(state);
+    };
+
+    const h1 = runCorruption();
+    const h2 = runCorruption();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated High-Risk Chaos Fixture 2: Transactions 2PC Coordinator Crash After PREPARE
+  it('[transactions:2pc-coordinator-crash] isolates participant BLOCKED_UNCERTAIN freeze', () => {
+    const plugin = DomainRegistry.get('transactions')!;
+    const runCrash = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Start 2PC
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'start-2pc',
+          tick: 1,
+          type: 'TXN_2PC_START' as any,
+          payload: { transactionId: 'tx-crash-freeze-isolated' },
+        },
+        rng,
+      ).nextState;
+
+      // Participants vote COMMIT
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'vote-order',
+          tick: 2,
+          type: 'TXN_2PC_PARTICIPANT_VOTE' as any,
+          payload: { participantId: 'part-order-svc', vote: 'VOTE_COMMIT' },
+        },
+        rng,
+      ).nextState;
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'vote-pay',
+          tick: 2,
+          type: 'TXN_2PC_PARTICIPANT_VOTE' as any,
+          payload: { participantId: 'part-payment-svc', vote: 'VOTE_COMMIT' },
+        },
+        rng,
+      ).nextState;
+
+      // Coordinator crashes before decision
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'crash-coord',
+          tick: 3,
+          type: 'TXN_2PC_CRASH_COORDINATOR' as any,
+          payload: { crashTiming: 'AFTER_PREPARE' },
+        },
+        rng,
+      ).nextState;
+
+      // Verify participants frozen in BLOCKED_UNCERTAIN
+      expect((state as any).twoPhaseCommit.finalOutcome).toBe('BLOCKED_UNCERTAIN');
+
+      return stableHash(state);
+    };
+
+    const h1 = runCrash();
+    const h2 = runCrash();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated High-Risk Chaos Fixture 3: Rate Limiter Fixed Window Boundary Burst
+  it('[rate-limiter:boundary-burst] isolates 2x limit admission across window boundary', () => {
+    const plugin = DomainRegistry.get('rate-limiter')!;
+    const runBoundaryBurst = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+      const clientId = 'client-burst-target';
+
+      // 10 requests at tick 9 (tail of window 0)
+      for (let i = 0; i < 10; i++) {
+        state = plugin.reduceState(
+          state,
+          {
+            id: `burst-w0-${i}`,
+            tick: 9,
+            type: 'RATE_LIMITER_REQUEST' as any,
+            payload: { clientId },
+          },
+          rng,
+        ).nextState;
+      }
+
+      // 10 requests at tick 10 (head of window 1)
+      for (let i = 0; i < 10; i++) {
+        state = plugin.reduceState(
+          state,
+          {
+            id: `burst-w1-${i}`,
+            tick: 10,
+            type: 'RATE_LIMITER_REQUEST' as any,
+            payload: { clientId },
+          },
+          rng,
+        ).nextState;
+      }
+
+      // Verify boundary burst flaw detected
+      expect((state as any).flawsDemonstrated.fixedWindowBoundaryBurstDetected).toBe(true);
+      expect((state as any).clients[clientId]?.totalAdmitted.FIXED_WINDOW).toBe(20);
+
+      return stableHash(state);
+    };
+
+    const h1 = runBoundaryBurst();
+    const h2 = runBoundaryBurst();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 1: RAG Hybrid Retrieval & Lost-in-the-Middle
+  it('[rag:hybrid-retrieval] produces bit-identical state across dual-retriever fusion and context packing', () => {
+    const plugin = DomainRegistry.get('rag')!;
+    const runRAG = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Ingest additional technical doc
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'ingest-1',
+          tick: 1,
+          type: 'RAG_INGEST_DOC' as any,
+          payload: {
+            docId: 'doc-paged-attention',
+            title: 'PagedAttention Virtual Memory for LLMs',
+            content:
+              'PagedAttention manages KV cache by paging non-contiguous GPU memory blocks, eliminating fragmentation and enabling copy-on-write memory sharing.',
+          },
+        },
+        rng,
+      ).nextState;
+
+      // Execute queries with hybrid search & RRF
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'query-1',
+          tick: 2,
+          type: 'RAG_EXECUTE_QUERY' as any,
+          payload: { queryId: 'q-rag-1', text: 'consensus Raft election log replication' },
+        },
+        rng,
+      ).nextState;
+
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'synth-1',
+          tick: 3,
+          type: 'RAG_SYNTHESIZE_RESPONSE' as any,
+          payload: { queryId: 'q-rag-1' },
+        },
+        rng,
+      ).nextState;
+
+      for (let t = 4; t <= 12; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'RAG_TICK' as any, payload: {} },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runRAG();
+    const h2 = runRAG();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 2: Multi-Agent MCP Swarm ReAct Loop
+  it('[agents:mcp-tool-call] produces bit-identical state across ReAct step cycles and MCP message bus', () => {
+    const plugin = DomainRegistry.get('agents')!;
+    const runAgents = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Dispatch complex engineering task
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'task-1',
+          tick: 1,
+          type: 'AGENTS_DISPATCH_TASK' as any,
+          payload: { taskId: 'audit-phase-3', prompt: 'Audit PagedAttention memory safety' },
+        },
+        rng,
+      ).nextState;
+
+      // Orchestrator delegates to researcher
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'react-1',
+          tick: 2,
+          type: 'AGENTS_STEP_REACT' as any,
+          payload: {
+            agentId: 'agent-researcher',
+            thought: 'Querying repository knowledge base for vLLM spec',
+            toolName: 'read_file',
+            toolParams: { path: '/docs/architecture/AI_INFRA_EXPANSION_PLAN.md' },
+          },
+        },
+        rng,
+      ).nextState;
+
+      // Step simulation clock to deliver tool responses
+      for (let t = 3; t <= 10; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'AGENTS_TICK' as any, payload: {} },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runAgents();
+    const h2 = runAgents();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 3: LLM Serving PagedAttention Continuous Batching
+  it('[llm-serving:continuous-batching] produces bit-identical state across multi-request VRAM paging and speculative decoding', () => {
+    const plugin = DomainRegistry.get('llm-serving')!;
+    const runServing = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Submit new burst request
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'sub-1',
+          tick: 1,
+          type: 'LLM_SUBMIT_REQUEST' as any,
+          payload: { requestId: 'req-streaming-stream', promptTokens: 32, maxGeneratedTokens: 16 },
+        },
+        rng,
+      ).nextState;
+
+      // Step continuous batching scheduler for 15 ticks
+      for (let t = 2; t <= 16; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `step-${t}`, tick: t, type: 'LLM_STEP_BATCH' as any },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runServing();
+    const h2 = runServing();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 4: VectorDB HNSW Multi-Layer Traversal
+  it('[vectordb:hnsw-greedy-beam] produces bit-identical state across vector insertions and k-NN greedy search', () => {
+    const plugin = DomainRegistry.get('vectordb')!;
+    const runVectorDB = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Insert vectors
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'ins-v1',
+          tick: 1,
+          type: 'VEC_INSERT_VECTOR' as any,
+          payload: { nodeId: 'vec-golden-1', vector: [0.12, 0.22, 0.32, 0.42], topLayer: 2 },
+        },
+        rng,
+      ).nextState;
+
+      // Run k-NN query
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'query-knn',
+          tick: 2,
+          type: 'VEC_QUERY_KNN' as any,
+          payload: { queryId: 'q-vec-1', queryVector: [0.13, 0.23, 0.33, 0.43], k: 3 },
+        },
+        rng,
+      ).nextState;
+
+      for (let t = 3; t <= 8; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'VEC_TICK' as any, payload: {} },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runVectorDB();
+    const h2 = runVectorDB();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 5: GPU Cluster 1F1B Schedule & ZeRO
+  it('[gpu-cluster:1f1b-schedule] produces bit-identical state across 1F1B schedule Gantt steps and ZeRO-3 sharding', () => {
+    const plugin = DomainRegistry.get('gpu-cluster')!;
+    const runGPU = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Set ZeRO-3 parameter sharding
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'set-zero3',
+          tick: 1,
+          type: 'GPU_SET_ZERO_STAGE' as any,
+          payload: { stage: 'ZeRO-3' },
+        },
+        rng,
+      ).nextState;
+
+      // Step 1F1B schedule and Ring-AllReduce for 12 ticks
+      for (let t = 2; t <= 12; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `step-${t}`, tick: t, type: 'GPU_STEP_1F1B' as any },
+          rng,
+        ).nextState;
+
+        state = plugin.reduceState(
+          state,
+          { id: `ar-${t}`, tick: t, type: 'GPU_STEP_ALLREDUCE' as any },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runGPU();
+    const h2 = runGPU();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
 });
+

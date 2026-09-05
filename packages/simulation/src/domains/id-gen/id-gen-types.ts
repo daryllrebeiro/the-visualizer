@@ -38,14 +38,21 @@ export interface IdWorkerState {
   totalGenerated: number;
 }
 
+import type { RaftClusterState } from '../raft/raft-types.js';
+
+export type WorkerRegistryMode = 'STATIC' | 'RAFT_CONSENSUS';
+
 export interface IdGenClusterState {
   clusterId: string;
   tick: number;
   rngState?: number;
   generatorType: IdGeneratorType;
+  workerRegistryMode: WorkerRegistryMode;
   customEpochMs: number; // e.g. 1704067200000 (Jan 1, 2024 UTC)
   refuseOnBackwardClock: boolean;
   workers: Record<number, IdWorkerState>;
+  registeredWorkerIds: Record<number, { registeredAtTick: number; term: number; status: 'ACTIVE' | 'REVOKED' }>;
+  raftCluster?: RaftClusterState;
   generatedIds: GeneratedIdRecord[];
   flawsDemonstrated: {
     duplicateIdDetected: boolean;
@@ -63,6 +70,15 @@ export type IdGenSimEvent =
       payload: {
         workerId: number;
         count?: number;
+      };
+    }
+  | {
+      id: string;
+      tick: number;
+      type: 'ID_GEN_REGISTER_WORKER_RAFT';
+      payload: {
+        workerId: number;
+        workerName?: string;
       };
     }
   | {
@@ -97,6 +113,7 @@ export type IdGenSimEvent =
       type: 'ID_GEN_UPDATE_CONFIG';
       payload: {
         generatorType?: IdGeneratorType;
+        workerRegistryMode?: WorkerRegistryMode;
         refuseOnBackwardClock?: boolean;
       };
     }

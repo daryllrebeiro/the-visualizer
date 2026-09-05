@@ -58,6 +58,8 @@ export interface ClientRateLimiterState {
   totalDenied: Record<RateLimiterAlgorithm, number>;
 }
 
+import type { RedisClusterState } from '../redis/redis-types.js';
+
 export interface RateLimiterClusterState {
   clusterId: string;
   tick: number;
@@ -77,6 +79,13 @@ export interface RateLimiterClusterState {
     nodeId: string;
     admittedBy: Record<RateLimiterAlgorithm, boolean>;
   }>;
+  redisCluster?: RedisClusterState;
+  redisMetrics?: {
+    totalCommands: number;
+    commandsByOp: Record<string, number>;
+    lastRoutedNodeId: string | null;
+    lastSlot: number | null;
+  };
   flawsDemonstrated: {
     fixedWindowBoundaryBurstDetected: boolean;
     localMemoryClusterMultiplierDetected: boolean;
