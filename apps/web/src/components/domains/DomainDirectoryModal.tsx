@@ -16,7 +16,12 @@ export interface DomainCardInfo {
     | 'distributed-lock'
     | 'cdn-cache'
     | 'id-gen'
-    | 'transactions';
+    | 'transactions'
+    | 'rag'
+    | 'agents'
+    | 'llm-serving'
+    | 'vectordb'
+    | 'gpu-cluster';
   name: string;
   category: string;
   icon: string;
@@ -261,6 +266,96 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
       'TXN-2 Coordinator Crash Blocking Hazard',
       'Saga Checkout Forward Orchestration',
       'Strict Reverse LIFO Compensating Actions',
+    ],
+  },
+  {
+    id: 'rag',
+    name: 'Retrieval-Augmented Generation (RAG)',
+    category: 'AI_INFRA',
+    icon: '📚',
+    tagline:
+      'Dense Passage Retrieval, BM25 sparse matching, Reciprocal Rank Fusion (RRF), Cross-Encoder re-ranking, and Lost-in-the-Middle context packing.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Modular RAG / RRF',
+    oracleSystem: 'Gao et al. (2023) / Cormack RRF / Liu (2023)',
+    color: '#3b82f6',
+    highlights: [
+      'Dual Dense + BM25 Retriever Funnel',
+      'Reciprocal Rank Fusion (RRF) Convergence',
+      'Cross-Encoder Re-Ranking Cut',
+      'Lost-in-the-Middle Attention Curve Packing',
+    ],
+  },
+  {
+    id: 'agents',
+    name: 'Multi-Agent MCP Swarms',
+    category: 'AI_INFRA',
+    icon: '🤖',
+    tagline:
+      'Autonomous ReAct loops, Model Context Protocol (MCP) JSON-RPC 2.0 tool execution, hierarchical supervisor-worker graphs, and acyclic loop guards.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'MCP 2024-11-05 / ReAct',
+    oracleSystem: 'Anthropic Model Context Protocol / Yao (2022) ReAct',
+    color: '#8b5cf6',
+    highlights: [
+      'Interactive ReAct Thought/Action Monologues',
+      'MCP JSON-RPC 2.0 Message Bus',
+      'Hierarchical Subagent Graph Delegation',
+      'AGENT-1 Acyclic Workflow Termination Guard',
+    ],
+  },
+  {
+    id: 'llm-serving',
+    name: 'LLM Inference Serving (PagedAttention)',
+    category: 'AI_INFRA',
+    icon: '⚡',
+    tagline:
+      'vLLM PagedAttention GPU KV-cache virtual memory allocator, Orca continuous batching prefill/decode scheduling, and Speculative Decoding verifier.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'vLLM / Orca SOSP \'23',
+    oracleSystem: 'vLLM SOSP \'23 / Orca OSDI \'22 / Speculative Decoding',
+    color: '#10b981',
+    highlights: [
+      'Physical GPU KV-Cache Paging Grid',
+      'Continuous Batching Prefill/Decode Waterfall',
+      'Speculative Lookahead Verification Ribbon',
+      'LLM-2 Memory Ceiling & OOM Eviction Guard',
+    ],
+  },
+  {
+    id: 'vectordb',
+    name: 'Vector Database (HNSW & IVF-PQ)',
+    category: 'AI_INFRA',
+    icon: '🧭',
+    tagline:
+      'Multi-layer Hierarchical Navigable Small World (HNSW) graph routing, Inverted File Product Quantization (IVF-PQ) Voronoi cell space partitioning, and recall gauges.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'HNSW / IVF-PQ',
+    oracleSystem: 'Malkov (2018) HNSW / Jégou (2011) Product Quantization',
+    color: '#f59e0b',
+    highlights: [
+      'Multi-Layer HNSW Skip-Highway Graph Descent',
+      'Voronoi Cell Space Partitioning',
+      '8-Bit Product Quantization Codebook',
+      'Dynamic Recall@K vs Distance Computations Gauge',
+    ],
+  },
+  {
+    id: 'gpu-cluster',
+    name: 'GPU Cluster & 3D Parallelism',
+    category: 'AI_INFRA',
+    icon: '🖥️',
+    tagline:
+      'Megatron-LM 3D Parallelism (TP x PP x DP), DeepSpeed ZeRO-1/2/3 memory sharding, 1F1B pipeline microbatch schedule Gantt waterfall, and Ring-AllReduce gradient sync.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Megatron-LM / ZeRO',
+    oracleSystem: 'Shoeybi (2019) Megatron-LM / Rajbhandari (2020) ZeRO',
+    color: '#ec4899',
+    highlights: [
+      'NVLink 900 GB/s vs InfiniBand 400G Mesh Topography',
+      '1F1B Pipeline Schedule Waterfall Gantt Chart',
+      'Circular Ring-AllReduce Tensor Transfers',
+      'ZeRO-1/2/3 VRAM Memory Scaling Profile',
     ],
   },
 ];

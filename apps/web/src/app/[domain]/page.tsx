@@ -1,6 +1,6 @@
 import React from 'react';
 
-import Page from '../page';
+import VisualizerApp from '../VisualizerApp';
 
 interface PageProps {
   params: Promise<{ domain: string }>;
@@ -21,6 +21,11 @@ export function generateStaticParams(): Array<{ domain: string }> {
     { domain: 'cdn-cache' },
     { domain: 'id-gen' },
     { domain: 'transactions' },
+    { domain: 'rag' },
+    { domain: 'agents' },
+    { domain: 'llm-serving' },
+    { domain: 'vectordb' },
+    { domain: 'gpu-cluster' },
   ];
 }
 
@@ -40,6 +45,11 @@ export default async function DomainPage({ params }: PageProps): Promise<React.J
     'cdn-cache',
     'id-gen',
     'transactions',
+    'rag',
+    'agents',
+    'llm-serving',
+    'vectordb',
+    'gpu-cluster',
   ] as const;
   type DomainType = (typeof validDomains)[number];
 
@@ -47,5 +57,5 @@ export default async function DomainPage({ params }: PageProps): Promise<React.J
     ? (resolvedParams.domain as DomainType)
     : 'kafka';
 
-  return <Page initialDomain={domain} />;
+  return <VisualizerApp initialDomain={domain} />;
 }

@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 import type { InspectableEntity } from '../components/inspector/EntityInspector';
+import type { RenderPerfMetrics } from '../components/perf/FpsMonitor';
 
 export interface ProducerConfig {
   id: string;
@@ -44,6 +45,7 @@ interface VisualizerProps {
   resetTrigger?: number | undefined;
   onHoverDetails: (details: HoverDetails | null) => void;
   onSelectEntity?: ((entity: InspectableEntity) => void) | undefined;
+  onPerfMetrics?: ((metrics: RenderPerfMetrics) => void) | undefined;
 }
 
 interface Particle {
@@ -64,6 +66,82 @@ interface Particle {
   trail: { x: number; y: number; alpha: number }[];
 }
 
+class ParticlePool {
+  private pool: Particle[] = [];
+  private nextId = 0;
+
+  constructor(initialCapacity = 80) {
+    for (let i = 0; i < initialCapacity; i++) {
+      this.pool.push(this.createBlankParticle());
+    }
+  }
+
+  private createBlankParticle(): Particle {
+    return {
+      id: `p-${++this.nextId}`,
+      startX: 0,
+      startY: 0,
+      endX: 0,
+      endY: 0,
+      x: 0,
+      y: 0,
+      progress: 0,
+      speed: 0.024,
+      color: '#2563eb',
+      label: undefined,
+      leg: 1,
+      topic: '',
+      partition: 0,
+      trail: [],
+    };
+  }
+
+  public acquire(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    speed: number,
+    color: string,
+    leg: 1 | 2,
+    topic: string,
+    partition: number,
+    label?: string | undefined,
+  ): Particle {
+    const p = this.pool.pop() || this.createBlankParticle();
+    p.startX = startX;
+    p.startY = startY;
+    p.endX = endX;
+    p.endY = endY;
+    p.x = startX;
+    p.y = startY;
+    p.progress = 0;
+    p.speed = speed;
+    p.color = color;
+    p.leg = leg;
+    p.topic = topic;
+    p.partition = partition;
+    p.label = label;
+    p.trail.length = 0;
+    return p;
+  }
+
+  public release(p: Particle): void {
+    p.trail.length = 0;
+    if (this.pool.length < 300) {
+      this.pool.push(p);
+    }
+  }
+
+  public clear(): void {
+    this.pool.length = 0;
+  }
+
+  public get size(): number {
+    return this.pool.length;
+  }
+}
+
 interface DragTarget {
   key: string;
   startX: number;
@@ -80,6 +158,7 @@ export function Visualizer({
   resetTrigger,
   onHoverDetails,
   onSelectEntity,
+  onPerfMetrics,
 }: VisualizerProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -89,6 +168,25 @@ export function Visualizer({
   const partitionPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
   const consumerPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
   const producerPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  // Performance telemetry & layout caching
+  const lastLayoutKeyRef = useRef<string>('');
+  const layoutVersionRef = useRef<number>(0);
+  const cachedGroupMembersRef = useRef<
+    {
+      memberId: string;
+      clientId: string;
+      groupId: string;
+      label: string;
+      joined: boolean;
+      subscribedTopics: string[];
+      assignedPartitions: { topic: string; partition: number }[];
+    }[]
+  >([]);
+  const particlePoolRef = useRef<ParticlePool>(new ParticlePool(80));
+  const onPerfMetricsRef = useRef(onPerfMetrics);
+  onPerfMetricsRef.current = onPerfMetrics;
+  const lastRenderStats = useRef<{ rendered: number; culled: number }>({ rendered: 0, culled: 0 });
 
   // User-dragged custom positions that persist across simulation ticks
   const customNodePositions = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -173,8 +271,35 @@ export function Visualizer({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
+    let lastFpsUpdate = 0;
+    const rollingFrameTimes: number[] = [];
+
     const animate = (): void => {
+      const frameStart = performance.now();
       render(ctx, canvas.width, canvas.height);
+      const frameTime = performance.now() - frameStart;
+
+      rollingFrameTimes.push(frameTime);
+      if (rollingFrameTimes.length > 30) rollingFrameTimes.shift();
+
+      const now = performance.now();
+      if (now - lastFpsUpdate >= 250) {
+        lastFpsUpdate = now;
+        if (onPerfMetricsRef.current) {
+          const avgFrameTime =
+            rollingFrameTimes.reduce((acc, v) => acc + v, 0) / (rollingFrameTimes.length || 1);
+          const computedFps = Math.min(60, Math.round(1000 / Math.max(avgFrameTime, 16.67)));
+          onPerfMetricsRef.current({
+            fps: computedFps,
+            frameTimeMs: avgFrameTime,
+            renderedEntities: lastRenderStats.current.rendered,
+            culledEntities: lastRenderStats.current.culled,
+            particleCount: particles.current.length,
+            poolSize: particlePoolRef.current.size,
+          });
+        }
+      }
+
       animationFrameRef.current = requestAnimationFrame(animate);
     };
     animate();
@@ -210,24 +335,20 @@ export function Visualizer({
     // Synchronize producer ring countdown
     producerLastProduceTimes.current.set(producerId, performance.now());
 
-    // Spawn Leg 1: Producer → Broker/Partition
-    particles.current.push({
-      id: Math.random().toString(36).substring(7),
-      startX: prodPos.x,
-      startY: prodPos.y,
-      endX: targetPos.x,
-      endY: targetPos.y,
-      x: prodPos.x,
-      y: prodPos.y,
-      progress: 0,
-      speed: 0.024,
-      color: '#2563eb', // Vibrant Blue
-      label: `${topicName}:${String(partitionId)}`,
-      leg: 1,
-      topic: topicName,
-      partition: partitionId,
-      trail: [],
-    });
+    // Spawn Leg 1: Producer → Broker/Partition using ParticlePool
+    const p = particlePoolRef.current.acquire(
+      prodPos.x,
+      prodPos.y,
+      targetPos.x,
+      targetPos.y,
+      0.024,
+      '#2563eb', // Vibrant Blue
+      1,
+      topicName,
+      partitionId,
+      `${topicName}:${String(partitionId)}`,
+    );
+    particles.current.push(p);
   };
 
   const lastHwMap = useRef<Map<string, number>>(new Map());
@@ -237,6 +358,8 @@ export function Visualizer({
   useEffect(() => {
     if (resetTrigger === undefined) return;
     customNodePositions.current.clear();
+    layoutVersionRef.current++;
+    particles.current.forEach((p) => particlePoolRef.current.release(p));
     particles.current = [];
     reconnectionPulsesRef.current.clear();
     producerLastProduceTimes.current.clear();
@@ -303,6 +426,7 @@ export function Visualizer({
 
   const handleResetLayout = (): void => {
     customNodePositions.current.clear();
+    layoutVersionRef.current++;
     setHasCustomPositions(false);
   };
 
@@ -378,139 +502,184 @@ export function Visualizer({
     const centerX = width / 2;
     const centerY = height / 2;
     const circleRadius = Math.min(width, height) * 0.28;
-
-    // ── Calculate Broker positions (Default or Custom Dragged) ──
-    brokerPositions.current.clear();
-    brokersArray.forEach((broker, index) => {
-      const key = `broker-${broker.id}`;
-      const custom = customNodePositions.current.get(key);
-      if (custom) {
-        brokerPositions.current.set(broker.id, custom);
-      } else {
-        const angle = (2 * Math.PI * index) / numBrokers - Math.PI / 2;
-        const x = centerX + circleRadius * Math.cos(angle);
-        const y = centerY + circleRadius * Math.sin(angle);
-        brokerPositions.current.set(broker.id, { x, y });
-      }
-    });
-
-    // ── Calculate Producer positions (Default or Custom Dragged) ──
-    producerPositions.current.clear();
     const activeProducers = producersRef.current;
-    const numProducers = activeProducers.length;
-    activeProducers.forEach((prod, index) => {
-      const key = `prod-${prod.id}`;
-      const custom = customNodePositions.current.get(key);
-      if (custom) {
-        producerPositions.current.set(prod.id, custom);
-      } else {
-        const x = 95;
-        const y =
-          numProducers > 1 ? 100 + (index * (height - 200)) / (numProducers - 1) : height / 2;
-        producerPositions.current.set(prod.id, { x, y });
-      }
-    });
 
-    // ── Calculate Consumer positions (Priority 1: Guaranteed Visibility) ──
-    consumerPositions.current.clear();
-    const allGroupMembers: {
-      memberId: string;
-      clientId: string;
-      groupId: string;
-      label: string;
-      joined: boolean;
-      subscribedTopics: string[];
-      assignedPartitions: { topic: string; partition: number }[];
-    }[] = [];
+    // ── Check Dirty-State Layout Cache Key ──
+    const layoutKey = `${currentState.tick}-${numBrokers}-${activeProducers.length}-${consumersRef.current.length}-${layoutVersionRef.current}-${width}x${height}`;
 
-    const seenConsumerIds = new Set<string>();
+    if (lastLayoutKeyRef.current !== layoutKey) {
+      lastLayoutKeyRef.current = layoutKey;
 
-    // 1. Gather live group members from cluster state
-    Object.keys(currentState.consumerGroups).forEach((groupId) => {
-      const group = currentState.consumerGroups[groupId];
-      if (group) {
-        Object.keys(group.members).forEach((memberId) => {
-          const m = group.members[memberId];
-          const clientId = m?.clientId ?? memberId;
-          seenConsumerIds.add(memberId);
-          seenConsumerIds.add(clientId);
-
-          allGroupMembers.push({
-            memberId,
-            clientId,
-            groupId,
-            label: clientId,
-            joined: true,
-            subscribedTopics: m?.subscribedTopics || ['orders'],
-            assignedPartitions: m?.assignedPartitions || [],
-          });
-        });
-      }
-    });
-
-    // 2. Gather local configured consumers not yet active in cluster state
-    consumersRef.current.forEach((localC) => {
-      if (
-        !seenConsumerIds.has(localC.id) &&
-        (!localC.memberId || !seenConsumerIds.has(localC.memberId))
-      ) {
-        allGroupMembers.push({
-          memberId: localC.id,
-          clientId: localC.id,
-          groupId: localC.groupId,
-          label: localC.id,
-          joined: localC.joined,
-          subscribedTopics: [localC.topic],
-          assignedPartitions: [],
-        });
-      }
-    });
-
-    const numConsumers = allGroupMembers.length;
-    allGroupMembers.forEach((member, index) => {
-      const key = `consumer-${member.memberId}`;
-      const custom = customNodePositions.current.get(key);
-      if (custom) {
-        consumerPositions.current.set(member.memberId, custom);
-      } else {
-        const x = width - 105;
-        const y =
-          numConsumers > 1 ? 100 + (index * (height - 200)) / (numConsumers - 1) : height / 2;
-        consumerPositions.current.set(member.memberId, { x, y });
-      }
-    });
-
-    // ── Calculate Partition positions (Default or Custom Dragged) ──
-    partitionPositions.current.clear();
-    const brokerPartitionCounts = new Map<string, number>();
-
-    for (const topicName in currentState.topics) {
-      const partitions = currentState.topics[topicName] || [];
-      partitions.forEach((part) => {
-        const partKey = `${topicName}-${String(part.partition)}`;
-        const key = `part-${partKey}`;
+      // ── Calculate Broker positions (Default or Custom Dragged) ──
+      brokerPositions.current.clear();
+      brokersArray.forEach((broker, index) => {
+        const key = `broker-${broker.id}`;
         const custom = customNodePositions.current.get(key);
-
         if (custom) {
-          partitionPositions.current.set(partKey, custom);
+          brokerPositions.current.set(broker.id, custom);
         } else {
-          const leaderId = part.leaderBrokerId;
-          if (leaderId) {
-            const currentCount = brokerPartitionCounts.get(leaderId) ?? 0;
-            brokerPartitionCounts.set(leaderId, currentCount + 1);
-
-            const brokerPos = brokerPositions.current.get(leaderId);
-            if (brokerPos) {
-              const angleOffset = (currentCount * Math.PI) / 4.5 - Math.PI / 4;
-              const distance = 85;
-              const x = brokerPos.x + distance * Math.cos(angleOffset);
-              const y = brokerPos.y + distance * Math.sin(angleOffset);
-              partitionPositions.current.set(partKey, { x, y });
-            }
-          }
+          const angle = (2 * Math.PI * index) / numBrokers - Math.PI / 2;
+          const x = centerX + circleRadius * Math.cos(angle);
+          const y = centerY + circleRadius * Math.sin(angle);
+          brokerPositions.current.set(broker.id, { x, y });
         }
       });
+
+      // ── Calculate Producer positions (Default or Custom Dragged) ──
+      producerPositions.current.clear();
+      const numProducers = activeProducers.length;
+      activeProducers.forEach((prod, index) => {
+        const key = `prod-${prod.id}`;
+        const custom = customNodePositions.current.get(key);
+        if (custom) {
+          producerPositions.current.set(prod.id, custom);
+        } else {
+          const x = 95;
+          const y =
+            numProducers > 1 ? 100 + (index * (height - 200)) / (numProducers - 1) : height / 2;
+          producerPositions.current.set(prod.id, { x, y });
+        }
+      });
+
+      // ── Calculate Consumer positions (Priority 1: Guaranteed Visibility) ──
+      consumerPositions.current.clear();
+      const allGroupMembers: {
+        memberId: string;
+        clientId: string;
+        groupId: string;
+        label: string;
+        joined: boolean;
+        subscribedTopics: string[];
+        assignedPartitions: { topic: string; partition: number }[];
+      }[] = [];
+
+      const seenConsumerIds = new Set<string>();
+
+      // 1. Gather live group members from cluster state
+      Object.keys(currentState.consumerGroups).forEach((groupId) => {
+        const group = currentState.consumerGroups[groupId];
+        if (group) {
+          Object.keys(group.members).forEach((memberId) => {
+            const m = group.members[memberId];
+            const clientId = m?.clientId ?? memberId;
+            seenConsumerIds.add(memberId);
+            seenConsumerIds.add(clientId);
+
+            allGroupMembers.push({
+              memberId,
+              clientId,
+              groupId,
+              label: clientId,
+              joined: true,
+              subscribedTopics: m?.subscribedTopics || ['orders'],
+              assignedPartitions: m?.assignedPartitions || [],
+            });
+          });
+        }
+      });
+
+      // 2. Gather local configured consumers not yet active in cluster state
+      consumersRef.current.forEach((localC) => {
+        if (
+          !seenConsumerIds.has(localC.id) &&
+          (!localC.memberId || !seenConsumerIds.has(localC.memberId))
+        ) {
+          allGroupMembers.push({
+            memberId: localC.id,
+            clientId: localC.id,
+            groupId: localC.groupId,
+            label: localC.id,
+            joined: localC.joined,
+            subscribedTopics: [localC.topic],
+            assignedPartitions: [],
+          });
+        }
+      });
+
+      const numConsumers = allGroupMembers.length;
+      allGroupMembers.forEach((member, index) => {
+        const key = `consumer-${member.memberId}`;
+        const custom = customNodePositions.current.get(key);
+        if (custom) {
+          consumerPositions.current.set(member.memberId, custom);
+        } else {
+          const x = width - 105;
+          const y =
+            numConsumers > 1 ? 100 + (index * (height - 200)) / (numConsumers - 1) : height / 2;
+          consumerPositions.current.set(member.memberId, { x, y });
+        }
+      });
+
+      cachedGroupMembersRef.current = allGroupMembers;
+
+      // ── Calculate Partition positions (Default or Custom Dragged) ──
+      partitionPositions.current.clear();
+      const brokerPartitionCounts = new Map<string, number>();
+
+      for (const topicName in currentState.topics) {
+        const partitions = currentState.topics[topicName] || [];
+        partitions.forEach((part) => {
+          const partKey = `${topicName}-${String(part.partition)}`;
+          const key = `part-${partKey}`;
+          const custom = customNodePositions.current.get(key);
+
+          if (custom) {
+            partitionPositions.current.set(partKey, custom);
+          } else {
+            const leaderId = part.leaderBrokerId;
+            if (leaderId) {
+              const currentCount = brokerPartitionCounts.get(leaderId) ?? 0;
+              brokerPartitionCounts.set(leaderId, currentCount + 1);
+
+              const brokerPos = brokerPositions.current.get(leaderId);
+              if (brokerPos) {
+                const angleOffset = (currentCount * Math.PI) / 4.5 - Math.PI / 4;
+                const distance = 85;
+                const x = brokerPos.x + distance * Math.cos(angleOffset);
+                const y = brokerPos.y + distance * Math.sin(angleOffset);
+                partitionPositions.current.set(partKey, { x, y });
+              }
+            }
+          }
+        });
+      }
     }
+
+    const allGroupMembers = cachedGroupMembersRef.current;
+
+    // ── Frustum Culling Viewport Bounding Box Calculation ──
+    const cx = width / 2;
+    const cy = height / 2;
+    const margin = 80;
+    const viewMinX = (0 - cx - cam.x) / cam.zoom + cx - margin;
+    const viewMaxX = (width - cx - cam.x) / cam.zoom + cx + margin;
+    const viewMinY = (0 - cy - cam.y) / cam.zoom + cy - margin;
+    const viewMaxY = (height - cy - cam.y) / cam.zoom + cy + margin;
+
+    const isPointVisible = (x: number, y: number, r = 40): boolean => {
+      return (
+        x + r >= viewMinX &&
+        x - r <= viewMaxX &&
+        y + r >= viewMinY &&
+        y - r <= viewMaxY
+      );
+    };
+
+    const isLineVisible = (x1: number, y1: number, x2: number, y2: number): boolean => {
+      const minX = Math.min(x1, x2);
+      const maxX = Math.max(x1, x2);
+      const minY = Math.min(y1, y2);
+      const maxY = Math.max(y1, y2);
+      return (
+        maxX >= viewMinX &&
+        minX <= viewMaxX &&
+        maxY >= viewMinY &&
+        minY <= viewMaxY
+      );
+    };
+
+    let renderedEntities = 0;
+    let culledEntities = 0;
 
     // ── 3. Persistent Producer → Broker Connection Lines (Priority 3: Reconnection Animation) ──
     const dashOffset = (timeNow / 35) % 16;
@@ -542,6 +711,12 @@ export function Visualizer({
       for (const brokerId of leaderSet) {
         const brokerPos = brokerPositions.current.get(brokerId);
         if (brokerPos) {
+          if (!isLineVisible(prodPos.x, prodPos.y, brokerPos.x, brokerPos.y)) {
+            culledEntities++;
+            continue;
+          }
+          renderedEntities++;
+
           const pulse = reconnectionPulsesRef.current.get(`${prod.id}-${brokerId}`);
           const isReconnecting = pulse && timeNow - pulse.startTime < pulse.duration;
 
@@ -603,6 +778,12 @@ export function Visualizer({
           const partKey = `${ap.topic}-${String(ap.partition)}`;
           const partPos = partitionPositions.current.get(partKey);
           if (partPos) {
+            if (!isLineVisible(partPos.x, partPos.y, memberPos.x, memberPos.y)) {
+              culledEntities++;
+              return;
+            }
+            renderedEntities++;
+
             ctx.strokeStyle = '#c4b5fd';
             ctx.lineWidth = 1.75;
             ctx.setLineDash([6, 6]);
@@ -622,6 +803,12 @@ export function Visualizer({
     activeProducers.forEach((prod) => {
       const pos = producerPositions.current.get(prod.id);
       if (pos) {
+        if (!isPointVisible(pos.x, pos.y, 40)) {
+          culledEntities++;
+          return;
+        }
+        renderedEntities++;
+
         const isDragged = dragTargetRef.current?.key === `prod-${prod.id}`;
         if (isDragged) {
           ctx.shadowColor = 'rgba(37, 99, 235, 0.4)';
@@ -687,6 +874,12 @@ export function Visualizer({
     allGroupMembers.forEach((member) => {
       const pos = consumerPositions.current.get(member.memberId);
       if (pos) {
+        if (!isPointVisible(pos.x, pos.y, 40)) {
+          culledEntities++;
+          return;
+        }
+        renderedEntities++;
+
         const isDragged = dragTargetRef.current?.key === `consumer-${member.memberId}`;
         if (isDragged) {
           ctx.shadowColor = 'rgba(124, 58, 237, 0.4)';
@@ -751,6 +944,11 @@ export function Visualizer({
     brokersArray.forEach((broker) => {
       const pos = brokerPositions.current.get(broker.id);
       if (!pos) return;
+      if (!isPointVisible(pos.x, pos.y, 60)) {
+        culledEntities++;
+        return;
+      }
+      renderedEntities++;
 
       const isCrashed = broker.status === 'CRASHED';
       const isRecovering = broker.status === 'RECOVERING';
@@ -812,6 +1010,11 @@ export function Visualizer({
         const partKey = `${topicName}-${String(part.partition)}`;
         const pos = partitionPositions.current.get(partKey);
         if (!pos) return;
+        if (!isPointVisible(pos.x, pos.y, 35)) {
+          culledEntities++;
+          return;
+        }
+        renderedEntities++;
 
         const isDragged = dragTargetRef.current?.key === `part-${partKey}`;
         if (isDragged) {
@@ -857,51 +1060,64 @@ export function Visualizer({
       particle.x = particle.startX + (particle.endX - particle.startX) * particle.progress;
       particle.y = particle.startY + (particle.endY - particle.startY) * particle.progress;
 
-      // Trailing glow sparks
-      particle.trail.push({ x: particle.x, y: particle.y, alpha: 0.85 });
-      if (particle.trail.length > 8) particle.trail.shift();
+      const inFrustum = isPointVisible(particle.x, particle.y, 25);
+      if (inFrustum) {
+        renderedEntities++;
+        // Trailing glow sparks (zero-allocation recycling)
+        if (particle.trail.length >= 8) {
+          const recycled = particle.trail.shift()!;
+          recycled.x = particle.x;
+          recycled.y = particle.y;
+          recycled.alpha = 0.85;
+          particle.trail.push(recycled);
+        } else {
+          particle.trail.push({ x: particle.x, y: particle.y, alpha: 0.85 });
+        }
 
-      particle.trail.forEach((t, tIdx) => {
-        t.alpha *= 0.85;
-        const radius = (tIdx / particle.trail.length) * 3.5;
-        ctx.fillStyle =
-          particle.leg === 1
-            ? `rgba(59, 130, 246, ${String(t.alpha)})`
-            : `rgba(124, 58, 237, ${String(t.alpha)})`;
+        particle.trail.forEach((t, tIdx) => {
+          t.alpha *= 0.85;
+          const radius = (tIdx / particle.trail.length) * 3.5;
+          ctx.fillStyle =
+            particle.leg === 1
+              ? `rgba(59, 130, 246, ${String(t.alpha)})`
+              : `rgba(124, 58, 237, ${String(t.alpha)})`;
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, radius, 0, 2 * Math.PI);
+          ctx.fill();
+        });
+
+        // Outer Glow Halo
+        ctx.shadowColor = particle.color;
+        ctx.shadowBlur = 12;
+
+        // Envelope Container Token
+        ctx.fillStyle = particle.color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+
         ctx.beginPath();
-        ctx.arc(t.x, t.y, radius, 0, 2 * Math.PI);
+        ctx.rect(particle.x - 9, particle.y - 7, 18, 14);
         ctx.fill();
-      });
+        ctx.stroke();
 
-      // Outer Glow Halo
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = 12;
+        // Envelope Flap Lines
+        ctx.beginPath();
+        ctx.moveTo(particle.x - 9, particle.y - 7);
+        ctx.lineTo(particle.x, particle.y + 1);
+        ctx.lineTo(particle.x + 9, particle.y - 7);
+        ctx.stroke();
 
-      // Envelope Container Token
-      ctx.fillStyle = particle.color;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 0;
 
-      ctx.beginPath();
-      ctx.rect(particle.x - 9, particle.y - 7, 18, 14);
-      ctx.fill();
-      ctx.stroke();
-
-      // Envelope Flap Lines
-      ctx.beginPath();
-      ctx.moveTo(particle.x - 9, particle.y - 7);
-      ctx.lineTo(particle.x, particle.y + 1);
-      ctx.lineTo(particle.x + 9, particle.y - 7);
-      ctx.stroke();
-
-      ctx.shadowBlur = 0;
-
-      // Label Badge
-      if (particle.label) {
-        ctx.fillStyle = '#1e293b';
-        ctx.font = '700 7px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(particle.label, particle.x, particle.y - 9);
+        // Label Badge
+        if (particle.label) {
+          ctx.fillStyle = '#1e293b';
+          ctx.font = '700 7px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(particle.label, particle.x, particle.y - 9);
+        }
+      } else {
+        culledEntities++;
       }
 
       // If Leg 1 completes, find EVERY assigned consumer and spawn Leg 2!
@@ -929,34 +1145,43 @@ export function Visualizer({
           }
         }
 
-        // Spawn Leg 2 packets to each assigned consumer
+        // Spawn Leg 2 packets to each assigned consumer using ParticlePool
         assignedTargets.forEach((target) => {
-          newlyChained.push({
-            id: Math.random().toString(36).substring(7),
-            startX: particle.endX,
-            startY: particle.endY,
-            endX: target.pos.x,
-            endY: target.pos.y,
-            x: particle.endX,
-            y: particle.endY,
-            progress: 0,
-            speed: 0.028,
-            color: '#7c3aed', // Purple Consume Packet
-            label: `P${String(particle.partition)}→${target.memberId.substring(0, 5)}`,
-            leg: 2,
-            topic: particle.topic,
-            partition: particle.partition,
-            trail: [],
-          });
+          const p2 = particlePoolRef.current.acquire(
+            particle.endX,
+            particle.endY,
+            target.pos.x,
+            target.pos.y,
+            0.028,
+            '#7c3aed', // Purple Consume Packet
+            2,
+            particle.topic,
+            particle.partition,
+            `P${String(particle.partition)}→${target.memberId.substring(0, 5)}`,
+          );
+          newlyChained.push(p2);
         });
       }
     });
 
-    // Remove finished particles, append new chained Leg 2 packets, and throttle particle pool to max 50
-    particles.current = particles.current
-      .filter((p) => p.progress < 1)
-      .concat(newlyChained)
-      .slice(-50);
+    // Recycle finished particles into particle pool and retain active ones (max 50)
+    const retainedParticles: Particle[] = [];
+    particles.current.forEach((p) => {
+      if (p.progress >= 1) {
+        particlePoolRef.current.release(p);
+      } else {
+        retainedParticles.push(p);
+      }
+    });
+    newlyChained.forEach((p) => retainedParticles.push(p));
+    if (retainedParticles.length > 50) {
+      const overflow = retainedParticles.splice(0, retainedParticles.length - 50);
+      overflow.forEach((p) => particlePoolRef.current.release(p));
+    }
+    particles.current = retainedParticles;
+
+    // Record rendered vs culled telemetry counts
+    lastRenderStats.current = { rendered: renderedEntities, culled: culledEntities };
 
     ctx.restore();
 
@@ -1126,6 +1351,7 @@ export function Visualizer({
       const newX = Math.max(30, Math.min(canvas.width - 30, drag.nodeStartX + dx));
       const newY = Math.max(30, Math.min(canvas.height - 30, drag.nodeStartY + dy));
       customNodePositions.current.set(drag.key, { x: newX, y: newY });
+      layoutVersionRef.current++;
       onHoverDetails(null);
       return;
     }
