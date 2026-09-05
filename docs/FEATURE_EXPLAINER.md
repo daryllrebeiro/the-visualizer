@@ -1,10 +1,10 @@
-# TheVisualizer: 13-Domain Distributed Systems Feature Explainer
+# TheVisualizer: 18-Domain Distributed Systems & AI Infrastructure Feature Explainer
 
-**TheVisualizer** is an interactive, deterministic, real-time simulation and visualization platform for distributed systems, storage engines, transport protocols, and system design interview architectures. Every visualizer in this monorepo is accessible via its own unique, direct routing endpoint (`/[domain]`), backed by a zero-I/O Deterministic Discrete-Event Simulation (DDES) engine, real-world protocol invariants, and interactive chaos injection controls.
+**TheVisualizer** is an interactive, deterministic, real-time simulation and visualization platform for distributed systems, storage engines, transport protocols, system design interview canon, and AI infrastructure architectures. Every visualizer in this monorepo is accessible via its own unique, direct routing endpoint (`/[domain]`), backed by a zero-I/O Deterministic Discrete-Event Simulation (DDES) engine, real-world protocol invariants, and interactive chaos injection controls.
 
 ---
 
-## Visualizer Navigation Matrix
+## Visualizer Navigation Matrix (18 Domains)
 
 | Visualizer Domain        | Unique Routing Endpoint                                                  | Visual Representation                                                        | Key Interactive Controls                                                       | Real-World Fidelity Highlight                                                 |
 | :----------------------- | :----------------------------------------------------------------------- | :--------------------------------------------------------------------------- | :----------------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
@@ -21,6 +21,11 @@
 | **CDN & Caching**        | [`/cdn-cache`](#11-cdn--multi-tier-caching-cdn-cache)                    | Geo PoP fleet (US/EU/AP) → Regional tiers → Origin, cache watermarks         | GET request, flash crowd stampede, single-flight coalescing toggle, purge wave | RFC 9111 HTTP semantics, stale-while-revalidate, request coalescing           |
 | **ID Generation**        | [`/id-gen`](#12-distributed-id-generation-id-gen)                        | 64-bit binary bit-field decomposition, multi-worker fleet, sortability table | Generate ID, inject NTP backward clock skew, flood 12-bit sequence, test UUID  | Twitter Snowflake decomposition, NTP skew refusal, UUIDv4 vs UUIDv7 sorting   |
 | **Distributed Txns**     | [`/transactions`](#13-distributed-transactions-2pc-vs-saga-transactions) | 2PC participant swimlane vs Saga forward/reverse LIFO compensation track     | Start 2PC, vote commit/abort, crash coordinator, step Saga, induce failure     | 2PC coordinator crash blocking hazard vs Saga reverse LIFO compensation       |
+| **Modular RAG**          | [`/rag`](#14-modular-rag-pipeline-rag)                                   | Hybrid retrieval lanes, rank combiner, reranker card, U-shaped context window | Submit query, toggle RRF combiner, toggle Cross-Encoder, toggle Lost-in-Middle | Lewis et al. 2020, Cormack RRF $k=60$, Liu et al. 2023 Lost-in-the-Middle    |
+| **Agent Swarms**         | [`/agents`](#15-autonomous-agent-swarms-agents)                          | Swarm topology graph, ReAct thought bubbles, shared blackboard, message bus  | Dispatch task, cycle topology (Star/Mesh/Ring), crash agent, memory race       | ReAct paradigm (Yao et al. 2022), blackboard concurrency, dead-letter routing |
+| **LLM Serving**          | [`/llm-serving`](#16-llm-serving--pagedattention-llm-serving)            | KV page table, GPU block allocation grid, prefill/decode queues, TTFT dials  | Submit prompt, flash crowd burst, preempt request, toggle continuous batching  | vLLM PagedAttention (SOSP '23), 16-token physical blocks, iteration batching  |
+| **Vector Database**      | [`/vectordb`](#17-vector-database--hnsw-graphs-vectordb)                 | Multi-layer HNSW graph, skip-list beam traversal, vector distance radar      | Query vector, adjust $efSearch$ beam, insert batch, delete node, toggle IVFPQ  | Malkov & Yashunin HNSW (TPAMI '18), $P=1/\ln(M)$, beam search exploration     |
+| **GPU Cluster**          | [`/gpu-cluster`](#18-gpu-cluster--3d-parallelism-gpu-cluster)            | 3D parallelism matrix (TP/PP/DP), NVLink crossbar, 1F1B schedule Gantt chart | Step micro-batch, inject straggler, sever NVLink lane, toggle ZeRO-1/2/3      | Megatron-LM 3D, 1F1B bubble-free schedule, ZeRO optimizer memory partitioning |
 
 ---
 
@@ -258,8 +263,111 @@
 
 ---
 
-## Technical Foundations
+### 14. Modular RAG Pipeline (`/rag`)
 
-1. **Deterministic Virtual Timeline:** Built on seeded pseudo-random number generator (SplitMix32) and discrete event queue. The exact same scenario inputs produce identical execution traces across any browser or server.
-2. **Hard Invariant Halting:** Reducers execute domain invariant checkers on every step. Any violation immediately pauses playback and captures a forensic snapshot.
-3. **Trace Replay Scrubber:** Simulation runs can be paused, scrubbed tick-by-tick, exported to `.json` trace files, and reloaded offline.
+- **Core Concepts:** Hybrid retrieval architectures, Reciprocal Rank Fusion (RRF $k=60$), Cross-Encoder neural reranking, token budget packing, and "Lost-in-the-Middle" attention degradation prevention.
+- **Visual Interface:**
+  - Parallel dual-lane retrieval columns: Sparse BM25 lexical keyword matching vs Dense vector cosine similarity search.
+  - Interactive RRF rank combiner card displaying computed candidate score weights ($RRF(d) = \sum \frac{1}{k + r(d)}$).
+  - Cross-Encoder deep neural reranker stage showing semantic relevance scoring.
+  - Final Context Window Inspector: Visualizes U-shaped token ordering (placing high-relevance chunks at the top and bottom edges of the context prompt while burying lower-relevance chunks in the middle).
+- **Chaos & Testing Controls:**
+  - **Submit Query:** Dispatches test queries through lexical and dense retrieval stages.
+  - **Toggle RRF Rank Combiner:** Toggles between hybrid reciprocal rank fusion versus single-stage retrieval.
+  - **Toggle Cross-Encoder Reranker:** Enables or bypasses the secondary compute-heavy neural reranking stage.
+  - **Toggle Lost-in-the-Middle U-Shape:** Toggles chronological chunk concatenation versus U-shaped positional optimization.
+  - **Trigger Out-of-Vocabulary / Dense Drift:** Injects out-of-distribution technical jargon or semantic drift to demonstrate hybrid retrieval resilience.
+- **Fidelity Highlights:**
+  - Grounded in Lewis et al. (2020) RAG foundation, Cormack et al. (2009) RRF algorithm with standard $k=60$ constant, and Liu et al. (2023) attention distribution findings.
+  - Invariants: `RAG-1` (Retrieval Score Monotonicity), `RAG-2` (Context Budget Preservation), `RAG-3` (RRF Rank Bounds), `RAG-4` (U-Shape Positional Integrity).
+
+---
+
+### 15. Autonomous Agent Swarms (`/agents`)
+
+- **Core Concepts:** Multi-agent autonomous collaboration, Reasoning + Acting (ReAct) paradigm, topology routing (Star / Mesh / Hierarchical / Ring), shared blackboard state coordination, and dead-letter fault containment.
+- **Visual Interface:**
+  - Dynamic force-directed swarm graph rendering interconnected agent cards (`Coordinator`, `Researcher`, `Coder`, `Critic`).
+  - Per-agent status tags (`IDLE`, `THINKING`, `ACTING`, `AWAITING_TOOL`, `ERROR`) with animated thought bubble streams.
+  - Shared Blackboard state inspector showing memory slot versions and concurrent read/write locks.
+  - Dead-Letter Routing Queue displaying isolated or timed-out task payloads.
+- **Chaos & Testing Controls:**
+  - **Dispatch Complex Task:** Sends structured multi-step objectives requiring multi-agent delegation.
+  - **Cycle Topology:** Dynamically switches communication structures between Star (central orchestrator), Mesh (peer-to-peer), Hierarchical (manager-worker tree), and Ring (token passing).
+  - **Crash / Hang Agent:** Induces synthetic worker death or infinite tool-call loops to verify supervisor timeout detection and dead-letter failover.
+  - **Simulate Blackboard Memory Race:** Injects concurrent unsynchronized writes across multiple workers to demonstrate optimistic locking rollbacks.
+- **Fidelity Highlights:**
+  - Implements the Yao et al. (2022) ReAct thought-action-observation cycle and modern multi-agent coordinator-worker patterns (AutoGPT / CrewAI / LangGraph).
+  - Invariants: `AGENTS-1` (Acyclic Execution DAG), `AGENTS-2` (Blackboard Optimistic Locking Concurrency), `AGENTS-3` (Dead-Letter Routing Isolation), `AGENTS-4` (ReAct Tool Call Bounded Retries).
+
+---
+
+### 16. LLM Serving & PagedAttention (`/llm-serving`)
+
+- **Core Concepts:** High-throughput Large Language Model inference, virtual memory Key-Value (KV) cache management (PagedAttention), continuous iteration batching (Orca), prefill vs. decode phase dynamics, and memory preemption.
+- **Visual Interface:**
+  - Logical-to-Physical KV Page Table: Maps per-sequence logical token sequences to 16-token physical GPU memory blocks.
+  - Physical GPU Memory Block Matrix: Color-coded memory grid displaying active, free, and shared prefix blocks.
+  - Dual-Phase Inference Queue: Parallel Prefill lane (compute-bound matrix multiplies) and Decode lane (memory-bandwidth-bound token stepping).
+  - Real-time performance dials: Time-to-First-Token (TTFT), Inter-Token Latency (ITL), and GPU memory fragmentation percentage.
+- **Chaos & Testing Controls:**
+  - **Submit Prompt:** Dispatches new inference requests with variable context lengths and output generation limits.
+  - **Flash Crowd Burst:** Fires 50 simultaneous long-context requests to push KV memory past 100% capacity.
+  - **Preempt Request:** Triggers KV cache eviction and recomputation under memory pressure.
+  - **Toggle Continuous Iteration Batching:** Compares rigid static batching (where fast requests are held hostage by long requests) against continuous iteration-level scheduling.
+- **Fidelity Highlights:**
+  - Directly models the Kwon et al. (SOSP 2023) vLLM PagedAttention virtual memory architecture and Yu et al. (OSDI 2022) Orca continuous batching scheduler.
+  - Invariants: `LLM-1` (KV Block Table Mapping Integrity), `LLM-2` (Zero Physical Memory Over-Allocation), `LLM-3` (Continuous Batching Fairness), `LLM-4` (Preemption Recomputation Correctness).
+
+---
+
+### 17. Vector Database & HNSW Graphs (`/vectordb`)
+
+- **Core Concepts:** Approximate Nearest Neighbor (ANN) search, Hierarchical Navigable Small World (HNSW) multi-layer graphs, logarithmic skip-list traversal, beam search pruning ($efSearch$), and vector quantization (IVFPQ).
+- **Visual Interface:**
+  - 3D-stacked multi-layer HNSW graph: Visualizes sparser upper layers (long-range highway connections) down to Layer 0 (dense local neighborhood clusters).
+  - Live Query Beam Traversal: Animated search path showing current entry point, candidate priority queue, dynamic evaluation perimeter ($efSearch$), and visited nodes.
+  - Quantization distortion panel: Compares uncompressed 768-dimensional float32 vectors against compressed Product Quantization (PQ) centroids and memory footprints.
+- **Chaos & Testing Controls:**
+  - **Query Vector:** Executes nearest neighbor search with live step-by-step beam expansion.
+  - **Adjust $efSearch$ Slider:** Balances query recall accuracy (high $efSearch$) against latency / distance evaluations (low $efSearch$).
+  - **Batch Insert:** Dynamically constructs HNSW links using the probability distribution $P(l) = 1 / \ln(M)$ and $M_{max}$ neighbor pruning heuristics.
+  - **Delete Vector Node:** Tests soft-deletion versus graph reconnection to prevent disjoint island partitions.
+  - **Toggle IVFPQ Quantization:** Compares exact brute-force Euclidean distance against quantized codebook approximations.
+- **Fidelity Highlights:**
+  - Faithfully adheres to the Malkov & Yashunin (IEEE TPAMI 2018) HNSW specification and Faiss indexing benchmarks.
+  - Invariants: `VDB-1` (Monotonic Distance Improvement in Beam Search), `VDB-2` (Layer 0 Graph Connectedness & No Disjoint Islands), `VDB-3` (Max Neighbor Bound $M$), `VDB-4` (Quantization Error Boundedness).
+
+---
+
+### 18. GPU Cluster & 3D Parallelism (`/gpu-cluster`)
+
+- **Core Concepts:** Distributed deep learning training, 3D parallelism matrix (Tensor Parallelism [TP] + Pipeline Parallelism [PP] + Data Parallelism [DP]), ZeRO memory partitioning (ZeRO-1/2/3), NVLink vs. InfiniBand network topology, and 1F1B schedule execution.
+- **Visual Interface:**
+  - 3D Parallelism Node Matrix: 8-GPU or 16-GPU cluster cards color-coded by TP intra-node rank, PP pipeline stage, and DP replication group.
+  - Interconnect Topology Diagram: High-bandwidth NVLink intra-node crossbars ($900\text{ GB/s}$) vs inter-node InfiniBand RDMA links ($400\text{ Gbps}$).
+  - Pipeline Execution Gantt Chart: Interactive 1F1B (One-Forward-One-Backward) micro-batch schedule highlighting forward passes, backward passes, activation stashing, and pipeline bubble idle time.
+  - Memory Breakdown Radar: Displays weights, gradients, optimizer states, and activation memory per GPU under ZeRO stages.
+- **Chaos & Testing Controls:**
+  - **Step Micro-Batch:** Steps through forward and backward micro-batch evaluations across the pipeline stages.
+  - **Inject Straggler GPU:** Slows down a single GPU by $300\text{ms}$ to demonstrate pipeline bubble propagation and all-reduce synchronization stalls.
+  - **Sever NVLink Lane:** Injects link degradation forcing TP communication over high-latency fallback PCIe/host paths.
+  - **Toggle ZeRO Stage (0/1/2/3):** Demonstrates memory footprint reduction from standard replication (ZeRO-0) to optimizer state partitioning (ZeRO-1), gradient partitioning (ZeRO-2), and parameter partitioning (ZeRO-3).
+- **Fidelity Highlights:**
+  - Modeled on Megatron-LM (Shoeybi et al. 2019), Narayanan et al. (SOSP 2021) 1F1B pipeline schedule, and Rajbhandari et al. (SC 2020) DeepSpeed ZeRO memory optimizations.
+  - Invariants: `GPU-1` (Pipeline Bubble Conservation), `GPU-2` (3D Tensor Dimension Product Consistency: $TP \times PP \times DP = N_{gpus}$), `GPU-3` (ZeRO Memory Partition Conservation), `GPU-4` (All-Reduce Gradient Synchronization Convergence).
+
+---
+
+## Platform Workflows & Architecture
+
+TheVisualizer is engineered as a unified, production-grade learning and interview preparation platform:
+
+1. **Global Command Palette (`Cmd+K` / `Ctrl+K`):** Instantly search, jump between, and execute actions across all 18 distributed systems and AI infrastructure domains.
+2. **Interview Prep Mode:** Built-in system design interview prep panels featuring real-world interview prompts, architectural trade-off checklists, capacity calculation calculators, and failure mode drills.
+3. **Composite Pipelines:** Seamless multi-domain scenarios (e.g., End-to-end RAG to VectorDB to LLM Serving; Kafka to Redis to Kubernetes) demonstrating cross-system distributed topologies.
+4. **Deterministic Virtual Timeline:** Built on a seeded pseudo-random number generator (SplitMix32) and discrete event queue. The exact same scenario inputs produce identical execution traces across any browser or server.
+5. **State Permalinks & Export:** Share any live simulation state, chaos scenario, or multi-node cluster topology via URL permalinks (`?p=...`) or portable `.json` scenario trace files.
+6. **Hardware-Accelerated 60 FPS Telemetry HUD:** High-density canvas rendering utilizing offscreen buffers, spatial viewport culling, zero garbage-collection overhead, and real-time frame duration telemetry ($< 0.1\text{ms}$ mean render cost).
+7. **Hard Invariant Halting:** Reducers execute domain invariant checkers on every step. Any violation immediately pauses playback, highlights the offending components, and captures a forensic snapshot.
+

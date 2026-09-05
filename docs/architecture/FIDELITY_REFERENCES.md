@@ -1,6 +1,6 @@
 # TheVisualizer — Real-World Fidelity References & System Specifications
 
-This document defines the authoritative references, formal specifications, RFCs, and source implementations underpinning each of the 8 simulated distributed systems domains in TheVisualizer platform. Every behavioral formula, configuration threshold, state transition, and naming convention in the simulation engine is cross-referenced against these sources.
+This document defines the authoritative references, formal specifications, RFCs, and research papers underpinning each of the 18 simulated distributed systems, storage engines, transport protocols, system design interview canon, and AI infrastructure domains in TheVisualizer platform. Every behavioral formula, configuration threshold, state transition, and naming convention in the simulation engine is cross-referenced against these sources.
 
 ---
 
@@ -21,6 +21,11 @@ This document defines the authoritative references, formal specifications, RFCs,
 | **CDN Cache** (`/cdn-cache`)                   | Multi-Tier CDN & Edge Caching    | • [RFC 9111: HTTP Caching (stale-while-revalidate, max-age, conditional revalidation)](https://www.rfc-editor.org/rfc/rfc9111)<br>• [RFC 5861: HTTP Cache-Control Extensions for Stale Content](https://www.rfc-editor.org/rfc/rfc5861)<br>• [Fastly / Cloudflare Multi-Tiered Cache Architecture](https://www.cloudflare.com/learning/cdn/what-is-caching/)                                                                                                                                                                                                                                                                                                                            | RFC 9111 / Edge PoP Tiered Hierarchy                           |
 | **ID Generator** (`/id-gen`)                   | Distributed 64-bit ID Generation | • [Twitter Snowflake Specification](https://github.com/twitter-archive/snowflake/tree/snowflake-2010)<br>• [RFC 9562: Universally Unique IDentifiers (UUIDv7 & UUIDv4)](https://www.rfc-editor.org/rfc/rfc9562)<br>• [Sonyflake Distributed ID Generator](https://github.com/sony/sonyflake)                                                                                                                                                                                                                                                                                                                                                                                            | Snowflake 64-bit / RFC 9562 UUIDv7                             |
 | **Distributed Transactions** (`/transactions`) | 2PC & Saga Orchestration         | • Gray (1978): [Notes on Data Base Operating Systems (Two-Phase Commit Protocol)](https://www.microsoft.com/en-us/research/publication/notes-on-data-base-operating-systems/)<br>• Garcia-Molina & Salem (1987): [Sagas (ACM SIGMOD '87)](https://www.cs.cornell.edu/andru/cs711/2002fa/reading/sagas.pdf)<br>• [Microservices Patterns: Saga Orchestration & Choreography](https://microservices.io/patterns/data/saga.html)                                                                                                                                                                                                                                                           | Two-Phase Commit (2PC) / Saga Pattern                          |
+| **Modular RAG** (`/rag`)                       | Hybrid Retrieval & Reranking     | • Lewis et al. (2020): [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (NeurIPS '20)](https://arxiv.org/abs/2005.11401)<br>• Cormack, Clarke, & Büttcher (2009): [Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods (SIGIR '09)](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf)<br>• Liu et al. (2023): [Lost in the Middle: How Language Models Use Long Contexts (TACL '24)](https://arxiv.org/abs/2307.03172)<br>• Nogueira & Cho (2019): [Passage Re-ranking with BERT](https://arxiv.org/abs/1901.04085)                                                                                                              | Modular RAG / Hybrid BM25+Dense & Cross-Encoder                |
+| **Agent Swarms** (`/agents`)                   | Multi-Agent Collaboration        | • Yao et al. (2022): [ReAct: Synergizing Reasoning and Acting in Language Models (ICLR '23)](https://arxiv.org/abs/2210.03629)<br>• Park et al. (2023): [Generative Agents: Interactive Simulacra of Human Behavior (UIST '23)](https://arxiv.org/abs/2304.03442)<br>• [CrewAI & LangGraph Multi-Agent Orchestration Frameworks](https://github.com/joaomdmoura/crewAI)<br>• Corkill (1991): [Blackboard Systems](http://mas.cs.umass.edu/paper/corkill-ai-expert-1991.pdf)                                                                                                                                                                                                            | ReAct Paradigm / Shared Blackboard Swarms                      |
+| **LLM Serving** (`/llm-serving`)               | High-Throughput LLM Inference    | • Kwon et al. (2023): [Efficient Memory Management for Large Language Model Serving with PagedAttention (SOSP '23)](https://arxiv.org/abs/2309.06180)<br>• Yu et al. (2022): [Orca: A Distributed Serving System for Transformer-Based Generative Models (OSDI '22)](https://www.usenix.org/conference/osdi22/presentation/yu)<br>• Aminabadi et al. (2022): [DeepSpeed-Inference: Extreme Throughput with Transformer Optimizations](https://arxiv.org/abs/2207.00032)                                                                                                                                                                                                        | vLLM PagedAttention / Orca Continuous Batching                 |
+| **Vector Database** (`/vectordb`)              | ANN Search & Graph Indexes       | • Malkov & Yashunin (2018): [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs (IEEE TPAMI '20)](https://arxiv.org/abs/1603.09320)<br>• Johnson, Douze, & Jégou (2019): [Billion-scale similarity search with GPUs (IEEE TBD '21 - Faiss)](https://arxiv.org/abs/1702.08734)<br>• Jégou, Douze, & Schmid (2011): [Product Quantization for Nearest Neighbor Search (IEEE TPAMI '11)](https://inria.hal.science/inria-00514462/document)                                                                                                                                                                         | HNSW Multi-Layer Skip Graph / Faiss IVFPQ                      |
+| **GPU Cluster** (`/gpu-cluster`)               | 3D Parallelism & Interconnect    | • Shoeybi et al. (2019): [Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism](https://arxiv.org/abs/1909.08053)<br>• Narayanan et al. (2021): [Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM (SOSP '21)](https://arxiv.org/abs/2104.04473)<br>• Rajbhandari et al. (2020): [ZeRO: Memory Optimizations Toward Training Trillion Parameter Models (SC '20)](https://arxiv.org/abs/1910.02054)<br>• [NVIDIA NVLink and NVSwitch Architecture Specification](https://www.nvidia.com/en-us/data-center/nvlink/)                                                                          | Megatron-LM 3D Parallelism / DeepSpeed ZeRO-1/2/3              |
 
 ---
 
@@ -155,3 +160,54 @@ Mapping of official system configuration parameters to TheVisualizer simulation 
 | `participant_timeout_ms`   | `participantTimeoutTicks` | Ticks (integer)                                                     |    Yes (Slider)    | 2PC Prepare Timeout                   |
 | `coordinator_crash_timing` | `coordinatorCrashPoint`   | `'NONE' \| 'AFTER_PREPARE' \| 'AFTER_COMMIT'`                       | Yes (Chaos Select) | 2PC Blocking Hazard Demonstration     |
 | `compensation_strategy`    | `compensationOrder`       | Strict reverse (`LIFO`)                                             |      Enforced      | Saga Compensating Transaction Pattern |
+
+### N. Modular RAG (`/rag`)
+
+| Real System Config Name    | Simulation State Property | Unit / Type                         | Tunable in UI? | Reference Spec                       |
+| :------------------------- | :------------------------ | :---------------------------------- | :------------: | :----------------------------------- |
+| `retrieval_mode`           | `retrievalMode`           | `'HYBRID' \| 'SPARSE' \| 'DENSE'`   |  Yes (Select)  | Lewis et al. 2020 RAG Paradigm       |
+| `rrf_k`                    | `rrfKConstant`            | Integer constant (default: 60)      |  Yes (Slider)  | Cormack et al. 2009 RRF Formula      |
+| `cross_encoder_rerank`     | `rerankerEnabled`         | Boolean                             |  Yes (Toggle)  | Nogueira & Cho 2019 Neural Reranking |
+| `u_shape_context_packing`  | `uShapePackingEnabled`    | Boolean                             |  Yes (Toggle)  | Liu et al. 2023 Lost-in-the-Middle   |
+| `max_context_token_budget` | `maxContextTokens`        | Tokens (e.g. 2048, 4096, 8192)      |  Yes (Slider)  | Context Window Budget Constraint     |
+
+### O. Autonomous Agent Swarms (`/agents`)
+
+| Real System Config Name   | Simulation State Property      | Unit / Type                                          | Tunable in UI? | Reference Spec                       |
+| :------------------------ | :----------------------------- | :--------------------------------------------------- | :------------: | :----------------------------------- |
+| `swarm_topology`          | `topology`                     | `'STAR' \| 'MESH' \| 'HIERARCHICAL' \| 'RING'`       |  Yes (Select)  | Multi-Agent Coordination Topologies  |
+| `react_max_iterations`    | `maxToolRetries`               | Integer (1–10, default: 5)                           |  Yes (Slider)  | Yao et al. 2022 ReAct Loop Bounds    |
+| `blackboard_concurrency`  | `optimisticLocking`            | Boolean                                              |  Yes (Toggle)  | Corkill 1991 Blackboard Architecture |
+| `dead_letter_timeout_ms`  | `deadLetterTimeoutTicks`       | Ticks (integer)                                      |  Yes (Slider)  | Fault Isolation & Dead-Letter Queue  |
+| `supervisor_intervention` | `supervisorInterventionPolicy` | `'AUTOMATIC_RETRY' \| 'ESCALATE' \| 'FAIL_FAST'`     |  Yes (Select)  | CrewAI / LangGraph Supervisor Models |
+
+### P. LLM Serving & PagedAttention (`/llm-serving`)
+
+| Real System Config Name   | Simulation State Property | Unit / Type                                          | Tunable in UI? | Reference Spec                     |
+| :------------------------ | :------------------------ | :--------------------------------------------------- | :------------: | :--------------------------------- |
+| `block_size`              | `tokensPerBlock`          | 16 tokens (physical page size)                       |  Fixed config  | vLLM PagedAttention §3.1 (SOSP '23) |
+| `max_num_seqs`            | `maxBatchSeqs`            | Integer (1–128 sequences)                            |  Yes (Slider)  | Orca Continuous Batching §4        |
+| `gpu_memory_utilization`  | `gpuMemoryUtilization`    | Ratio (0.50–0.95, default: 0.90)                     |  Yes (Slider)  | vLLM Physical Block Allocator      |
+| `iteration_scheduling`    | `schedulingMode`          | `'CONTINUOUS_ITERATION' \| 'STATIC_BATCHING'`        |  Yes (Toggle)  | Orca (OSDI '22) vs Rigid Batching  |
+| `preemption_policy`       | `preemptionPolicy`        | `'RECOMPUTE' \| 'SWAP_TO_HOST'`                      |  Yes (Select)  | vLLM Eviction Strategy             |
+
+### Q. Vector Database & HNSW Graphs (`/vectordb`)
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `M`                     | `maxConnectionsM`         | Integer (4–64, default: 16)                    |  Yes (Slider)  | Malkov & Yashunin 2018 §3.2 (HNSW) |
+| `ef_construction`       | `efConstruction`          | Integer (16–200, default: 64)                  |  Yes (Slider)  | HNSW Index Construction Parameter  |
+| `ef_search`             | `efSearch`                | Integer (4–128, default: 16)                   |  Yes (Slider)  | HNSW Search Beam Width §3.3        |
+| `quantization_type`     | `quantizationMode`        | `'NONE' \| 'IVFPQ' \| 'SCALAR'`                |  Yes (Select)  | Faiss Product Quantization (PQ)    |
+| `distance_metric`       | `distanceMetric`          | `'COSINE' \| 'EUCLIDEAN' \| 'INNER_PRODUCT'`   |  Yes (Select)  | Vector Distance Evaluation Metric  |
+
+### R. GPU Cluster & 3D Parallelism (`/gpu-cluster`)
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `tensor_model_parallel` | `tpDegree`                | Integer ($1, 2, 4, 8$)                         | Yes (Stepper)  | Megatron-LM Tensor Parallelism     |
+| `pipeline_model_parallel`| `ppDegree`               | Integer ($1, 2, 4, 8$)                         | Yes (Stepper)  | 1F1B Schedule (SOSP '21)           |
+| `data_parallel_size`    | `dpDegree`                | Integer ($1, 2, 4, 8$)                         | Yes (Stepper)  | DistributedDataParallel (DDP)      |
+| `zero_stage`            | `zeroStage`               | `0 \| 1 \| 2 \| 3`                             |  Yes (Select)  | DeepSpeed ZeRO (SC '20)            |
+| `interconnect_type`     | `interconnectType`        | `'NVLINK_4' \| 'INFINIBAND_NDR' \| 'PCIE_GEN5'`|  Yes (Select)  | NVIDIA Hardware Interconnect Specs |
+
