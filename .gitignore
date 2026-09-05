@@ -57,3 +57,5 @@ yarn-debug.log*
 # Misc
 .eslintcache
 .parcelcache
+playwright-report/
+test-results/
