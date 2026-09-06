@@ -66,7 +66,10 @@ Mapping of official system configuration parameters to TheVisualizer simulation 
 | `initial_rto`            | `rtoTicks` (derived from SRTT/RTTVAR) | Ticks (calculated)  |    Observed    | RFC 6298                                          |
 | `tcp_nagle`              | `nagleEnabled`                        | Boolean             |  Yes (Toggle)  | RFC 896 / TCP_NODELAY socket option               |
 
+*Fidelity Verification Note (Networking)*: RFC 2018 selective acknowledgment multi-block reporting is implemented via `computeSackBlocks`, coalescing out-of-order segment buffers into up to 4 contiguous SACK blocks ordered with the triggering block first (tested in `packages/simulation/src/domains/networking/networking.fidelity.test.ts`).
+
 ### D. Redis Cluster (`/redis`)
+
 
 | Real System Config Name | Simulation State Property | Unit / Type          | Tunable in UI? | Reference Spec                 |
 | :---------------------- | :------------------------ | :------------------- | :------------: | :----------------------------- |
@@ -112,7 +115,10 @@ Mapping of official system configuration parameters to TheVisualizer simulation 
 | `queue_type`                | `queueType`                | `'classic' \| 'quorum'` |  Yes (Select)  | RabbitMQ Quorum Queues (Raft)        |
 | `alternate-exchange`        | `alternateExchange`        | String (Exchange ID)    |  Yes (Input)   | RabbitMQ AE Extension                |
 
+*Fidelity Verification Note (RabbitMQ)*: Unrouted messages published with `mandatory: true` emit an AMQP 0-9-1 `basic.return` frame (`RABBIT_BASIC_RETURN`) with replyCode 312 (`NO_ROUTE`) back to the publisher connection and are dropped from queues per `RABBIT-1` (tested in `packages/simulation/src/domains/rabbitmq/rabbitmq.fidelity.test.ts`).
+
 ### I. Rate Limiter (`/rate-limiter`)
+
 
 | Real System Config Name | Simulation State Property | Unit / Type                        | Tunable in UI? | Reference Spec                                  |
 | :---------------------- | :------------------------ | :--------------------------------- | :------------: | :---------------------------------------------- |
@@ -191,6 +197,8 @@ Mapping of official system configuration parameters to TheVisualizer simulation 
 | `iteration_scheduling`    | `schedulingMode`          | `'CONTINUOUS_ITERATION' \| 'STATIC_BATCHING'`        |  Yes (Toggle)  | Orca (OSDI '22) vs Rigid Batching  |
 | `preemption_policy`       | `preemptionPolicy`        | `'RECOMPUTE' \| 'SWAP_TO_HOST'`                      |  Yes (Select)  | vLLM Eviction Strategy             |
 
+*Fidelity Verification Note (LLM Serving)*: KV-cache preemption under block exhaustion atomically captures execution checkpoints (position, RNG state, token history); resumption restores state producing byte-identical token generation sequences (`SERVE-3`, tested in `packages/simulation/src/domains/llm-serving/llm-serving.fidelity.test.ts`).
+
 ### Q. Vector Database & HNSW Graphs (`/vectordb`)
 
 | Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
@@ -201,6 +209,8 @@ Mapping of official system configuration parameters to TheVisualizer simulation 
 | `quantization_type`     | `quantizationMode`        | `'NONE' \| 'IVFPQ' \| 'SCALAR'`                |  Yes (Select)  | Faiss Product Quantization (PQ)    |
 | `distance_metric`       | `distanceMetric`          | `'COSINE' \| 'EUCLIDEAN' \| 'INNER_PRODUCT'`   |  Yes (Select)  | Vector Distance Evaluation Metric  |
 
+*Fidelity Verification Note (VectorDB)*: HNSW layer 0 search explores an `ef_search`-bounded candidate priority queue (Malkov & Yashunin 2018 Algorithm 2), producing monotonic recall scaling across candidate beam widths (`VEC-5`, tested in `packages/simulation/src/domains/vectordb/vectordb.fidelity.test.ts`).
+
 ### R. GPU Cluster & 3D Parallelism (`/gpu-cluster`)
 
 | Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
@@ -210,4 +220,33 @@ Mapping of official system configuration parameters to TheVisualizer simulation 
 | `data_parallel_size`    | `dpDegree`                | Integer ($1, 2, 4, 8$)                         | Yes (Stepper)  | DistributedDataParallel (DDP)      |
 | `zero_stage`            | `zeroStage`               | `0 \| 1 \| 2 \| 3`                             |  Yes (Select)  | DeepSpeed ZeRO (SC '20)            |
 | `interconnect_type`     | `interconnectType`        | `'NVLINK_4' \| 'INFINIBAND_NDR' \| 'PCIE_GEN5'`|  Yes (Select)  | NVIDIA Hardware Interconnect Specs |
+
+*Fidelity Verification Note (GPU Cluster)*: Preemption checkpoints include atomic checksum validation (`computeCheckpointChecksum`); corrupted or truncated checkpoints are detected on spot-resume, triggering explicit restart-from-scratch (`GPU_CHECKPOINT_CORRUPT_RESTART`, tested in `packages/simulation/src/domains/gpu-cluster/gpu-cluster.fidelity.test.ts`).
+
+### S. LLM Pipeline & Lineage (`/llm-pipeline`)
+
+
+The LLM Pipeline simulation is modeled after the **OpenLineage specification** and the **W3C PROV Data Model (PROV-DM)**, merged with Gao et al.'s **Modular RAG** architecture and Cormack et al.'s **Reciprocal Rank Fusion (RRF)**. In modern production generative AI pipelines, every output claim must maintain an unbroken provenance trail from model generation back through intermediate agent tool invocations, retrieved chunks, and source document ingestion boundaries. Flagship invariant `PIPE-8` strictly audits that every citation resolves to an existing source document passage via a connected causal subgraph, failing immediately if lineage is severed due to cache eviction, ungrounded hallucination, or unvalidated tool execution.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `lineage_tracking`      | `provenanceLedger`        | W3C PROV Entity/Activity Graph                 |  Yes (Inspect) | W3C PROV-DM / OpenLineage 1.0      |
+| `rrf_k`                 | `rrfK`                    | Integer ($k=60$)                               |  Yes (Slider)  | Cormack et al. (SIGIR '09)         |
+| `max_context_tokens`    | `maxContextTokens`        | Integer (default: 4096)                        |  Yes (Slider)  | Context Window Non-Overflow        |
+| `lineage_severing`      | `isLineageSevered`        | Boolean                                        |  Yes (Chaos)   | PIPE-8 Flagship Invariant Drill    |
+
+### T. LLM Gateway & Guardrails (`/llm-gateway`)
+
+The LLM Gateway simulation models multi-provider upstream orchestration, semantic caching, and pre-execution guardrail boundaries. Fault tolerance follows **Martin Fowler's Circuit Breaker** finite state machine (`CLOSED ➔ OPEN ➔ HALF_OPEN ➔ CLOSED`), ensuring upstream failures (503s/timeouts) trip to an open circuit breaker, automatically triggering fallback routing across priority chains without caller disruption. Semantic caching is modeled after **GPTCache** (Bang et al. 2023) and Redis semantic caching, evaluating query embeddings in cosine vector space against cached centroids with acceptance threshold $\theta \ge 0.88$ ($0 upstream token cost). Input guardrails implement adversarial prompt injection filtering modeled after **NeMo Guardrails** (NVIDIA 2023) and Llama Guard, rejecting unsafe inputs prior to provider dispatch.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `failure_threshold`     | `failureThreshold`        | Integer (default: 3 consecutive errors)        |  Yes (Inspect) | Martin Fowler Circuit Breaker (2014)|
+| `cooldown_duration`     | `cooldownTicks`           | Integer (default: 5 ticks)                     |  Yes (Inspect) | Circuit Breaker Cooldown Period    |
+| `half_open_successes`   | `successThreshold`        | Integer (default: 2 consecutive probe successes)| Yes (Inspect) | Canary Probing Recovery Criterion  |
+| `similarity_threshold`  | `similarityThreshold`     | Float (0.80–0.98, default: 0.88)               |  Yes (Buttons) | GPTCache Cosine Threshold Bound    |
+| `prompt_injection_guard`| `injectionFilterEnabled`  | Boolean                                        |  Yes (Toggle)  | NeMo Guardrails / Llama Guard      |
+| `provider_outage_chaos` | `isOutageSimulated`       | Boolean                                        |  Yes (Chaos)   | GW-1 Circuit Trip Chaos Drill      |
+
+
 
