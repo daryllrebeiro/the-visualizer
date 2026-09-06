@@ -81,3 +81,64 @@ export async function validateHostAndGetIp(host: string): Promise<string> {
     });
   });
 }
+
+/**
+ * Safe outbound HTTP request executor that prevents Time-of-Check to Time-of-Use (TOCTOU)
+ * DNS rebinding attacks. Resolves the hostname once, asserts that the resolved IP is not
+ * in any blocked range, and connects directly to the pinned IP address with the original Host header.
+ */
+export async function safeFetch(
+  rawUrl: string,
+  init?: RequestInit,
+  maxRedirects: number = 3,
+): Promise<Response> {
+  let currentUrl = rawUrl;
+  let remainingRedirects = maxRedirects;
+
+  while (true) {
+    const parsed = new URL(currentUrl);
+    const host = parsed.hostname;
+    const safeIp = await validateHostAndGetIp(host);
+
+    // Re-write URL to target the pinned IP address directly
+    parsed.hostname = safeIp;
+
+    const headers = new Headers(init?.headers);
+    if (!headers.has('Host')) {
+      headers.set('Host', host);
+    }
+
+    const response = await fetch(parsed.toString(), {
+      ...init,
+      headers,
+      redirect: 'manual',
+    });
+
+    const isRedirect =
+      response.status === 301 ||
+      response.status === 302 ||
+      response.status === 303 ||
+      response.status === 307 ||
+      response.status === 308;
+
+    if (isRedirect) {
+      const location = response.headers.get('location');
+      if (!location) {
+        return response;
+      }
+
+      if (remainingRedirects <= 0) {
+        throw new Error('safeFetch: maximum redirect limit exceeded');
+      }
+      remainingRedirects -= 1;
+
+      const redirectUrl = new URL(location, currentUrl).toString();
+      currentUrl = redirectUrl;
+      continue;
+    }
+
+    return response;
+  }
+}
+
+

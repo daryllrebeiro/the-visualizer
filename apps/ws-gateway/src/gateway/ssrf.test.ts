@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { isIpBlocked, validateHostAndGetIp } from './ssrf.js';
+import { isIpBlocked, safeFetch, validateHostAndGetIp } from './ssrf.js';
 
 describe('SSRF Protection & IP Blocklist', () => {
   describe('isIpBlocked', () => {
@@ -47,6 +47,40 @@ describe('SSRF Protection & IP Blocklist', () => {
     it('should reject blocked direct IPs', async () => {
       await expect(validateHostAndGetIp('10.0.0.1')).rejects.toThrow('blocked');
       await expect(validateHostAndGetIp('127.0.0.1')).rejects.toThrow('blocked');
+    });
+  });
+
+  describe('safeFetch (DNS Rebinding Mitigation & Redirect Defense)', () => {
+    it('should reject outbound requests targeting blocked loopback and cloud metadata', async () => {
+      await expect(safeFetch('http://169.254.169.254/latest/meta-data')).rejects.toThrow('blocked');
+      await expect(safeFetch('http://127.0.0.1:3000/internal')).rejects.toThrow('blocked');
+      await expect(safeFetch('http://localhost:8080/secrets')).rejects.toThrow('blocked');
+    });
+
+    it('should block redirects pointing to internal cloud metadata addresses', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'http://169.254.169.254/latest/meta-data' },
+        });
+      });
+
+      await expect(safeFetch('http://one.one.one.one/redirect')).rejects.toThrow('blocked');
+      fetchSpy.mockRestore();
+    });
+
+    it('should enforce maxRedirects limit', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'http://one.one.one.one/redirect' },
+        });
+      });
+
+      await expect(safeFetch('http://one.one.one.one/redirect', undefined, 2)).rejects.toThrow(
+        'maximum redirect limit exceeded',
+      );
+      fetchSpy.mockRestore();
     });
   });
 });

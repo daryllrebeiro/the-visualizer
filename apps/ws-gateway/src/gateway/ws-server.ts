@@ -191,6 +191,32 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
     void (async () => {
       const url = request.url ?? '';
       const cookies = request.headers.cookie ?? '';
+      const origin = request.headers.origin;
+
+      if (origin) {
+        const isAllowedOrigin =
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('https://localhost:') ||
+          origin.startsWith('http://127.0.0.1:') ||
+          origin.endsWith('.run.app') ||
+          (process.env.ALLOWED_ORIGINS
+            ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).includes(origin)
+            : false);
+
+        if (!isAllowedOrigin) {
+          socket.write(
+            'HTTP/1.1 403 Forbidden\r\n' +
+              'Connection: close\r\n' +
+              'Content-Type: text/plain\r\n' +
+              'X-Frame-Options: DENY\r\n' +
+              'X-Content-Type-Options: nosniff\r\n' +
+              '\r\n' +
+              'Forbidden: Invalid Origin',
+          );
+          socket.destroy();
+          return;
+        }
+      }
 
       const user = await authenticateConnection(url, cookies);
       if (!user) {
@@ -250,7 +276,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             }),
           );
           wsMessagesSentTotal.inc({ type: 'SESSION_ERROR' });
-          ws.terminate();
+          ws.close(1008, 'Policy Violation: Rate limit exceeded');
           return;
         }
 
