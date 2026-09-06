@@ -17,11 +17,11 @@ export interface DomainCardInfo {
     | 'cdn-cache'
     | 'id-gen'
     | 'transactions'
-    | 'rag'
-    | 'agents'
     | 'llm-serving'
     | 'vectordb'
-    | 'gpu-cluster';
+    | 'gpu-cluster'
+    | 'llm-pipeline'
+    | 'llm-gateway';
   name: string;
   category: string;
   icon: string;
@@ -268,42 +268,7 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
       'Strict Reverse LIFO Compensating Actions',
     ],
   },
-  {
-    id: 'rag',
-    name: 'Retrieval-Augmented Generation (RAG)',
-    category: 'AI_INFRA',
-    icon: '📚',
-    tagline:
-      'Dense Passage Retrieval, BM25 sparse matching, Reciprocal Rank Fusion (RRF), Cross-Encoder re-ranking, and Lost-in-the-Middle context packing.',
-    fidelityTag: 'PROTOCOL_COMPATIBLE',
-    fidelityDisplayName: 'Modular RAG / RRF',
-    oracleSystem: 'Gao et al. (2023) / Cormack RRF / Liu (2023)',
-    color: '#3b82f6',
-    highlights: [
-      'Dual Dense + BM25 Retriever Funnel',
-      'Reciprocal Rank Fusion (RRF) Convergence',
-      'Cross-Encoder Re-Ranking Cut',
-      'Lost-in-the-Middle Attention Curve Packing',
-    ],
-  },
-  {
-    id: 'agents',
-    name: 'Multi-Agent MCP Swarms',
-    category: 'AI_INFRA',
-    icon: '🤖',
-    tagline:
-      'Autonomous ReAct loops, Model Context Protocol (MCP) JSON-RPC 2.0 tool execution, hierarchical supervisor-worker graphs, and acyclic loop guards.',
-    fidelityTag: 'PROTOCOL_COMPATIBLE',
-    fidelityDisplayName: 'MCP 2024-11-05 / ReAct',
-    oracleSystem: 'Anthropic Model Context Protocol / Yao (2022) ReAct',
-    color: '#8b5cf6',
-    highlights: [
-      'Interactive ReAct Thought/Action Monologues',
-      'MCP JSON-RPC 2.0 Message Bus',
-      'Hierarchical Subagent Graph Delegation',
-      'AGENT-1 Acyclic Workflow Termination Guard',
-    ],
-  },
+
   {
     id: 'llm-serving',
     name: 'LLM Inference Serving (PagedAttention)',
@@ -356,6 +321,42 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
       '1F1B Pipeline Schedule Waterfall Gantt Chart',
       'Circular Ring-AllReduce Tensor Transfers',
       'ZeRO-1/2/3 VRAM Memory Scaling Profile',
+    ],
+  },
+  {
+    id: 'llm-pipeline',
+    name: 'LLM Pipeline & Lineage (PIPE-8)',
+    category: 'AI_INFRA',
+    icon: '🧬',
+    tagline:
+      'ETL document ingestion, dense + BM25 hybrid search with RRF fusion, agentic tool DAG execution, and W3C PROV end-to-end lineage traceability.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'OpenLineage / W3C PROV',
+    oracleSystem: 'W3C PROV-DM / OpenLineage 1.0 Specification',
+    color: '#06b6d4',
+    highlights: [
+      'Flagship PIPE-8 Provenance Lineage Traceability',
+      'Interactive Provenance Graph Walk-Back Ribbon',
+      'Dense DPR + Sparse BM25 RRF Rank Combination',
+      'Acyclic Agent Tool Execution DAG',
+    ],
+  },
+  {
+    id: 'llm-gateway',
+    name: 'LLM Gateway & Guardrails (GW-1)',
+    category: 'AI_INFRA',
+    icon: '🛡️',
+    tagline:
+      'Multi-provider fallback routing with Martin Fowler circuit breakers (CLOSED/OPEN/HALF_OPEN), cosine semantic caching, and pre-execution adversarial injection guardrails.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Martin Fowler FSM / Cosine Cache',
+    oracleSystem: 'Martin Fowler Circuit Breaker / GPTCache / NeMo Guardrails',
+    color: '#3b82f6',
+    highlights: [
+      'Flagship GW-1 Circuit Breaker FSM Rigor & Fallback Routing',
+      'Interactive Polar Cosine Similarity Radar',
+      'Zero-Cost Semantic Cache with Acceptance Radius',
+      'Pre-Execution Adversarial Injection Scanner',
     ],
   },
 ];

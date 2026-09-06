@@ -112,29 +112,25 @@ export const DataTableModal: React.FC<DataTableModalProps> = ({
                     <td style={{ padding: '8px 12px', fontWeight: 500 }}>{row.name}</td>
                     <td style={{ padding: '8px 12px' }}>{row.roleOrType}</td>
                     <td style={{ padding: '8px 12px' }}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          background:
-                            row.status.toLowerCase().includes('alive') ||
-                            row.status.toLowerCase().includes('running') ||
-                            row.status.toLowerCase().includes('ready')
-                              ? '#dcfce7'
-                              : '#fee2e2',
-                          color:
-                            row.status.toLowerCase().includes('alive') ||
-                            row.status.toLowerCase().includes('running') ||
-                            row.status.toLowerCase().includes('ready')
-                              ? '#15803d'
-                              : '#b91c1c',
-                        }}
-                      >
-                        {row.status}
-                      </span>
+                      {(() => {
+                        const s = (row.status ?? '').toLowerCase();
+                        const isHealthy = s.includes('alive') || s.includes('running') || s.includes('ready') || s.includes('active') || s.includes('healthy');
+                        return (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              background: isHealthy ? '#dcfce7' : '#fee2e2',
+                              color: isHealthy ? '#15803d' : '#b91c1c',
+                            }}
+                          >
+                            {row.status ?? 'UNKNOWN'}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: '8px 12px', color: '#64748b' }}>{row.metrics}</td>
                   </tr>

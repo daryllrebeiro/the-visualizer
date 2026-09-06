@@ -96,6 +96,30 @@ export const GLOSSARY_TERMS: Record<
     definition:
       'Congestion control algorithm that increases cwnd linearly (+1 MSS per RTT) and cuts cwnd in half upon detecting packet loss.',
   },
+  PROVENANCE_LEDGER: {
+    term: 'Provenance Lineage Ledger (W3C PROV)',
+    category: 'LLM Pipeline',
+    definition:
+      'End-to-end directed acyclic causal graph linking synthesized claims back through agent tool observations and retrieved chunks to source document passages.',
+  },
+  RRF_FUSION: {
+    term: 'Reciprocal Rank Fusion (RRF)',
+    category: 'LLM Pipeline / RAG',
+    definition:
+      'Rank-based combination algorithm (sum of 1 / (k + rank)) that merges disparate sparse lexical BM25 and dense vector search result rankings without score calibration.',
+  },
+  CIRCUIT_BREAKER_FSM: {
+    term: 'Circuit Breaker FSM (CLOSED/OPEN/HALF_OPEN)',
+    category: 'LLM Gateway',
+    definition:
+      'Fault tolerance state machine designed by Martin Fowler. CLOSED routes normally; repeated failures trip to OPEN (fail-fast / fallback); after cooldown, HALF_OPEN allows limited canary probes to verify upstream recovery.',
+  },
+  SEMANTIC_CACHE: {
+    term: 'Cosine Semantic Cache',
+    category: 'LLM Gateway',
+    definition:
+      'Vector cache that measures cosine similarity between query embeddings and cached prompt centroids. Hits at similarity ≥ θ (e.g. 0.88) return pre-computed responses at 0 upstream inference cost and minimal latency.',
+  },
 };
 
 export interface GlossaryTooltipProps {

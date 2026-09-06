@@ -215,7 +215,7 @@ export const INTERVIEW_CHALLENGES: InterviewChallenge[] = [
     title: 'Design an Enterprise RAG & Semantic Retrieval Pipeline',
     difficulty: 'Hard',
     companyTags: ['OpenAI', 'Anthropic', 'Google Cloud', 'Cohere', 'Palantir'],
-    domain: 'rag',
+    domain: 'llm-pipeline',
     scenarioId: 'lost-in-middle',
     drillLabel: '▶ Simulate Hybrid RRF & Lost-in-the-Middle Mitigation',
     problemStatement:

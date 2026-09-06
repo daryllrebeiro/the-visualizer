@@ -13,11 +13,11 @@ export type DomainKey =
   | 'cdn-cache'
   | 'id-gen'
   | 'transactions'
-  | 'rag'
-  | 'agents'
   | 'llm-serving'
   | 'vectordb'
-  | 'gpu-cluster';
+  | 'gpu-cluster'
+  | 'llm-pipeline'
+  | 'llm-gateway';
 
 export const DOMAIN_OPTIONS: ReadonlyArray<{
   id: DomainKey;
@@ -132,22 +132,6 @@ export const DOMAIN_OPTIONS: ReadonlyArray<{
     color: '#ec4899',
   },
   {
-    id: 'rag',
-    name: 'Modular RAG',
-    icon: '📚',
-    category: 'Hybrid Retrieval & Lost-in-the-Middle',
-    path: '/rag',
-    color: '#38bdf8',
-  },
-  {
-    id: 'agents',
-    name: 'Agent Swarm',
-    icon: '🤖',
-    category: 'MCP Protocol & ReAct Monologue',
-    path: '/agents',
-    color: '#a855f7',
-  },
-  {
     id: 'llm-serving',
     name: 'LLM Serving',
     icon: '🧠',
@@ -170,5 +154,21 @@ export const DOMAIN_OPTIONS: ReadonlyArray<{
     category: '3D Parallelism & 1F1B Schedule',
     path: '/gpu-cluster',
     color: '#ef4444',
+  },
+  {
+    id: 'llm-pipeline',
+    name: 'LLM Pipeline',
+    icon: '🧬',
+    category: 'ETL, RAG & Lineage (PIPE-8)',
+    path: '/llm-pipeline',
+    color: '#06b6d4',
+  },
+  {
+    id: 'llm-gateway',
+    name: 'LLM Gateway',
+    icon: '🛡️',
+    category: 'Routing, Semantic Cache & Guardrails (GW-1)',
+    path: '/llm-gateway',
+    color: '#3b82f6',
   },
 ];

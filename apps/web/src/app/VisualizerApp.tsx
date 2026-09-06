@@ -56,12 +56,6 @@ import {
   type TransactionsClusterState,
   TransactionsInvariantChecker,
   type TransactionsSimEvent,
-  type RAGClusterState,
-  RAGInvariantChecker,
-  type RAGSimEvent,
-  type AgentsClusterState,
-  AgentsInvariantChecker,
-  type AgentsSimEvent,
   type LLMServingClusterState,
   LLMServingInvariantChecker,
   type LLMServingSimEvent,
@@ -71,6 +65,12 @@ import {
   type GPUClusterState,
   GPUClusterInvariantChecker,
   type GPUClusterSimEvent,
+  type LlmPipelineClusterState,
+  LlmPipelineInvariantChecker,
+  type LlmPipelineSimEvent,
+  type LlmGatewayClusterState,
+  LlmGatewayInvariantChecker,
+  type LlmGatewaySimEvent,
   createDefaultBaselineState,
   createDefaultCdnCacheCluster,
   createDefaultDBCluster,
@@ -84,11 +84,11 @@ import {
   createDefaultRedisCluster,
   createDefaultStorageCluster,
   createDefaultTransactionsCluster,
-  createDefaultRAGCluster,
-  createDefaultAgentsCluster,
   createDefaultLLMServingCluster,
   createDefaultVectorDBCluster,
   createDefaultGPUCluster,
+  createDefaultLlmPipelineCluster,
+  createDefaultLlmGatewayCluster,
   pureCdnCacheTransition,
   pureDBTransition,
   pureDistributedLockTransition,
@@ -102,11 +102,11 @@ import {
   pureStateTransition,
   pureStorageTransition,
   pureTransactionsTransition,
-  pureRAGTransition,
-  pureAgentsTransition,
   pureLLMServingTransition,
   pureVectorDBTransition,
   pureGPUClusterTransition,
+  pureLlmPipelineTransition,
+  pureLlmGatewayTransition,
 } from '@the-visualizer/simulation';
 import { DataTableModal, OnboardingTour } from '@the-visualizer/ui';
 
@@ -127,11 +127,11 @@ import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
 import { TraceImportModal } from '../components/scenarios/TraceImportModal';
 import { StorageEngineVisualizer } from '../components/storage/StorageEngineVisualizer';
 import { TransactionsVisualizer } from '../components/transactions/TransactionsVisualizer';
-import { RagVisualizer } from '../components/rag/RagVisualizer';
-import { AgentsVisualizer } from '../components/agents/AgentsVisualizer';
 import { LlmServingVisualizer } from '../components/llm-serving/LlmServingVisualizer';
 import { VectordbVisualizer } from '../components/vectordb/VectordbVisualizer';
 import { GpuClusterVisualizer } from '../components/gpu-cluster/GpuClusterVisualizer';
+import { LlmPipelineVisualizer } from '../components/llm-pipeline/LlmPipelineVisualizer';
+import { LlmGatewayVisualizer } from '../components/llm-gateway/LlmGatewayVisualizer';
 import { CommandPaletteModal } from '../components/palette/CommandPaletteModal';
 import { InterviewPrepModal } from '../components/interview/InterviewPrepModal';
 import { CompositePipelineModal } from '../components/composite/CompositePipelineModal';
@@ -403,17 +403,6 @@ export default function VisualizerApp({
   const txnInvariantCheckerRef = useRef<TransactionsInvariantChecker>(
     new TransactionsInvariantChecker(),
   );
-
-  const [ragState, setRagState] = useState<RAGClusterState>(() => createDefaultRAGCluster());
-  const ragRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
-  const ragInvariantCheckerRef = useRef<RAGInvariantChecker>(new RAGInvariantChecker());
-
-  const [agentsState, setAgentsState] = useState<AgentsClusterState>(() =>
-    createDefaultAgentsCluster(),
-  );
-  const agentsRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
-  const agentsInvariantCheckerRef = useRef<AgentsInvariantChecker>(new AgentsInvariantChecker());
-
   const [llmServingState, setLlmServingState] = useState<LLMServingClusterState>(() =>
     createDefaultLLMServingCluster(),
   );
@@ -436,6 +425,22 @@ export default function VisualizerApp({
   const gpuClusterRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
   const gpuClusterInvariantCheckerRef = useRef<GPUClusterInvariantChecker>(
     new GPUClusterInvariantChecker(),
+  );
+
+  const [llmPipelineState, setLlmPipelineState] = useState<LlmPipelineClusterState>(() =>
+    createDefaultLlmPipelineCluster(),
+  );
+  const llmPipelineRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const llmPipelineInvariantCheckerRef = useRef<LlmPipelineInvariantChecker>(
+    new LlmPipelineInvariantChecker(),
+  );
+
+  const [llmGatewayState, setLlmGatewayState] = useState<LlmGatewayClusterState>(() =>
+    createDefaultLlmGatewayCluster(),
+  );
+  const llmGatewayRngRef = useRef<DeterministicRNG>(new DeterministicRNG(42));
+  const llmGatewayInvariantCheckerRef = useRef<LlmGatewayInvariantChecker>(
+    new LlmGatewayInvariantChecker(),
   );
 
   // Offline Reconstitution State
@@ -655,52 +660,6 @@ export default function VisualizerApp({
     return () => clearInterval(interval);
   }, [selectedDomain, isPaused]);
 
-  // Modular RAG Simulation Loop
-  useEffect(() => {
-    if (selectedDomain !== 'rag' || isPaused) return;
-    const interval = setInterval(() => {
-      setRagState((prev) => {
-        const ev: RAGSimEvent = {
-          id: `rag-tick-${String(prev.tick + 1)}`,
-          tick: prev.tick + 1,
-          type: 'RAG_TICK',
-          payload: {},
-        };
-        const res = pureRAGTransition(prev, ev, ragRngRef.current);
-        const violation = ragInvariantCheckerRef.current.check(res.nextState);
-        if (violation && !violation.isPedagogicalFlaw) {
-          setIsHalted(true);
-          setHaltError(`[RAG ${violation.ruleId}] ${violation.description}`);
-        }
-        return res.nextState;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [selectedDomain, isPaused]);
-
-  // Agent Swarm Simulation Loop
-  useEffect(() => {
-    if (selectedDomain !== 'agents' || isPaused) return;
-    const interval = setInterval(() => {
-      setAgentsState((prev) => {
-        const ev: AgentsSimEvent = {
-          id: `agents-tick-${String(prev.tick + 1)}`,
-          tick: prev.tick + 1,
-          type: 'AGENTS_TICK',
-          payload: {},
-        };
-        const res = pureAgentsTransition(prev, ev, agentsRngRef.current);
-        const violation = agentsInvariantCheckerRef.current.check(res.nextState);
-        if (violation && !violation.isPedagogicalFlaw) {
-          setIsHalted(true);
-          setHaltError(`[Agents ${violation.ruleId}] ${violation.description}`);
-        }
-        return res.nextState;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [selectedDomain, isPaused]);
-
   // LLM Serving Simulation Loop (Orca Continuous Batching / PagedAttention)
   useEffect(() => {
     if (selectedDomain !== 'llm-serving' || isPaused) return;
@@ -767,6 +726,29 @@ export default function VisualizerApp({
         return res.nextState;
       });
     }, 500);
+    return () => clearInterval(interval);
+  }, [selectedDomain, isPaused]);
+
+  // LLM Gateway Simulation Loop (Cooldown Tick Elapsing)
+  useEffect(() => {
+    if (selectedDomain !== 'llm-gateway' || isPaused) return;
+    const interval = setInterval(() => {
+      setLlmGatewayState((prev) => {
+        const ev: LlmGatewaySimEvent = {
+          id: `gw-tick-${String(prev.tick + 1)}`,
+          tick: prev.tick + 1,
+          type: 'GW_TICK',
+          payload: {},
+        };
+        const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
+        const violation = llmGatewayInvariantCheckerRef.current.check(res.nextState);
+        if (violation) {
+          setIsHalted(true);
+          setHaltError(`[LLM Gateway ${violation.invariantName}] ${violation.description}`);
+        }
+        return res.nextState;
+      });
+    }, 1000);
     return () => clearInterval(interval);
   }, [selectedDomain, isPaused]);
 
@@ -1354,10 +1336,10 @@ export default function VisualizerApp({
     idGenRngRef.current = new DeterministicRNG(42);
     setTxnState(createDefaultTransactionsCluster());
     txnRngRef.current = new DeterministicRNG(42);
-    setRagState(createDefaultRAGCluster());
-    ragRngRef.current = new DeterministicRNG(42);
-    setAgentsState(createDefaultAgentsCluster());
-    agentsRngRef.current = new DeterministicRNG(42);
+    setLlmPipelineState(createDefaultLlmPipelineCluster());
+    llmPipelineRngRef.current = new DeterministicRNG(42);
+    setLlmGatewayState(createDefaultLlmGatewayCluster());
+    llmGatewayRngRef.current = new DeterministicRNG(42);
     setLlmServingState(createDefaultLLMServingCluster());
     llmServingRngRef.current = new DeterministicRNG(42);
     setVectorDbState(createDefaultVectorDBCluster());
@@ -1557,8 +1539,8 @@ export default function VisualizerApp({
     else if (selectedDomain === 'cdn-cache') currentTick = cdnCacheState.tick;
     else if (selectedDomain === 'id-gen') currentTick = idGenState.tick;
     else if (selectedDomain === 'transactions') currentTick = txnState.tick;
-    else if (selectedDomain === 'rag') currentTick = ragState.tick;
-    else if (selectedDomain === 'agents') currentTick = agentsState.tick;
+    else if (selectedDomain === 'llm-pipeline') currentTick = llmPipelineState.tick;
+    else if (selectedDomain === 'llm-gateway') currentTick = llmGatewayState.tick;
     else if (selectedDomain === 'llm-serving') currentTick = llmServingState.tick;
     else if (selectedDomain === 'vectordb') currentTick = vectorDbState.tick;
     else if (selectedDomain === 'gpu-cluster') currentTick = gpuClusterState.tick;
@@ -1593,8 +1575,8 @@ export default function VisualizerApp({
         handleIdGenInjectClockSkew(1, 150);
       } else if (dom === 'transactions') {
         handleTxnCrashCoordinator('AFTER_PREPARE');
-      } else if (dom === 'rag') {
-        handleRagExecuteQuery('q-drill', 'Explain consensus and Raft log replication');
+      } else if (dom === 'llm-pipeline') {
+        handleLlmPipelineExecuteSearch('q-drill', 'Explain consensus and Raft log replication');
       } else if (dom === 'cdn-cache') {
         handleCdnPurge('product-123');
       } else if (dom === 'database') {
@@ -1611,8 +1593,8 @@ export default function VisualizerApp({
         handleStorageTriggerCompaction(0);
       } else if (dom === 'networking') {
         handleNetworkingDropPacket();
-      } else if (dom === 'agents') {
-        handleAgentsDispatchTask('task-drill', 'Perform deep verification of cluster');
+      } else if (dom === 'llm-gateway') {
+        handleLlmGatewayDispatchRequest('System test query');
       } else if (dom === 'llm-serving') {
         handleLlmSubmitRequest('p-drill', 64, 128);
       } else if (dom === 'vectordb') {
@@ -3000,147 +2982,6 @@ export default function VisualizerApp({
     });
   };
 
-  // RAG Handlers
-  const handleRagExecuteQuery = (queryId: string, text: string): void => {
-    setRagState((prev) => {
-      const ev: RAGSimEvent = {
-        id: `rag-q-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'RAG_EXECUTE_QUERY',
-        payload: { queryId, text },
-      };
-      const res = pureRAGTransition(prev, ev, ragRngRef.current);
-      addLog(`[RAG] Executed Hybrid Retrieval Query "${text}"`, 'INFO');
-      return res.nextState;
-    });
-  };
-
-  const handleRagPackContext = (maxBudgetTokens: number, enableLostInTheMiddle: boolean): void => {
-    setRagState((prev) => {
-      const ev: RAGSimEvent = {
-        id: `rag-pack-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'RAG_PACK_CONTEXT',
-        payload: { maxBudgetTokens, enableLostInTheMiddle },
-      };
-      const res = pureRAGTransition(prev, ev, ragRngRef.current);
-      addLog(
-        `[RAG] Packed Context (Budget: ${maxBudgetTokens} tok, U-Curve: ${String(enableLostInTheMiddle)})`,
-        'INFO',
-      );
-      return res.nextState;
-    });
-  };
-
-  const handleRagSynthesize = (queryId: string): void => {
-    setRagState((prev) => {
-      const ev: RAGSimEvent = {
-        id: `rag-synth-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'RAG_SYNTHESIZE_RESPONSE',
-        payload: { queryId },
-      };
-      const res = pureRAGTransition(prev, ev, ragRngRef.current);
-      addLog(`[RAG] Synthesized Grounded Response for ${queryId}`, 'INFO');
-      return res.nextState;
-    });
-  };
-
-  const handleRagInjectOutOfDomain = (queryText: string): void => {
-    setRagState((prev) => {
-      const ev: RAGSimEvent = {
-        id: `rag-ood-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'RAG_INJECT_OUT_OF_DOMAIN',
-        payload: { queryText },
-      };
-      const res = pureRAGTransition(prev, ev, ragRngRef.current);
-      addLog(`[RAG Chaos] Injected Out-of-Domain Query: "${queryText}"`, 'WARN');
-      return res.nextState;
-    });
-  };
-
-  // Agents Handlers
-  const handleAgentsDispatchTask = (taskId: string, prompt: string): void => {
-    setAgentsState((prev) => {
-      const ev: AgentsSimEvent = {
-        id: `agents-task-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'AGENTS_DISPATCH_TASK',
-        payload: { taskId, prompt },
-      };
-      const res = pureAgentsTransition(prev, ev, agentsRngRef.current);
-      addLog(`[Agents] Dispatched Task "${prompt}"`, 'INFO');
-      return res.nextState;
-    });
-  };
-
-  const handleAgentsStepReact = (
-    agentId: string,
-    thought: string,
-    toolName?: string,
-    toolParams?: Record<string, unknown>,
-  ): void => {
-    setAgentsState((prev) => {
-      const ev: AgentsSimEvent = {
-        id: `agents-react-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'AGENTS_STEP_REACT',
-        payload: { agentId, thought, toolName, toolParams },
-      };
-      const res = pureAgentsTransition(prev, ev, agentsRngRef.current);
-      addLog(`[Agents] Agent ${agentId} ReAct Step (Tool: ${toolName ?? 'None'})`, 'INFO');
-      return res.nextState;
-    });
-  };
-
-  const handleAgentsDelegateSubagent = (
-    parentId: string,
-    subagentId: string,
-    role: any,
-    prompt: string,
-  ): void => {
-    setAgentsState((prev) => {
-      const ev: AgentsSimEvent = {
-        id: `agents-del-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'AGENTS_DELEGATE_SUBAGENT',
-        payload: { parentId, subagentId, role, prompt },
-      };
-      const res = pureAgentsTransition(prev, ev, agentsRngRef.current);
-      addLog(`[Agents] Delegated Subagent ${subagentId} (${role})`, 'INFO');
-      return res.nextState;
-    });
-  };
-
-  const handleAgentsInjectToolFailure = (serverId: string, toolName: string): void => {
-    setAgentsState((prev) => {
-      const ev: AgentsSimEvent = {
-        id: `agents-fail-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'AGENTS_INJECT_TOOL_FAILURE',
-        payload: { serverId, toolName },
-      };
-      const res = pureAgentsTransition(prev, ev, agentsRngRef.current);
-      addLog(`[Agents Chaos] Injected Tool Failure: ${serverId}/${toolName}`, 'WARN');
-      return res.nextState;
-    });
-  };
-
-  const handleAgentsHallucinatedToolAttack = (agentId: string, toolName: string): void => {
-    setAgentsState((prev) => {
-      const ev: AgentsSimEvent = {
-        id: `agents-halluc-${String(Date.now())}`,
-        tick: prev.tick + 1,
-        type: 'AGENTS_HALLUCINATED_TOOL_ATTACK',
-        payload: { agentId, toolName },
-      };
-      const res = pureAgentsTransition(prev, ev, agentsRngRef.current);
-      addLog(`[Agents Chaos] Hallucinated Tool Call Attempted: ${toolName}`, 'WARN');
-      return res.nextState;
-    });
-  };
-
   // LLM Serving Handlers
   const handleLlmSubmitRequest = (
     requestId: string,
@@ -3333,6 +3174,220 @@ export default function VisualizerApp({
       };
       const res = pureGPUClusterTransition(prev, ev, gpuClusterRngRef.current);
       addLog(`[GPU Cluster Chaos] Severed NVLink: ${sourceGPU} <-> ${targetGPU}`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  /* ── LLM Pipeline Domain Handlers ── */
+  const handleLlmPipelineIngestDoc = (docId: string, title: string, content: string): void => {
+    setLlmPipelineState((prev) => {
+      const ev: LlmPipelineSimEvent = {
+        id: `ingest-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'PIPE_INGEST_DOC',
+        payload: { docId, title, content },
+      };
+      const res = pureLlmPipelineTransition(prev, ev, llmPipelineRngRef.current);
+      addLog(`[LLM Pipeline] Ingested document "${title}" (${docId})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmPipelineExecuteSearch = (queryId: string, queryText: string): void => {
+    setLlmPipelineState((prev) => {
+      const ev: LlmPipelineSimEvent = {
+        id: `search-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'PIPE_EXECUTE_HYBRID_SEARCH',
+        payload: { queryId, queryText },
+      };
+      const res = pureLlmPipelineTransition(prev, ev, llmPipelineRngRef.current);
+      addLog(`[LLM Pipeline] Hybrid search + RRF fusion executed for "${queryText}"`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmPipelineDispatchAgentStep = (step: {
+    stepId: string;
+    taskId: string;
+    type: 'PLAN' | 'TOOL_CALL' | 'OBSERVATION' | 'SYNTHESIS';
+    toolName?: string;
+    toolArgs?: Record<string, unknown>;
+    output?: string;
+    dependsOn?: string[];
+  }): void => {
+    setLlmPipelineState((prev) => {
+      const ev: LlmPipelineSimEvent = {
+        id: `step-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'PIPE_DISPATCH_AGENT_STEP',
+        payload: step,
+      };
+      const res = pureLlmPipelineTransition(prev, ev, llmPipelineRngRef.current);
+      addLog(`[LLM Pipeline] Dispatched Agent Step ${step.type} (${step.stepId})`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmPipelineSynthesizeResponse = (
+    queryId: string,
+    answerText: string,
+    claims: any[],
+  ): void => {
+    setLlmPipelineState((prev) => {
+      const ev: LlmPipelineSimEvent = {
+        id: `synth-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'PIPE_SYNTHESIZE_RESPONSE',
+        payload: { queryId, answerText, claims },
+      };
+      const res = pureLlmPipelineTransition(prev, ev, llmPipelineRngRef.current);
+      addLog(`[LLM Pipeline] Synthesized grounded response with ${claims.length} claims`, 'SUCCESS');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmPipelineSeverLineage = (responseId: string, claimId: string): void => {
+    setLlmPipelineState((prev) => {
+      const ev: LlmPipelineSimEvent = {
+        id: `sever-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'PIPE_SEVER_LINEAGE',
+        payload: { responseId, claimId },
+      };
+      const res = pureLlmPipelineTransition(prev, ev, llmPipelineRngRef.current);
+      const violation = llmPipelineInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[LLM Pipeline ${violation.invariantName}] ${violation.description}`);
+      }
+      addLog(`[LLM Pipeline Chaos] Severed provenance lineage for claim ${claimId}`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmPipelineInjectToolFailure = (stepId: string, reason: string): void => {
+    setLlmPipelineState((prev) => {
+      const ev: LlmPipelineSimEvent = {
+        id: `fail-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'PIPE_INJECT_TOOL_FAILURE',
+        payload: { stepId, reason },
+      };
+      const res = pureLlmPipelineTransition(prev, ev, llmPipelineRngRef.current);
+      addLog(`[LLM Pipeline Chaos] Injected tool failure into ${stepId}: ${reason}`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  /* ── LLM Gateway Domain Handlers ── */
+  const handleLlmGatewayDispatchRequest = (prompt: string, angleDeg?: number, forceInjection?: boolean): void => {
+    setLlmGatewayState((prev) => {
+      const payload: { prompt: string; angleDeg?: number; forceInjection?: boolean } = { prompt };
+      if (angleDeg !== undefined) payload.angleDeg = angleDeg;
+      if (forceInjection !== undefined) payload.forceInjection = forceInjection;
+
+      const ev: LlmGatewaySimEvent = {
+        id: `dispatch-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'GW_DISPATCH_REQUEST',
+        payload,
+      };
+      const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
+      const violation = llmGatewayInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[LLM Gateway ${violation.invariantName}] ${violation.description}`);
+      }
+      addLog(`[LLM Gateway] Dispatched query "${prompt.slice(0, 40)}..." (Angle: ${angleDeg ?? 'auto'}°)`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmGatewaySetProviderOutage = (providerId: string, outage: boolean): void => {
+    setLlmGatewayState((prev) => {
+      const ev: LlmGatewaySimEvent = {
+        id: `outage-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'GW_SET_PROVIDER_OUTAGE',
+        payload: { providerId, outage },
+      };
+      const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
+      addLog(`[LLM Gateway Chaos] Provider ${providerId} simulated outage set to ${String(outage)}`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmGatewayTriggerFailures = (providerId: string, count: number): void => {
+    setLlmGatewayState((prev) => {
+      const ev: LlmGatewaySimEvent = {
+        id: `fail-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'GW_TRIGGER_FAILURES',
+        payload: { providerId, count },
+      };
+      const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
+      const violation = llmGatewayInvariantCheckerRef.current.check(res.nextState);
+      if (violation) {
+        setIsHalted(true);
+        setHaltError(`[LLM Gateway ${violation.invariantName}] ${violation.description}`);
+      }
+      addLog(`[LLM Gateway Chaos] Injected ${count} consecutive failures on provider ${providerId}`, 'WARN');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmGatewayResetCircuitBreaker = (providerId: string): void => {
+    setLlmGatewayState((prev) => {
+      const ev: LlmGatewaySimEvent = {
+        id: `reset-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'GW_RESET_CIRCUIT_BREAKER',
+        payload: { providerId },
+      };
+      const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
+      addLog(`[LLM Gateway] Operator reset circuit breaker for ${providerId}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmGatewayUpdateCacheThreshold = (threshold: number): void => {
+    setLlmGatewayState((prev) => {
+      const ev: LlmGatewaySimEvent = {
+        id: `th-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'GW_UPDATE_CACHE_THRESHOLD',
+        payload: { threshold },
+      };
+      const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
+      addLog(`[LLM Gateway] Updated semantic cache threshold to θ = ${threshold.toFixed(2)}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmGatewayToggleGuardrail = (guardrail: 'injection' | 'pii', enabled: boolean): void => {
+    setLlmGatewayState((prev) => {
+      const ev: LlmGatewaySimEvent = {
+        id: `guard-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'GW_TOGGLE_GUARDRAIL',
+        payload: { guardrail, enabled },
+      };
+      const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
+      addLog(`[LLM Gateway] Guardrail "${guardrail}" set to ${String(enabled)}`, 'INFO');
+      return res.nextState;
+    });
+  };
+
+  const handleLlmGatewayTick = (): void => {
+    setLlmGatewayState((prev) => {
+      const ev: LlmGatewaySimEvent = {
+        id: `manual-tick-${String(Date.now())}`,
+        tick: prev.tick + 1,
+        type: 'GW_TICK',
+        payload: {},
+      };
+      const res = pureLlmGatewayTransition(prev, ev, llmGatewayRngRef.current);
       return res.nextState;
     });
   };
@@ -3615,26 +3670,6 @@ export default function VisualizerApp({
         },
       ];
     }
-    if (selectedDomain === 'rag') {
-      return [
-        {
-          id: 'rag-query-engine',
-          name: 'Modular RAG Pipeline',
-          roleOrType: 'Dual Retriever (Dense + BM25)',
-          status: 'ACTIVE',
-          metrics: `Chunks: ${Object.keys(ragState.chunks).length} | Top-K: ${ragState.activeQuery?.fusedMatches.length ?? 0} | Packed Tokens: ${ragState.contextWindow.packedChunks.reduce((a: number, c: any) => a + c.tokens, 0)}`,
-        },
-      ];
-    }
-    if (selectedDomain === 'agents') {
-      return Object.values(agentsState.agents).map((a) => ({
-        id: `agent-${a.id}`,
-        name: `${a.name} (${a.role})`,
-        roleOrType: a.role,
-        status: a.status,
-        metrics: `Scratchpad: ${a.scratchpad.length} steps | Mem: ${a.usedMemoryTokens}/${a.memoryLimitTokens} tok`,
-      }));
-    }
     if (selectedDomain === 'llm-serving') {
       const runningCount = llmServingState.batchScheduler.runningRequestIds.length;
       const waitingCount = Object.values(llmServingState.requests).filter(
@@ -3668,6 +3703,24 @@ export default function VisualizerApp({
         metrics: `VRAM: ${(g.memoryAllocatedMB / 1024).toFixed(1)} / ${(g.memoryTotalMB / 1024).toFixed(1)} GB | Utilization: ${g.utilizationPct}%`,
       }));
     }
+    if (selectedDomain === 'llm-pipeline') {
+      return Object.values(llmPipelineState.documents).map((d) => ({
+        id: `doc-${d.id}`,
+        name: d.title,
+        roleOrType: 'Ingested Pipeline Document',
+        status: 'PROCESSED',
+        metrics: `Size: ${d.byteSize} B | Source: ${d.sourceUri}`,
+      }));
+    }
+    if (selectedDomain === 'llm-gateway') {
+      return Object.values(llmGatewayState.providers).map((p) => ({
+        id: `provider-${p.id}`,
+        name: p.name,
+        roleOrType: `Priority #${p.priority} · ${p.circuitBreaker.state}`,
+        status: p.circuitBreaker.state,
+        metrics: `Latency: ${p.latencyMs}ms | Failures: ${p.circuitBreaker.consecutiveFailures}/${p.circuitBreaker.failureThreshold} | Cost: $${p.costPer1kTokens.toFixed(4)}`,
+      }));
+    }
     return [
       {
         id: 'tcp-connection',
@@ -3692,11 +3745,11 @@ export default function VisualizerApp({
     cdnCacheState,
     idGenState,
     txnState,
-    ragState,
-    agentsState,
     llmServingState,
     vectorDbState,
     gpuClusterState,
+    llmPipelineState,
+    llmGatewayState,
   ]);
 
   return (
@@ -4860,23 +4913,6 @@ export default function VisualizerApp({
                 onStepSaga={handleTxnStepSaga}
                 onSwitchProtocol={handleTxnSwitchProtocol}
               />
-            ) : selectedDomain === 'rag' ? (
-              <RagVisualizer
-                state={ragState}
-                onExecuteQuery={handleRagExecuteQuery}
-                onPackContext={handleRagPackContext}
-                onSynthesize={handleRagSynthesize}
-                onInjectOutOfDomain={handleRagInjectOutOfDomain}
-              />
-            ) : selectedDomain === 'agents' ? (
-              <AgentsVisualizer
-                state={agentsState}
-                onDispatchTask={handleAgentsDispatchTask}
-                onStepReact={handleAgentsStepReact}
-                onDelegateSubagent={handleAgentsDelegateSubagent}
-                onInjectToolFailure={handleAgentsInjectToolFailure}
-                onHallucinatedToolAttack={handleAgentsHallucinatedToolAttack}
-              />
             ) : selectedDomain === 'llm-serving' ? (
               <LlmServingVisualizer
                 state={llmServingState}
@@ -4892,6 +4928,27 @@ export default function VisualizerApp({
                 onInsertVector={handleVectorDbInsertVector}
                 onQueryKNN={handleVectorDbQueryKNN}
                 onToggleIndexType={handleVectorDbToggleIndexType}
+              />
+            ) : selectedDomain === 'llm-pipeline' ? (
+              <LlmPipelineVisualizer
+                state={llmPipelineState}
+                onIngestDoc={handleLlmPipelineIngestDoc}
+                onExecuteHybridSearch={handleLlmPipelineExecuteSearch}
+                onDispatchAgentStep={handleLlmPipelineDispatchAgentStep}
+                onSynthesizeResponse={handleLlmPipelineSynthesizeResponse}
+                onSeverLineage={handleLlmPipelineSeverLineage}
+                onInjectToolFailure={handleLlmPipelineInjectToolFailure}
+              />
+            ) : selectedDomain === 'llm-gateway' ? (
+              <LlmGatewayVisualizer
+                state={llmGatewayState}
+                onDispatchRequest={handleLlmGatewayDispatchRequest}
+                onSetProviderOutage={handleLlmGatewaySetProviderOutage}
+                onTriggerFailures={handleLlmGatewayTriggerFailures}
+                onResetCircuitBreaker={handleLlmGatewayResetCircuitBreaker}
+                onUpdateCacheThreshold={handleLlmGatewayUpdateCacheThreshold}
+                onToggleGuardrail={handleLlmGatewayToggleGuardrail}
+                onTick={handleLlmGatewayTick}
               />
             ) : (
               <GpuClusterVisualizer

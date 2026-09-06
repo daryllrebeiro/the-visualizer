@@ -226,32 +226,7 @@ export function CommandPaletteModal({
           onClose();
         },
       },
-      {
-        id: 'domain-rag',
-        title: 'Modular RAG Architecture',
-        category: 'DOMAINS',
-        icon: '📚',
-        badge: 'AI Infrastructure',
-        description: 'Dense DPR + Sparse BM25, Reciprocal Rank Fusion (RRF), Lost-in-the-Middle context packing.',
-        keywords: ['rag', 'retrieval', 'bm25', 'rrf', 'lost in the middle', 'embeddings'],
-        action: () => {
-          onSelectDomain('rag');
-          onClose();
-        },
-      },
-      {
-        id: 'domain-agents',
-        title: 'Agent Swarm & Model Context Protocol',
-        category: 'DOMAINS',
-        icon: '🤖',
-        badge: 'AI Infrastructure',
-        description: 'MCP JSON-RPC 2.0 message bus, ReAct monologue scratchpad, supervisor-worker graph.',
-        keywords: ['agents', 'mcp', 'react', 'tool call', 'swarm', 'orchestration'],
-        action: () => {
-          onSelectDomain('agents');
-          onClose();
-        },
-      },
+
       {
         id: 'domain-llm-serving',
         title: 'LLM Serving & PagedAttention',
@@ -288,6 +263,32 @@ export function CommandPaletteModal({
         keywords: ['gpu', 'zero', '1f1b', 'ring-allreduce', 'megatron', 'parallelism', 'nvlink'],
         action: () => {
           onSelectDomain('gpu-cluster');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-llm-pipeline',
+        title: 'LLM Pipeline & Lineage (PIPE-8)',
+        category: 'DOMAINS',
+        icon: '🧬',
+        badge: 'AI Infrastructure',
+        description: 'ETL document chunking, hybrid RRF search, agent tool DAG, W3C PROV lineage walk-back.',
+        keywords: ['llm-pipeline', 'pipeline', 'lineage', 'pipe-8', 'etl', 'w3c prov', 'walkback'],
+        action: () => {
+          onSelectDomain('llm-pipeline');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-llm-gateway',
+        title: 'LLM Gateway & Guardrails (GW-1)',
+        category: 'DOMAINS',
+        icon: '🛡️',
+        badge: 'AI Infrastructure',
+        description: 'Multi-provider routing, circuit breaker FSM, cosine semantic caching, pre-execution injection filter.',
+        keywords: ['llm-gateway', 'gateway', 'circuit breaker', 'guardrails', 'semantic cache', 'gw-1', 'injection'],
+        action: () => {
+          onSelectDomain('llm-gateway');
           onClose();
         },
       },
@@ -344,7 +345,7 @@ export function CommandPaletteModal({
         description: 'Arranges most relevant chunks at prompt boundaries to counter LLM middle attention degradation.',
         keywords: ['lost in the middle', 'rag', 'context', 'u-curve', 'attention', 'packing'],
         action: () => {
-          onSelectDomain('rag');
+          onSelectDomain('llm-pipeline');
           onClose();
         },
       },
@@ -398,7 +399,7 @@ export function CommandPaletteModal({
         description: 'Combines multiple search result rankings without requiring score normalization: RRF(d) = Σ 1/(k + rank).',
         keywords: ['rrf', 'reciprocal rank fusion', 'hybrid search', 'dense sparse', 'bm25'],
         action: () => {
-          onSelectDomain('rag');
+          onSelectDomain('llm-pipeline');
           onClose();
         },
       },

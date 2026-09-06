@@ -38,7 +38,7 @@ export const COMPOSITE_PIPELINES: CompositePipeline[] = [
       {
         id: 'stage-rag-dense',
         name: 'Hybrid Semantic Retrieval',
-        domain: 'rag',
+        domain: 'llm-pipeline',
         icon: '📚',
         description: 'Dense embedding query combined with BM25 keyword search via Reciprocal Rank Fusion (RRF).',
         latencyBudgetMs: 35,
