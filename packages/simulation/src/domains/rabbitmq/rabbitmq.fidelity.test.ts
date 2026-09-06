@@ -113,4 +113,48 @@ describe('RabbitMQ Domain Fidelity Test Suite (AMQP 0-9-1 & Quorum Queues)', () 
       expect(routedMsg).toBeDefined();
     });
   });
+
+  describe('Mandatory Message Unroutable basic.return Frame (AMQP 0-9-1)', () => {
+    it('emits RABBIT_BASIC_RETURN frame with NO_ROUTE reply code when mandatory message cannot be routed', () => {
+      const rng = new DeterministicRNG(42);
+      const cluster = createDefaultRabbitCluster();
+
+      // amq.direct has no alternateExchange by default, and routing key has no bindings
+      expect(cluster.exchanges['amq.direct']?.alternateExchange).toBeFalsy();
+
+      const pub: RabbitSimEvent = {
+        id: 'pub-mandatory-unroutable',
+        tick: 5,
+        type: 'RABBIT_PUBLISH',
+        payload: {
+          exchangeName: 'amq.direct',
+          routingKey: 'completely.unbound.key',
+          payload: 'critical-order-data',
+          mandatory: true,
+          publisherId: 'pub-client-1',
+        },
+      };
+
+      const res = pureRabbitTransition(cluster, pub, rng);
+
+      // Must emit a RABBIT_BASIC_RETURN frame
+      const returnEvent = res.emittedEvents.find((e) => e.type === 'RABBIT_BASIC_RETURN');
+      expect(returnEvent).toBeDefined();
+      expect(returnEvent?.payload).toMatchObject({
+        replyCode: 312,
+        replyText: 'NO_ROUTE',
+        exchange: 'amq.direct',
+        routingKey: 'completely.unbound.key',
+        publisherId: 'pub-client-1',
+        messagePayload: 'critical-order-data',
+      });
+
+      // Confirm message is dropped (not queued anywhere)
+      for (const q of Object.values(res.nextState.queues)) {
+        const found = q.messages.find((m) => m.payload === 'critical-order-data');
+        expect(found).toBeUndefined();
+      }
+    });
+  });
 });
+

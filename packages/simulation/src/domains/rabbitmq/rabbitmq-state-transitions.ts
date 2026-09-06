@@ -307,7 +307,26 @@ function handlePublish(
     state.totalUnroutableToAlternate++;
   }
 
+  // Mandatory message handling (AMQP 0-9-1 basic.return frame)
+  if (matchingQueueNames.length === 0 && p.mandatory) {
+    emittedEvents.push({
+      id: `return-${msgId}`,
+      tick: state.tick,
+      type: 'RABBIT_BASIC_RETURN',
+      payload: {
+        replyCode: 312,
+        replyText: 'NO_ROUTE',
+        exchange: exchange.name,
+        routingKey: p.routingKey,
+        publisherId: p.publisherId ?? 'publisher-client',
+        messageId: msgId,
+        messagePayload: p.payload,
+      },
+    });
+  }
+
   let routedCount = 0;
+
   for (const qName of matchingQueueNames) {
     const q = state.queues[qName];
     if (q) {

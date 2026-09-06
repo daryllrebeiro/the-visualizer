@@ -81,6 +81,7 @@ export interface NetworkingClusterState {
   inFlightPackets: TCPPacket[];
   deliveredPackets: TCPPacket[];
   slidingWindow: TCPSlidingWindowSlot[];
+  receivedOutOfOrderBlocks?: SackBlock[] | undefined;
   congestion: CongestionControlState;
   totalPacketsSent: number;
   totalPacketsDropped: number;
@@ -95,7 +96,9 @@ export type NetworkEventType =
   | 'TCP_DROP_PACKET'
   | 'TCP_TICK'
   | 'TCP_CLOSE_CONNECTION'
-  | 'TCP_CONFIGURE_FIDELITY';
+  | 'TCP_CONFIGURE_FIDELITY'
+  | 'NET_PACKET_TRANSMIT';
+
 
 export interface NetworkSimEvent {
   id: string;

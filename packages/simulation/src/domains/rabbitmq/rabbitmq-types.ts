@@ -92,6 +92,7 @@ export type RabbitEventType =
   | 'RABBIT_MESSAGE_DELIVERED'
   | 'RABBIT_MESSAGE_DEAD_LETTERED'
   | 'RABBIT_BASIC_ACK'
+  | 'RABBIT_BASIC_RETURN'
   | 'RABBIT_CONFIGURE_FIDELITY';
 
 export interface RabbitSimEvent {
@@ -107,4 +108,7 @@ export interface RabbitPublishPayload {
   payload: string;
   headers?: Record<string, string> | undefined;
   ttl?: number | undefined;
+  mandatory?: boolean | undefined;
+  publisherId?: string | undefined;
 }
+

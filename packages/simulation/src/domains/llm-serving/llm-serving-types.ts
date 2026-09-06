@@ -20,6 +20,15 @@ export interface InferenceRequest {
   completionTick?: number | undefined;
   speculativeAcceptedTokens: number;
   speculativeRejectedTokens: number;
+  outputTokens?: number[] | undefined;
+  seed?: number | undefined;
+  checkpoint?:
+    | {
+        position: number;
+        tokens: number[];
+        rngState: number;
+      }
+    | undefined;
 }
 
 export interface PhysicalKVBlock {

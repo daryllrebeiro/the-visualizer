@@ -1,5 +1,6 @@
 import type {
   CongestionControlState,
+  SackBlock,
   TCPCongestionAlgorithm,
   TCPSlidingWindowSlot,
 } from './networking-types.js';
@@ -167,3 +168,54 @@ export function advanceCongestionWindow(
     phase: congestion.phase,
   });
 }
+
+/**
+ * RFC 2018 Multi-Block SACK Generator.
+ *
+ * Rules per RFC 2018 Section 3:
+ * 1. The first SACK block MUST specify the contiguous block containing the segment
+ *    that triggered this ACK.
+ * 2. Additional SACK blocks report previously queued out-of-order blocks in reverse
+ *    chronological order of arrival or descending sequence.
+ * 3. Standard TCP option space limit: At most 4 blocks without timestamps (40 bytes option limit:
+ *    kind(1) + length(1) + 4 * 8 = 34 <= 40).
+ */
+export function computeSackBlocks(
+  existingBlocks: SackBlock[],
+  triggeringBlock: SackBlock,
+  maxBlocks = 4,
+): SackBlock[] {
+  // Merge triggering block with existing out-of-order blocks
+  const all = [...existingBlocks, triggeringBlock];
+
+  // Sort by leftEdge ascending to merge overlapping / contiguous intervals
+  all.sort((a, b) => a.leftEdge - b.leftEdge);
+
+  const merged: SackBlock[] = [];
+  for (const blk of all) {
+    if (merged.length === 0) {
+      merged.push({ leftEdge: blk.leftEdge, rightEdge: blk.rightEdge });
+    } else {
+      const prev = merged[merged.length - 1]!;
+      if (blk.leftEdge <= prev.rightEdge) {
+        prev.rightEdge = Math.max(prev.rightEdge, blk.rightEdge);
+      } else {
+        merged.push({ leftEdge: blk.leftEdge, rightEdge: blk.rightEdge });
+      }
+    }
+  }
+
+  // Find the merged block containing the triggering block
+  const trigMerged =
+    merged.find(
+      (m) => m.leftEdge <= triggeringBlock.leftEdge && m.rightEdge >= triggeringBlock.rightEdge,
+    ) ?? triggeringBlock;
+
+  // The first block in SACK option MUST be the triggering block (RFC 2018)
+  const remaining = merged.filter((m) => m !== trigMerged);
+  // Order remaining blocks by descending leftEdge (most recent / highest sequence first)
+  remaining.sort((a, b) => b.leftEdge - a.leftEdge);
+
+  return [trigMerged, ...remaining].slice(0, maxBlocks);
+}
+

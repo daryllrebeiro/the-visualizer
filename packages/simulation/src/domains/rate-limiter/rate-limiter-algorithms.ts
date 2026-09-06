@@ -153,9 +153,11 @@ export function stepSlidingLog(
 }
 
 /**
- * Sliding Window Counter (Cloudflare Weighted Average Approximation)
+ * Sliding Window Counter (Linear Interpolation Approximation)
  * Formula: count = previousWindowCount * (1 - timeIntoCurrent / windowSize) + currentWindowCount
- * Reference: Cloudflare blog "How we built rate limiting"
+ * Theoretical worst-case divergence occurs at window boundaries where actual traffic in [t - W, t]
+ * can reach 2 * limit while the estimator only charges (previousCount * overlap + currentCount).
+ * Bound: |N_true - N_approx| <= limit (max 100% burst divergence under boundary step traffic).
  */
 export function stepSlidingCounter(
   state: SlidingCounterState,

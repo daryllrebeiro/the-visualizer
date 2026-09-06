@@ -300,3 +300,14 @@ export * from './domains/vectordb/vectordb-algorithms.js';
 export * from './domains/gpu-cluster/gpu-cluster-types.js';
 export * from './domains/gpu-cluster/gpu-cluster-state-transitions.js';
 export * from './domains/gpu-cluster/gpu-cluster-invariants.js';
+
+// Domain: LLM Gateway
+export * from './domains/llm-gateway/llm-gateway-types.js';
+export * from './domains/llm-gateway/llm-gateway-state-transitions.js';
+export * from './domains/llm-gateway/llm-gateway-invariants.js';
+
+// Domain: LLM Pipeline
+export * from './domains/llm-pipeline/llm-pipeline-types.js';
+export * from './domains/llm-pipeline/llm-pipeline-state-transitions.js';
+export * from './domains/llm-pipeline/llm-pipeline-invariants.js';
+

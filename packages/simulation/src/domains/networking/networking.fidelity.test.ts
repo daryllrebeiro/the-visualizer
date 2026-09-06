@@ -263,4 +263,105 @@ describe('TCP Networking Domain Fidelity Test Suite', () => {
       expect(renoViolation?.description).toContain('Reno (0.5x)');
     });
   });
+
+  describe('RFC 2018 Multi-Block Non-Contiguous SACK Reporting', () => {
+    it('reports exactly 2 distinct SACK blocks when two non-contiguous gaps exist in receive buffer', () => {
+      const rng = new DeterministicRNG(42);
+      let state = createDefaultNetworkingCluster();
+      state.sackEnabled = true;
+      state.clientState = 'ESTABLISHED';
+      state.serverState = 'ESTABLISHED';
+      state.serverAckNumber = 1000; // Waiting for byte 1000
+
+      // Arrive block 1: seq 1200..1400 (gap [1000..1200])
+      state.inFlightPackets.push({
+        id: 'ooo-block-1',
+        source: 'CLIENT',
+        destination: 'SERVER',
+        seqNumber: 1200,
+        ackNumber: 1000,
+        flags: ['DATA'],
+        windowSize: 4,
+        payloadLength: 200,
+        payload: 'block1',
+        sentAtTick: 0,
+        state: 'InFlight',
+      });
+      state = pureNetworkingTransition(state, { id: 't1', tick: 1, type: 'TCP_TICK', payload: {} }, rng).nextState;
+
+      // Arrive block 2: seq 1700..1900 (gap [1400..1700])
+      state.inFlightPackets.push({
+        id: 'ooo-block-2',
+        source: 'CLIENT',
+        destination: 'SERVER',
+        seqNumber: 1700,
+        ackNumber: 1000,
+        flags: ['DATA'],
+        windowSize: 4,
+        payloadLength: 200,
+        payload: 'block2',
+        sentAtTick: 1,
+        state: 'InFlight',
+      });
+      const resT2 = pureNetworkingTransition(state, { id: 't2', tick: 2, type: 'TCP_TICK', payload: {} }, rng);
+      state = resT2.nextState;
+
+      // Assert that NET_PACKET_TRANSMIT is emitted on the event pipeline carrying the 2 SACK blocks
+      const transmitEvent = resT2.emittedEvents.find(
+        (e) => e.type === 'NET_PACKET_TRANSMIT' && (e.payload?.flags as string[])?.includes('ACK'),
+      );
+      expect(transmitEvent).toBeDefined();
+      expect((transmitEvent?.payload?.sackBlocks as any[])?.length).toBe(2);
+      expect((transmitEvent?.payload?.sackBlocks as any[])?.[0]).toEqual({ leftEdge: 1700, rightEdge: 1900 });
+      expect((transmitEvent?.payload?.sackBlocks as any[])?.[1]).toEqual({ leftEdge: 1200, rightEdge: 1400 });
+
+      // The dup ACK in-flight packet also reports both non-contiguous SACK blocks
+      const dupAck = state.inFlightPackets.filter((p) => p.flags.includes('ACK') && p.source === 'SERVER').at(-1);
+      expect(dupAck).toBeDefined();
+      expect(dupAck?.sackBlocks).toBeDefined();
+      expect(dupAck?.sackBlocks?.length).toBe(2);
+      // First block is the triggering segment (1700..1900)
+      expect(dupAck?.sackBlocks?.[0]).toEqual({ leftEdge: 1700, rightEdge: 1900 });
+      // Second block is the previously held out-of-order segment (1200..1400)
+      expect(dupAck?.sackBlocks?.[1]).toEqual({ leftEdge: 1200, rightEdge: 1400 });
+    });
+
+
+    it('reports 3 distinct SACK blocks for 3 non-contiguous gaps and respects 4-block RFC 2018 limit', () => {
+      const rng = new DeterministicRNG(42);
+      let state = createDefaultNetworkingCluster();
+      state.sackEnabled = true;
+      state.clientState = 'ESTABLISHED';
+      state.serverState = 'ESTABLISHED';
+      state.serverAckNumber = 1000;
+
+      // Block 1: 1100..1200 (gap 1000..1100)
+      state.inFlightPackets.push({
+        id: 'b1', source: 'CLIENT', destination: 'SERVER', seqNumber: 1100, ackNumber: 1000,
+        flags: ['DATA'], windowSize: 4, payloadLength: 100, payload: 'b1', sentAtTick: 0, state: 'InFlight',
+      });
+      state = pureNetworkingTransition(state, { id: 't1', tick: 1, type: 'TCP_TICK', payload: {} }, rng).nextState;
+
+      // Block 2: 1400..1500 (gap 1200..1400)
+      state.inFlightPackets.push({
+        id: 'b2', source: 'CLIENT', destination: 'SERVER', seqNumber: 1400, ackNumber: 1000,
+        flags: ['DATA'], windowSize: 4, payloadLength: 100, payload: 'b2', sentAtTick: 1, state: 'InFlight',
+      });
+      state = pureNetworkingTransition(state, { id: 't2', tick: 2, type: 'TCP_TICK', payload: {} }, rng).nextState;
+
+      // Block 3: 1800..2000 (gap 1500..1800)
+      state.inFlightPackets.push({
+        id: 'b3', source: 'CLIENT', destination: 'SERVER', seqNumber: 1800, ackNumber: 1000,
+        flags: ['DATA'], windowSize: 4, payloadLength: 200, payload: 'b3', sentAtTick: 2, state: 'InFlight',
+      });
+      state = pureNetworkingTransition(state, { id: 't3', tick: 3, type: 'TCP_TICK', payload: {} }, rng).nextState;
+
+      const dupAck = state.inFlightPackets.filter((p) => p.flags.includes('ACK') && p.source === 'SERVER').at(-1);
+      expect(dupAck?.sackBlocks?.length).toBe(3);
+      expect(dupAck?.sackBlocks?.[0]).toEqual({ leftEdge: 1800, rightEdge: 2000 });
+      expect(dupAck?.sackBlocks).toContainEqual({ leftEdge: 1400, rightEdge: 1500 });
+      expect(dupAck?.sackBlocks).toContainEqual({ leftEdge: 1100, rightEdge: 1200 });
+    });
+  });
 });
+

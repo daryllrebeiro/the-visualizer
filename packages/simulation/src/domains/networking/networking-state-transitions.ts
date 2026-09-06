@@ -1,6 +1,7 @@
 import type { DeterministicRNG } from '../../prng/deterministic-rng.js';
 import {
   advanceCongestionWindow,
+  computeSackBlocks,
   createInitialCongestionState,
   createInitialSlidingWindow,
   updateRttAndRto,
@@ -8,6 +9,7 @@ import {
 import type {
   NetworkSimEvent,
   NetworkingClusterState,
+  SackBlock,
   TCPCongestionAlgorithm,
   TCPPacket,
 } from './networking-types.js';
@@ -43,6 +45,7 @@ export function createDefaultNetworkingCluster(
     inFlightPackets: [],
     deliveredPackets: [],
     slidingWindow: createInitialSlidingWindow(1001, 12),
+    receivedOutOfOrderBlocks: [],
     congestion: createInitialCongestionState('RENO'), // Reno baseline for textbook, CUBIC for realistic
     totalPacketsSent: 0,
     totalPacketsDropped: 0,
@@ -83,6 +86,19 @@ export function pureNetworkingTransition(
         };
         nextState.inFlightPackets.push(synPkt);
         nextState.totalPacketsSent++;
+        emittedEvents.push({
+          id: `evt-tx-${synPkt.id}`,
+          tick: nextState.tick,
+          type: 'NET_PACKET_TRANSMIT',
+          payload: {
+            packetId: synPkt.id,
+            source: synPkt.source,
+            destination: synPkt.destination,
+            seqNumber: synPkt.seqNumber,
+            ackNumber: synPkt.ackNumber,
+            flags: synPkt.flags,
+          },
+        });
       }
       break;
     }
@@ -109,6 +125,20 @@ export function pureNetworkingTransition(
           };
           nextState.inFlightPackets.push(dataPkt);
           nextState.totalPacketsSent++;
+          emittedEvents.push({
+            id: `evt-tx-${dataPkt.id}`,
+            tick: nextState.tick,
+            type: 'NET_PACKET_TRANSMIT',
+            payload: {
+              packetId: dataPkt.id,
+              source: dataPkt.source,
+              destination: dataPkt.destination,
+              seqNumber: dataPkt.seqNumber,
+              ackNumber: dataPkt.ackNumber,
+              flags: dataPkt.flags,
+              payloadLength: dataPkt.payloadLength,
+            },
+          });
         }
       }
       break;
@@ -127,9 +157,10 @@ export function pureNetworkingTransition(
     }
 
     case 'TCP_TICK': {
-      handlePacketDeliveryTick(nextState);
+      handlePacketDeliveryTick(nextState, emittedEvents);
       break;
     }
+
 
     case 'TCP_CONFIGURE_FIDELITY': {
       const mode = event.payload['fidelityMode'] as 'TEXTBOOK' | 'REALISTIC';
@@ -159,7 +190,7 @@ export function pureNetworkingTransition(
   return { nextState, emittedEvents };
 }
 
-function handlePacketDeliveryTick(state: NetworkingClusterState): void {
+function handlePacketDeliveryTick(state: NetworkingClusterState, emittedEvents: NetworkSimEvent[]): void {
   const remainingInFlight: TCPPacket[] = [];
 
   for (const pkt of state.inFlightPackets) {
@@ -188,6 +219,19 @@ function handlePacketDeliveryTick(state: NetworkingClusterState): void {
         };
         remainingInFlight.push(synAckPkt);
         state.totalPacketsSent++;
+        emittedEvents.push({
+          id: `evt-tx-${synAckPkt.id}`,
+          tick: state.tick,
+          type: 'NET_PACKET_TRANSMIT',
+          payload: {
+            packetId: synAckPkt.id,
+            source: synAckPkt.source,
+            destination: synAckPkt.destination,
+            seqNumber: synAckPkt.seqNumber,
+            ackNumber: synAckPkt.ackNumber,
+            flags: synAckPkt.flags,
+          },
+        });
       } else if (pkt.flags.includes('SYN-ACK')) {
         // Client receives SYN-ACK
         state.clientState = 'ESTABLISHED';
@@ -210,6 +254,19 @@ function handlePacketDeliveryTick(state: NetworkingClusterState): void {
         };
         remainingInFlight.push(ackPkt);
         state.totalPacketsSent++;
+        emittedEvents.push({
+          id: `evt-tx-${ackPkt.id}`,
+          tick: state.tick,
+          type: 'NET_PACKET_TRANSMIT',
+          payload: {
+            packetId: ackPkt.id,
+            source: ackPkt.source,
+            destination: ackPkt.destination,
+            seqNumber: ackPkt.seqNumber,
+            ackNumber: ackPkt.ackNumber,
+            flags: ackPkt.flags,
+          },
+        });
       } else if (pkt.flags.includes('ACK') && state.serverState === 'SYN_RECEIVED') {
         // Server receives final ACK
         state.serverState = 'ESTABLISHED';
@@ -220,6 +277,12 @@ function handlePacketDeliveryTick(state: NetworkingClusterState): void {
         if (pkt.seqNumber === expectedSeq || expectedSeq === 0) {
           // In-order packet delivery
           state.serverAckNumber = pkt.seqNumber + pkt.payloadLength;
+
+          if (state.receivedOutOfOrderBlocks) {
+            state.receivedOutOfOrderBlocks = state.receivedOutOfOrderBlocks.filter(
+              (b) => b.rightEdge > state.serverAckNumber,
+            );
+          }
 
           const slot = state.slidingWindow.find((s) => s.seqNumber === pkt.seqNumber);
           if (slot) {
@@ -234,15 +297,56 @@ function handlePacketDeliveryTick(state: NetworkingClusterState): void {
 
           advanceCongestionWindow(state.congestion, state.tick, 'ACK_RECEIVED');
         } else if (pkt.seqNumber > expectedSeq) {
-          // Out-of-order segment arrival -> trigger Duplicate ACK & optional SACK block (RFC 2018)
-          const sackBlocks = state.sackEnabled
-            ? [{ leftEdge: pkt.seqNumber, rightEdge: pkt.seqNumber + pkt.payloadLength }]
-            : undefined;
+          // Out-of-order segment arrival -> trigger Duplicate ACK & multi-block SACK (RFC 2018)
+          let sackBlocks: SackBlock[] | undefined = undefined;
 
           if (state.sackEnabled) {
+            const triggeringBlock: SackBlock = {
+              leftEdge: pkt.seqNumber,
+              rightEdge: pkt.seqNumber + pkt.payloadLength,
+            };
+            sackBlocks = computeSackBlocks(
+              state.receivedOutOfOrderBlocks ?? [],
+              triggeringBlock,
+              4, // RFC 2018 limit
+            );
+            state.receivedOutOfOrderBlocks = sackBlocks;
+
             const sackedSlot = state.slidingWindow.find((s) => s.seqNumber === pkt.seqNumber);
             if (sackedSlot) sackedSlot.isSacked = true;
           }
+
+          // Emit duplicate ACK back to sender reporting current cumulative ack and SACK blocks
+          const dupAckPkt: TCPPacket = {
+            id: `pkt-dupack-${String(state.tick)}-${String(pkt.seqNumber)}`,
+            source: pkt.destination,
+            destination: pkt.source,
+            seqNumber: pkt.destination === 'SERVER' ? state.serverSeqNumber : state.clientSeqNumber,
+            ackNumber: expectedSeq,
+            flags: ['ACK'],
+            windowSize: state.windowSize,
+            payloadLength: 0,
+            payload: '',
+            sentAtTick: state.tick,
+            state: 'InFlight',
+            sackBlocks,
+          };
+          remainingInFlight.push(dupAckPkt);
+          state.totalPacketsSent++;
+          emittedEvents.push({
+            id: `evt-tx-${dupAckPkt.id}`,
+            tick: state.tick,
+            type: 'NET_PACKET_TRANSMIT',
+            payload: {
+              packetId: dupAckPkt.id,
+              source: dupAckPkt.source,
+              destination: dupAckPkt.destination,
+              seqNumber: dupAckPkt.seqNumber,
+              ackNumber: dupAckPkt.ackNumber,
+              flags: dupAckPkt.flags,
+              sackBlocks: dupAckPkt.sackBlocks,
+            },
+          });
 
           state.congestion.duplicateAckCount++;
 
@@ -271,6 +375,20 @@ function handlePacketDeliveryTick(state: NetworkingClusterState): void {
               };
               remainingInFlight.push(retransmitPkt);
               state.totalPacketsSent++;
+              emittedEvents.push({
+                id: `evt-tx-${retransmitPkt.id}`,
+                tick: state.tick,
+                type: 'NET_PACKET_TRANSMIT',
+                payload: {
+                  packetId: retransmitPkt.id,
+                  source: retransmitPkt.source,
+                  destination: retransmitPkt.destination,
+                  seqNumber: retransmitPkt.seqNumber,
+                  ackNumber: retransmitPkt.ackNumber,
+                  flags: retransmitPkt.flags,
+                  sackBlocks: retransmitPkt.sackBlocks,
+                },
+              });
             }
           }
         }
@@ -282,3 +400,4 @@ function handlePacketDeliveryTick(state: NetworkingClusterState): void {
 
   state.inFlightPackets = remainingInFlight;
 }
+

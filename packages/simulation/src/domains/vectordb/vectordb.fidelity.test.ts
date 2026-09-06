@@ -102,4 +102,86 @@ describe('Domain 12: Vector Database & HNSW / IVF-PQ Fidelity', () => {
     expect(state.activeQuery?.distanceComputationsCount).toBeGreaterThan(0);
     expect(checker.check(state)).toBeNull();
   });
+
+  it('VEC-5: validates that ef_search controls exploration breadth and produces monotonically increasing recall', () => {
+    // Build a graph with 20 vectors arranged in clustered space
+    let state = createDefaultVectorDBCluster();
+    const clusterRng = new DeterministicRNG(1234);
+
+    for (let i = 6; i <= 25; i++) {
+      const v = [
+        Number((clusterRng.nextFloat() * 2).toFixed(3)),
+        Number((clusterRng.nextFloat() * 2).toFixed(3)),
+        Number((clusterRng.nextFloat() * 2).toFixed(3)),
+        Number((clusterRng.nextFloat() * 2).toFixed(3)),
+      ];
+      state = pureVectorDBTransition(
+        state,
+        {
+          id: `ins-${i}`,
+          tick: i,
+          type: 'VEC_INSERT_VECTOR',
+          payload: { nodeId: `vec-${i}`, vector: v, topLayer: i % 3 === 0 ? 1 : 0 },
+        },
+        clusterRng,
+      ).nextState;
+    }
+
+    const queryVector = [0.55, 0.75, 1.25, 1.45];
+    const k = 5;
+
+    // Run search at efSearch = 1 (greedy narrow search)
+    const stateEf1 = pureVectorDBTransition(
+      JSON.parse(JSON.stringify(state)),
+      {
+        id: 'q-ef1',
+        tick: 100,
+        type: 'VEC_QUERY_KNN',
+        payload: { queryId: 'q-ef1', queryVector, k, efSearch: 1 },
+      },
+      clusterRng,
+    ).nextState;
+
+    // Run search at efSearch = 5 (moderate candidate beam)
+    const stateEf5 = pureVectorDBTransition(
+      JSON.parse(JSON.stringify(state)),
+      {
+        id: 'q-ef5',
+        tick: 101,
+        type: 'VEC_QUERY_KNN',
+        payload: { queryId: 'q-ef5', queryVector, k, efSearch: 5 },
+      },
+      clusterRng,
+    ).nextState;
+
+    // Run search at efSearch = 25 (wide candidate beam exploring entire cluster)
+    const stateEf25 = pureVectorDBTransition(
+      JSON.parse(JSON.stringify(state)),
+      {
+        id: 'q-ef25',
+        tick: 102,
+        type: 'VEC_QUERY_KNN',
+        payload: { queryId: 'q-ef25', queryVector, k, efSearch: 25 },
+      },
+      clusterRng,
+    ).nextState;
+
+    const recallEf1 = stateEf1.metrics.recallAtK;
+    const recallEf5 = stateEf5.metrics.recallAtK;
+    const recallEf25 = stateEf25.metrics.recallAtK;
+
+    // Recall must be monotonically non-decreasing
+    expect(recallEf5).toBeGreaterThanOrEqual(recallEf1);
+    expect(recallEf25).toBeGreaterThanOrEqual(recallEf5);
+
+    // Across ef=1 and ef=25, recall must be measurably different (narrow vs wide search)
+    expect(recallEf25).toBeGreaterThan(recallEf1);
+    expect(recallEf25).toBe(1.0); // Large efSearch finds all true nearest neighbors
+
+    // Distance computation count must increase with efSearch
+    expect(stateEf25.activeQuery!.distanceComputationsCount).toBeGreaterThan(
+      stateEf1.activeQuery!.distanceComputationsCount,
+    );
+  });
 });
+

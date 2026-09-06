@@ -61,7 +61,7 @@ export class GPUClusterInvariantChecker {
       };
     }
 
-    // 3. GPU-3: ZeRO Memory Allocation Bounds
+    // 3. GPU-3: ZeRO Memory Allocation Bounds & Preemption Checkpoint Guarantee
     for (const gpu of Object.values(gpus)) {
       if (gpu.memoryAllocatedMB > gpu.memoryTotalMB) {
         return {
@@ -72,6 +72,19 @@ export class GPUClusterInvariantChecker {
       }
     }
 
+    if (
+      state.trainingJob?.lastCheckpoint?.corrupted &&
+      state.trainingJob.status === 'TRAINING' &&
+      state.trainingJob.currentStep > 0
+    ) {
+      return {
+        ruleId: 'GPU-3',
+        invariantName: 'Preemption Checkpoint Integrity',
+        description: `Training resumed at step ${state.trainingJob.currentStep} with corrupted checkpoint. Corrupted checkpoint must trigger restart from scratch.`,
+      };
+    }
+
     return null;
   }
 }
+

@@ -10,6 +10,38 @@ import type {
   PhysicalKVBlock,
 } from './llm-serving-types.js';
 
+export function generateTokenForPosition(
+  requestId: string,
+  promptTokens: number,
+  tokenIndex: number,
+  seed = 42,
+  previousTokens: number[] = [],
+): number {
+  // Fold running hash of all prior tokens in the KV cache
+  let kvContextHash = 0x811c9dc5;
+  for (let idx = 0; idx < previousTokens.length; idx++) {
+    const tok = previousTokens[idx]!;
+    kvContextHash ^= (tok & 0xff);
+    kvContextHash = Math.imul(kvContextHash, 0x01000193) >>> 0;
+    kvContextHash ^= ((tok >>> 8) & 0xff);
+    kvContextHash = Math.imul(kvContextHash, 0x01000193) >>> 0;
+    kvContextHash ^= ((tok >>> 16) & 0xff);
+    kvContextHash = Math.imul(kvContextHash, 0x01000193) >>> 0;
+    kvContextHash ^= ((tok >>> 24) & 0xff);
+    kvContextHash = Math.imul(kvContextHash, 0x01000193) >>> 0;
+    kvContextHash = (kvContextHash ^ ((idx + 1) * 31)) >>> 0;
+  }
+
+  let h = (seed ^ (promptTokens * 10007) ^ (tokenIndex * 31) ^ kvContextHash) >>> 0;
+  for (let i = 0; i < requestId.length; i++) {
+    h = (h ^ (requestId.charCodeAt(i) * 37)) >>> 0;
+  }
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+
 export function createDefaultLLMServingCluster(clusterId = 'llm-serving-1'): LLMServingClusterState {
   const totalBlocks = 32;
   const blockSizeTokens = 16;
@@ -31,6 +63,8 @@ export function createDefaultLLMServingCluster(clusterId = 'llm-serving-1'): LLM
     promptTokens: 48, // requires 3 blocks
     maxGeneratedTokens: 32,
     generatedTokens: 0,
+    outputTokens: [],
+    seed: 42,
     state: 'WAITING',
     arrivalTimeTick: 0,
     speculativeAcceptedTokens: 0,
@@ -42,6 +76,8 @@ export function createDefaultLLMServingCluster(clusterId = 'llm-serving-1'): LLM
     promptTokens: 32, // requires 2 blocks
     maxGeneratedTokens: 48,
     generatedTokens: 0,
+    outputTokens: [],
+    seed: 42,
     state: 'WAITING',
     arrivalTimeTick: 0,
     speculativeAcceptedTokens: 0,
@@ -168,12 +204,10 @@ export function pureLLMServingTransition(
           // Generate token(s)
           let tokensGenerated = 1;
           if (nextState.speculativeEngine.enabled) {
+            const remaining = Math.max(0, req.maxGeneratedTokens - req.generatedTokens - 1);
             const accepted =
               rng.nextFloat() < nextState.speculativeEngine.draftAcceptanceRate
-                ? Math.min(
-                    nextState.speculativeEngine.gammaLookahead,
-                    req.maxGeneratedTokens - req.generatedTokens,
-                  )
+                ? Math.min(nextState.speculativeEngine.gammaLookahead, remaining)
                 : 0;
             tokensGenerated += accepted;
             req.speculativeAcceptedTokens += accepted;
@@ -181,7 +215,22 @@ export function pureLLMServingTransition(
               req.speculativeRejectedTokens += 1;
             }
           }
+          tokensGenerated = Math.min(
+            tokensGenerated,
+            Math.max(0, req.maxGeneratedTokens - req.generatedTokens),
+          );
 
+          if (!req.outputTokens) req.outputTokens = [];
+          for (let i = 0; i < tokensGenerated; i++) {
+            const tok = generateTokenForPosition(
+              req.id,
+              req.promptTokens,
+              req.generatedTokens + i,
+              req.seed ?? 42,
+              req.outputTokens,
+            );
+            req.outputTokens.push(tok);
+          }
           req.generatedTokens += tokensGenerated;
 
           // Check if new physical block is needed for newly generated tokens
@@ -192,10 +241,20 @@ export function pureLLMServingTransition(
           if (blocksNeeded > currentBlocks) {
             const extra = blocksNeeded - currentBlocks;
             if (!allocateBlocksForRequest(nextState, reqId, extra)) {
-              // OOM condition! Preempt request
+              // OOM condition! Checkpoint & preempt request
               req.state = 'PREEMPTED';
+              req.checkpoint = {
+                position: req.generatedTokens,
+                tokens: [...(req.outputTokens ?? [])],
+                rngState: rng.getState(),
+              };
+              // Evict working state to simulate swap-out / memory liberation
+              req.outputTokens = [];
+              req.generatedTokens = 0;
               freeBlocksForRequest(nextState, reqId);
-              batchScheduler.preemptedRequestIds.push(reqId);
+              if (!batchScheduler.preemptedRequestIds.includes(reqId)) {
+                batchScheduler.preemptedRequestIds.push(reqId);
+              }
               nextState.metrics.preemptionCount++;
               continue;
             }
@@ -212,7 +271,34 @@ export function pureLLMServingTransition(
         }
       }
 
-      // 2. Admit WAITING requests into PREFILL up to maxBatchSize
+      // 2a. Resume PREEMPTED requests from checkpoint if VRAM blocks available
+      const stillPreempted: string[] = [];
+      for (const preemptedId of batchScheduler.preemptedRequestIds) {
+        const req = requests[preemptedId];
+        if (!req || req.state !== 'PREEMPTED') continue;
+        if (stillRunning.length >= batchScheduler.maxBatchSize) {
+          stillPreempted.push(preemptedId);
+          continue;
+        }
+
+        const totalTokens =
+          req.promptTokens + (req.checkpoint ? req.checkpoint.position : req.generatedTokens);
+        const blocksRequired = Math.ceil(totalTokens / kvBlockPool.blockSizeTokens);
+        if (allocateBlocksForRequest(nextState, preemptedId, blocksRequired)) {
+          // Successfully restored KV cache blocks from checkpoint!
+          if (req.checkpoint) {
+            req.generatedTokens = req.checkpoint.position;
+            req.outputTokens = [...req.checkpoint.tokens];
+          }
+          req.state = 'DECODE';
+          stillRunning.push(preemptedId);
+        } else {
+          stillPreempted.push(preemptedId);
+        }
+      }
+      batchScheduler.preemptedRequestIds = stillPreempted;
+
+      // 2b. Admit WAITING requests into PREFILL up to maxBatchSize
       for (const req of Object.values(requests)) {
         if (
           req.state === 'WAITING' &&
@@ -245,6 +331,8 @@ export function pureLLMServingTransition(
         promptTokens,
         maxGeneratedTokens,
         generatedTokens: 0,
+        outputTokens: [],
+        seed: (event.payload as any).seed ?? 42,
         state: 'WAITING',
         arrivalTimeTick: nextState.tick,
         speculativeAcceptedTokens: 0,
@@ -258,11 +346,21 @@ export function pureLLMServingTransition(
       const req = nextState.requests[requestId];
       if (req && (req.state === 'PREFILL' || req.state === 'DECODE')) {
         req.state = 'PREEMPTED';
+        req.checkpoint = {
+          position: req.generatedTokens,
+          tokens: [...(req.outputTokens ?? [])],
+          rngState: rng.getState(),
+        };
+        // Evict working state to simulate swap-out / memory liberation
+        req.outputTokens = [];
+        req.generatedTokens = 0;
         freeBlocksForRequest(nextState, requestId);
         nextState.batchScheduler.runningRequestIds = nextState.batchScheduler.runningRequestIds.filter(
           (id) => id !== requestId,
         );
-        nextState.batchScheduler.preemptedRequestIds.push(requestId);
+        if (!nextState.batchScheduler.preemptedRequestIds.includes(requestId)) {
+          nextState.batchScheduler.preemptedRequestIds.push(requestId);
+        }
         nextState.metrics.preemptionCount++;
       }
       break;

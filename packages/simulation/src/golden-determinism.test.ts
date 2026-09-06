@@ -65,12 +65,11 @@ const GOLDEN_TICKS = 10;
 describe('Golden Determinism Suite', () => {
   const domains = DomainRegistry.list();
 
-  // Verify all 18 domains are registered
-  it('should have all 18 domains registered', () => {
+  // Verify all registered domains
+  it('should have all domains registered', () => {
     expect(domains.length).toBe(18);
     const ids = domains.map((d) => d.id).sort();
     expect(ids).toEqual([
-      'agents',
       'cdn-cache',
       'database',
       'distributed-lock',
@@ -78,11 +77,12 @@ describe('Golden Determinism Suite', () => {
       'id-gen',
       'kafka',
       'kubernetes',
+      'llm-gateway',
+      'llm-pipeline',
       'llm-serving',
       'networking',
       'rabbitmq',
       'raft',
-      'rag',
       'rate-limiter',
       'redis',
       'storage',
@@ -1034,120 +1034,108 @@ describe('Golden Determinism Suite', () => {
     expect(h1).toBeGreaterThan(0);
   });
 
-  // Dedicated AI Infrastructure Golden Fixture 1: RAG Hybrid Retrieval & Lost-in-the-Middle
-  it('[rag:hybrid-retrieval] produces bit-identical state across dual-retriever fusion and context packing', () => {
-    const plugin = DomainRegistry.get('rag')!;
-    const runRAG = () => {
+  // Dedicated AI Infrastructure Golden Fixture 1: Consolidated LLM Pipeline (ETL, RAG, Tool DAG & W3C Lineage)
+  it('[llm-pipeline:e2e-trace] produces bit-identical state across ingest, hybrid retrieval, agent tool execution, and W3C lineage synthesis', () => {
+    const plugin = DomainRegistry.get('llm-pipeline')!;
+    const runPipeline = () => {
       const rng = new DeterministicRNG(42);
       let state = plugin.createDefaultState();
 
-      // Ingest additional technical doc
+      // 1. Ingest technical doc
       state = plugin.reduceState(
         state,
         {
-          id: 'ingest-1',
+          id: 'ingest-vllm',
           tick: 1,
-          type: 'RAG_INGEST_DOC' as any,
+          type: 'PIPE_INGEST_DOC' as any,
           payload: {
-            docId: 'doc-paged-attention',
-            title: 'PagedAttention Virtual Memory for LLMs',
+            docId: 'doc-vllm-spec',
+            title: 'PagedAttention Engine Specification',
             content:
-              'PagedAttention manages KV cache by paging non-contiguous GPU memory blocks, eliminating fragmentation and enabling copy-on-write memory sharing.',
+              'PagedAttention partitions memory blocks to prevent memory fragmentation and enables dynamic KV cache allocation.',
           },
         },
         rng,
       ).nextState;
 
-      // Execute queries with hybrid search & RRF
+      // 2. Hybrid search & RRF
       state = plugin.reduceState(
         state,
         {
-          id: 'query-1',
+          id: 'search-1',
           tick: 2,
-          type: 'RAG_EXECUTE_QUERY' as any,
-          payload: { queryId: 'q-rag-1', text: 'consensus Raft election log replication' },
+          type: 'PIPE_EXECUTE_HYBRID_SEARCH' as any,
+          payload: { queryId: 'q-vllm', queryText: 'PagedAttention memory fragmentation' },
         },
         rng,
       ).nextState;
 
+      // 3. Agent Tool Call
       state = plugin.reduceState(
         state,
         {
-          id: 'synth-1',
+          id: 'step-tool-vllm',
           tick: 3,
-          type: 'RAG_SYNTHESIZE_RESPONSE' as any,
-          payload: { queryId: 'q-rag-1' },
-        },
-        rng,
-      ).nextState;
-
-      for (let t = 4; t <= 12; t++) {
-        state = plugin.reduceState(
-          state,
-          { id: `tick-${t}`, tick: t, type: 'RAG_TICK' as any, payload: {} },
-          rng,
-        ).nextState;
-      }
-
-      return stableHash(state);
-    };
-
-    const h1 = runRAG();
-    const h2 = runRAG();
-    expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
-  });
-
-  // Dedicated AI Infrastructure Golden Fixture 2: Multi-Agent MCP Swarm ReAct Loop
-  it('[agents:mcp-tool-call] produces bit-identical state across ReAct step cycles and MCP message bus', () => {
-    const plugin = DomainRegistry.get('agents')!;
-    const runAgents = () => {
-      const rng = new DeterministicRNG(42);
-      let state = plugin.createDefaultState();
-
-      // Dispatch complex engineering task
-      state = plugin.reduceState(
-        state,
-        {
-          id: 'task-1',
-          tick: 1,
-          type: 'AGENTS_DISPATCH_TASK' as any,
-          payload: { taskId: 'audit-phase-3', prompt: 'Audit PagedAttention memory safety' },
-        },
-        rng,
-      ).nextState;
-
-      // Orchestrator delegates to researcher
-      state = plugin.reduceState(
-        state,
-        {
-          id: 'react-1',
-          tick: 2,
-          type: 'AGENTS_STEP_REACT' as any,
+          type: 'PIPE_DISPATCH_AGENT_STEP' as any,
           payload: {
-            agentId: 'agent-researcher',
-            thought: 'Querying repository knowledge base for vLLM spec',
-            toolName: 'read_file',
-            toolParams: { path: '/docs/architecture/AI_INFRA_EXPANSION_PLAN.md' },
+            stepId: 'step-tool-vllm',
+            taskId: 'task-vllm',
+            type: 'TOOL_CALL',
+            toolName: 'vector_search',
+            toolArgs: { query: 'PagedAttention' },
+            dependsOn: ['step-plan-1'],
           },
         },
         rng,
       ).nextState;
 
-      // Step simulation clock to deliver tool responses
-      for (let t = 3; t <= 10; t++) {
-        state = plugin.reduceState(
-          state,
-          { id: `tick-${t}`, tick: t, type: 'AGENTS_TICK' as any, payload: {} },
-          rng,
-        ).nextState;
-      }
+      // 4. Agent Observation
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'step-obs-vllm',
+          tick: 4,
+          type: 'PIPE_DISPATCH_AGENT_STEP' as any,
+          payload: {
+            stepId: 'step-obs-vllm',
+            taskId: 'task-vllm',
+            type: 'OBSERVATION',
+            output: 'Found chunk-vllm-spec-1 with relevance score 0.96.',
+            dependsOn: ['step-tool-vllm'],
+          },
+        },
+        rng,
+      ).nextState;
+
+      // 5. Synthesize Response
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'synth-vllm',
+          tick: 5,
+          type: 'PIPE_SYNTHESIZE_RESPONSE' as any,
+          payload: {
+            queryId: 'q-vllm',
+            answerText:
+              'PagedAttention eliminates GPU memory fragmentation via virtual memory paging tables.',
+            claims: [
+              {
+                claimId: 'claim-vllm-1',
+                text: 'PagedAttention eliminates memory fragmentation',
+                citationChunkId: 'chunk-doc-vllm-spec-1',
+                observationStepId: 'step-obs-vllm',
+              },
+            ],
+          },
+        },
+        rng,
+      ).nextState;
 
       return stableHash(state);
     };
 
-    const h1 = runAgents();
-    const h2 = runAgents();
+    const h1 = runPipeline();
+    const h2 = runPipeline();
     expect(h1).toBe(h2);
     expect(h1).toBeGreaterThan(0);
   });
@@ -1185,6 +1173,59 @@ describe('Golden Determinism Suite', () => {
 
     const h1 = runServing();
     const h2 = runServing();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 3b: LLM Serving OOM Eviction Chaos & Speculative Draft Rejection
+  it('[llm-serving:oom-eviction-chaos] produces bit-identical state across OOM block exhaustion preemption and speculative rejections', () => {
+    const plugin = DomainRegistry.get('llm-serving')!;
+    const runChaos = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Enable speculative decoding with tight draft acceptance rate
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'toggle-spec',
+          tick: 1,
+          type: 'LLM_TOGGLE_SPECULATIVE' as any,
+          payload: { enabled: true, gamma: 4, draftAcceptanceRate: 0.25 },
+        },
+        rng,
+      ).nextState;
+
+      // Inject OOM flood to trigger preemption
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'oom-flood',
+          tick: 2,
+          type: 'LLM_OOM_INJECTION' as any,
+          payload: { count: 5 },
+        },
+        rng,
+      ).nextState;
+
+      // Step batch 12 ticks
+      for (let t = 3; t <= 14; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `step-${t}`, tick: t, type: 'LLM_STEP_BATCH' as any },
+          rng,
+        ).nextState;
+      }
+
+      // Assert invariants hold
+      const validation = plugin.validateInvariants(state);
+      expect(validation.passed).toBe(true);
+
+      return stableHash(state);
+    };
+
+    const h1 = runChaos();
+    const h2 = runChaos();
     expect(h1).toBe(h2);
     expect(h1).toBeGreaterThan(0);
   });
@@ -1237,6 +1278,58 @@ describe('Golden Determinism Suite', () => {
     expect(h1).toBeGreaterThan(0);
   });
 
+  // Dedicated AI Infrastructure Golden Fixture 4b: VectorDB Node Deletion Chaos & Subsumption Integrity
+  it('[vectordb:node-deletion-chaos] produces bit-identical state across dynamic node deletion and graph healing', () => {
+    const plugin = DomainRegistry.get('vectordb')!;
+    const runDeleteChaos = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Insert node
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'ins-chaos',
+          tick: 1,
+          type: 'VEC_INSERT_VECTOR' as any,
+          payload: { nodeId: 'vec-chaos-victim', vector: [0.75, 0.65, 0.55, 0.45], topLayer: 2 },
+        },
+        rng,
+      ).nextState;
+
+      // Delete node
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'del-chaos',
+          tick: 2,
+          type: 'VEC_DELETE_NODE' as any,
+          payload: { nodeId: 'vec-chaos-victim' },
+        },
+        rng,
+      ).nextState;
+
+      // Assert invariants hold
+      const validation = plugin.validateInvariants(state);
+      expect(validation.passed).toBe(true);
+
+      for (let t = 3; t <= 8; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'VEC_TICK' as any, payload: {} },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runDeleteChaos();
+    const h2 = runDeleteChaos();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
   // Dedicated AI Infrastructure Golden Fixture 5: GPU Cluster 1F1B Schedule & ZeRO
   it('[gpu-cluster:1f1b-schedule] produces bit-identical state across 1F1B schedule Gantt steps and ZeRO-3 sharding', () => {
     const plugin = DomainRegistry.get('gpu-cluster')!;
@@ -1276,6 +1369,326 @@ describe('Golden Determinism Suite', () => {
 
     const h1 = runGPU();
     const h2 = runGPU();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 5b: GPU Cluster Straggler Drag & NVLink Fallback Chaos
+  it('[gpu-cluster:straggler-nvlink-chaos] produces bit-identical state across thermal throttling and NVLink interconnect degradation', () => {
+    const plugin = DomainRegistry.get('gpu-cluster')!;
+    const runGPUChaos = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Throttle GPU #2 to create straggler bottleneck
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'throttle-gpu2',
+          tick: 1,
+          type: 'GPU_THROTTLE_STRAGGLER' as any,
+          payload: { gpuId: 'gpu-2', throttled: true },
+        },
+        rng,
+      ).nextState;
+
+      // Sever intra-chassis NVLink to force PCIe fallback
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'sever-nvlink',
+          tick: 2,
+          type: 'GPU_SEVER_NVLINK' as any,
+          payload: { sourceGPU: 'gpu-0', targetGPU: 'gpu-1' },
+        },
+        rng,
+      ).nextState;
+
+      // Step AllReduce across degraded fabric
+      for (let t = 3; t <= 8; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `step-ar-${t}`, tick: t, type: 'GPU_STEP_ALLREDUCE' as any },
+          rng,
+        ).nextState;
+      }
+
+      // Assert invariants hold
+      const validation = plugin.validateInvariants(state);
+      expect(validation.passed).toBe(true);
+
+      return stableHash(state);
+    };
+
+    const h1 = runGPUChaos();
+    const h2 = runGPUChaos();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 6: LLM Pipeline Steady-State & Flagship PIPE-8 Passing
+  it('[llm-pipeline:steady-traceable] produces bit-identical state across ETL, RAG, agent tool DAG, and verified PIPE-8 provenance', () => {
+    const plugin = DomainRegistry.get('llm-pipeline')!;
+    const runPipeline = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // 1. Ingest docs
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'ingest-1',
+          tick: 1,
+          type: 'PIPE_INGEST_DOC' as any,
+          payload: {
+            docId: 'doc-dist-sys',
+            title: 'Reliable Distributed Systems',
+            content:
+              'State machine replication relies on total order broadcast and deterministic state transitions.',
+          },
+        },
+        rng,
+      ).nextState;
+
+      // 2. Hybrid search & RRF
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'search-1',
+          tick: 2,
+          type: 'PIPE_EXECUTE_HYBRID_SEARCH' as any,
+          payload: { queryId: 'q-rep', queryText: 'total order broadcast replication' },
+        },
+        rng,
+      ).nextState;
+
+      // 3. Agent Tool Call
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'tool-step-1',
+          tick: 3,
+          type: 'PIPE_DISPATCH_AGENT_STEP' as any,
+          payload: {
+            stepId: 'step-tool-rep',
+            taskId: 'task-rep',
+            type: 'TOOL_CALL',
+            toolName: 'knowledge_search',
+            toolArgs: { term: 'replication' },
+            dependsOn: ['step-plan-1'],
+          },
+        },
+        rng,
+      ).nextState;
+
+      // 4. Agent Observation
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'obs-step-1',
+          tick: 4,
+          type: 'PIPE_DISPATCH_AGENT_STEP' as any,
+          payload: {
+            stepId: 'step-obs-rep',
+            taskId: 'task-rep',
+            type: 'OBSERVATION',
+            output: 'Retrieved chunk-dist-sys-1 with relevance score 0.94.',
+            dependsOn: ['step-tool-rep'],
+          },
+        },
+        rng,
+      ).nextState;
+
+      // 5. Synthesize response with valid citation
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'synth-1',
+          tick: 5,
+          type: 'PIPE_SYNTHESIZE_RESPONSE' as any,
+          payload: {
+            queryId: 'q-rep',
+            answerText: 'State machine replication guarantees consistency using total order broadcast.',
+            claims: [
+              {
+                claimId: 'claim-rep-1',
+                text: 'Replication relies on total order broadcast',
+                citationChunkId: 'chunk-doc-dist-sys-1',
+                observationStepId: 'step-obs-rep',
+              },
+            ],
+          },
+        },
+        rng,
+      ).nextState;
+
+      // Assert PIPE-8 passes
+      const validation = plugin.validateInvariants(state);
+      expect(validation.passed).toBe(true);
+
+      for (let t = 6; t <= 10; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'PIPE_TICK' as any },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runPipeline();
+    const h2 = runPipeline();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 7: LLM Pipeline Lineage-Severing Chaos & Flagship PIPE-8 Failing
+  it('[llm-pipeline:lineage-severed-chaos] asserts PIPE-8 correctly triggers violation when provenance lineage is severed', () => {
+    const plugin = DomainRegistry.get('llm-pipeline')!;
+    const runSevered = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Trigger chaos: sever lineage on default claim
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'sever-claim-1',
+          tick: 1,
+          type: 'PIPE_SEVER_LINEAGE' as any,
+          payload: {
+            responseId: 'resp-init',
+            claimId: 'claim-init-1',
+          },
+        },
+        rng,
+      ).nextState;
+
+      // Assert PIPE-8 fails
+      const validation = plugin.validateInvariants(state);
+      expect(validation.passed).toBe(false);
+      expect(validation.violation?.name).toBe('PIPE-8');
+      expect(validation.violation?.description).toContain('Provenance lineage severed');
+
+      for (let t = 2; t <= 6; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'PIPE_TICK' as any },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runSevered();
+    const h2 = runSevered();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 8: LLM Gateway Steady Cached & Multi-Provider Route
+  it('[llm-gateway:steady-cached-route] produces deterministic state hash across semantic cache hits and provider execution', () => {
+    const plugin = DomainRegistry.get('llm-gateway')!;
+    const runGateway = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Dispatch cache hit query (angle 45 deg)
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'req-hit',
+          tick: 1,
+          type: 'GW_DISPATCH_REQUEST' as any,
+          payload: { prompt: 'Write SQL query for 30-day cohort retention', angleDeg: 45 },
+        },
+        rng,
+      ).nextState;
+
+      // Dispatch cache miss query (angle 180 deg) -> routed to primary (OpenAI)
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'req-miss',
+          tick: 2,
+          type: 'GW_DISPATCH_REQUEST' as any,
+          payload: { prompt: 'Explain Kubernetes topology spread constraints', angleDeg: 180 },
+        },
+        rng,
+      ).nextState;
+
+      // Invariants must pass
+      const validation = plugin.validateInvariants(state);
+      expect(validation.passed).toBe(true);
+
+      for (let t = 3; t <= 7; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'GW_TICK' as any },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runGateway();
+    const h2 = runGateway();
+    expect(h1).toBe(h2);
+    expect(h1).toBeGreaterThan(0);
+  });
+
+  // Dedicated AI Infrastructure Golden Fixture 9: LLM Gateway Circuit Breaker Trip & Fallback Routing Chaos
+  it('[llm-gateway:provider-outage-fallback] asserts GW-1 circuit breaker trips to OPEN and routes to fallback provider under outage', () => {
+    const plugin = DomainRegistry.get('llm-gateway')!;
+    const runOutage = () => {
+      const rng = new DeterministicRNG(42);
+      let state = plugin.createDefaultState();
+
+      // Trigger 3 failures on primary provider
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'trip-primary',
+          tick: 1,
+          type: 'GW_TRIGGER_FAILURES' as any,
+          payload: { providerId: 'openai-gpt4o', count: 3 },
+        },
+        rng,
+      ).nextState;
+
+      // Dispatch request -> must be FALLBACK_ROUTED to secondary
+      state = plugin.reduceState(
+        state,
+        {
+          id: 'req-fallback',
+          tick: 2,
+          type: 'GW_DISPATCH_REQUEST' as any,
+          payload: { prompt: 'Summarize distributed lock algorithms', angleDeg: 330 },
+        },
+        rng,
+      ).nextState;
+
+      // Verify invariants
+      const validation = plugin.validateInvariants(state);
+      expect(validation.passed).toBe(true);
+
+      // Advance 5 ticks to enter HALF_OPEN
+      for (let t = 3; t <= 7; t++) {
+        state = plugin.reduceState(
+          state,
+          { id: `tick-${t}`, tick: t, type: 'GW_TICK' as any },
+          rng,
+        ).nextState;
+      }
+
+      return stableHash(state);
+    };
+
+    const h1 = runOutage();
+    const h2 = runOutage();
     expect(h1).toBe(h2);
     expect(h1).toBeGreaterThan(0);
   });

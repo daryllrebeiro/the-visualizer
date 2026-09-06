@@ -109,4 +109,84 @@ describe('Domain 13: GPU Cluster & 3D Parallelism Fidelity', () => {
     expect(state.gpus['gpu-2']?.status).toBe('THROTTLED');
     expect(state.metrics.stepTimeMs).toBe(285.0); // Step time doubled
   });
+
+  it('GPU-5a: validates unmodified stateful checkpoint checksum and resumes training normally', () => {
+    let state = createDefaultGPUCluster();
+
+    // 1. Initial training state at step 150
+    expect((state as any).trainingJob.currentStep).toBe(150);
+
+    // 2. Trigger spot preemption which writes a stateful checkpoint
+    const preemptResult = pureGPUClusterTransition(
+      state,
+      { id: 'preempt-1', tick: 10, type: 'GPU_SPOT_PREEMPTION' as any },
+      rng,
+    );
+    state = preemptResult.nextState;
+    expect((state as any).trainingJob.status).toBe('PREEMPTED');
+    const ckpt = (state as any).trainingJob.lastCheckpoint;
+    expect(ckpt).toBeDefined();
+    expect(ckpt.step).toBe(150);
+    expect(ckpt.weightShards).toBeDefined();
+    expect(ckpt.weightShards.length).toBe(8);
+    expect(ckpt.optimizerState).toBeDefined();
+    expect(ckpt.checksum).toMatch(/^0x[0-9a-f]{8}$/);
+
+    // 3. Positive resume with unmodified checkpoint
+    const resumeResult = pureGPUClusterTransition(
+      JSON.parse(JSON.stringify(state)),
+      { id: 'resume-positive', tick: 12, type: 'GPU_RESUME_TRAINING' as any },
+      rng,
+    );
+    const resumeState = resumeResult.nextState as any;
+    expect(resumeState.trainingJob.status).toBe('TRAINING');
+    expect(resumeState.trainingJob.currentStep).toBe(150); // Successfully resumed at step 150
+    expect(
+      resumeResult.emittedEvents.some((e: any) => e.type === 'GPU_RESUME_FROM_CHECKPOINT'),
+    ).toBe(true);
+  });
+
+  it('GPU-5b: organically detects weight shard corruption via checksum mismatch and restarts from scratch', () => {
+    let state = createDefaultGPUCluster();
+
+    // 1. Trigger spot preemption to create valid stateful checkpoint
+    state = pureGPUClusterTransition(
+      state,
+      { id: 'preempt-1', tick: 10, type: 'GPU_SPOT_PREEMPTION' as any },
+      rng,
+    ).nextState;
+
+    const originalCkpt = (state as any).trainingJob.lastCheckpoint;
+    expect(originalCkpt).toBeDefined();
+    expect(originalCkpt.weightShards.length).toBeGreaterThan(0);
+
+    // 2. Corrupt checkpoint state data directly (flip bits in weight shard parameter hash)
+    // without setting corrupted = true or modifying ckpt.checksum
+    const corruptState: any = JSON.parse(JSON.stringify(state));
+    corruptState.trainingJob.lastCheckpoint.weightShards[0].parameterHash ^= 0x1337;
+    expect(corruptState.trainingJob.lastCheckpoint.corrupted).toBeFalsy();
+
+    // 3. Attempt resume with organically corrupted checkpoint state
+    const corruptResumeResult = pureGPUClusterTransition(
+      corruptState,
+      { id: 'resume-corrupt', tick: 15, type: 'GPU_RESUME_TRAINING' as any },
+      rng,
+    );
+
+    // 4. Must organically detect checksum mismatch and restart from scratch (step 0)
+    const corruptResumeState: any = corruptResumeResult.nextState;
+    expect(corruptResumeState.trainingJob.status).toBe('TRAINING');
+    expect(corruptResumeState.trainingJob.currentStep).toBe(0); // Restart from scratch!
+
+    const restartEvent = corruptResumeResult.emittedEvents.find(
+      (e) => e.type === 'GPU_CHECKPOINT_CORRUPT_RESTART',
+    );
+    expect(restartEvent).toBeDefined();
+    if (restartEvent && restartEvent.type === 'GPU_CHECKPOINT_CORRUPT_RESTART') {
+      expect(restartEvent.payload.restartedAtStep).toBe(0);
+      expect(restartEvent.payload.reason).toContain('Checksum mismatch');
+    }
+  });
 });
+
+

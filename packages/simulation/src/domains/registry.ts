@@ -81,13 +81,6 @@ import type {
   TransactionsSimEvent,
 } from './transactions/transactions-types.js';
 
-import { RAGInvariantChecker } from './rag/rag-invariants.js';
-import { createDefaultRAGCluster, pureRAGTransition } from './rag/rag-state-transitions.js';
-import type { RAGClusterState, RAGSimEvent } from './rag/rag-types.js';
-
-import { AgentsInvariantChecker } from './agents/agents-invariants.js';
-import { createDefaultAgentsCluster, pureAgentsTransition } from './agents/agents-state-transitions.js';
-import type { AgentsClusterState, AgentsSimEvent } from './agents/agents-types.js';
 
 import { LLMServingInvariantChecker } from './llm-serving/llm-serving-invariants.js';
 import { createDefaultLLMServingCluster, pureLLMServingTransition } from './llm-serving/llm-serving-state-transitions.js';
@@ -100,6 +93,14 @@ import type { VectorDBClusterState, VectorDBSimEvent } from './vectordb/vectordb
 import { GPUClusterInvariantChecker } from './gpu-cluster/gpu-cluster-invariants.js';
 import { createDefaultGPUCluster, pureGPUClusterTransition } from './gpu-cluster/gpu-cluster-state-transitions.js';
 import type { GPUClusterState, GPUClusterSimEvent } from './gpu-cluster/gpu-cluster-types.js';
+
+import { LlmPipelineInvariantChecker } from './llm-pipeline/llm-pipeline-invariants.js';
+import { createDefaultLlmPipelineCluster, pureLlmPipelineTransition } from './llm-pipeline/llm-pipeline-state-transitions.js';
+import type { LlmPipelineClusterState, LlmPipelineSimEvent } from './llm-pipeline/llm-pipeline-types.js';
+
+import { LlmGatewayInvariantChecker } from './llm-gateway/llm-gateway-invariants.js';
+import { createDefaultLlmGatewayCluster, pureLlmGatewayTransition } from './llm-gateway/llm-gateway-state-transitions.js';
+import type { LlmGatewayClusterState, LlmGatewaySimEvent } from './llm-gateway/llm-gateway-types.js';
 
 export interface DomainPluginMetadata {
   id: string;
@@ -540,63 +541,6 @@ export const TransactionsDomainPlugin: DomainPlugin<
   scenarioLibrary: [],
 };
 
-export const RAGDomainPlugin: DomainPlugin<RAGClusterState, RAGSimEvent> = {
-  metadata: {
-    id: 'rag',
-    name: 'Retrieval-Augmented Generation (RAG)',
-    version: '1.0.0',
-    category: 'AI_INFRA',
-    description:
-      'Modular RAG with Dense Passage Retrieval, sparse BM25 lexical matching, Reciprocal Rank Fusion (RRF), Cross-Encoder re-ranking, and Lost-in-the-Middle context packing.',
-    fidelityTag: 'PROTOCOL_COMPATIBLE',
-    fidelityDisplayName: 'Modular RAG / RRF',
-    icon: '📚',
-    color: '#3b82f6',
-  },
-  createDefaultState: () => createDefaultRAGCluster(),
-  reduceState: (state, event, rng) => pureRAGTransition(state, event, rng),
-  validateInvariants: (state) => {
-    const checker = new RAGInvariantChecker();
-    const violation = checker.check(state);
-    if (violation && !violation.isPedagogicalFlaw) {
-      return {
-        passed: false,
-        violation: { name: violation.invariantName, description: violation.description },
-      };
-    }
-    return { passed: true };
-  },
-  scenarioLibrary: [],
-};
-
-export const AgentsDomainPlugin: DomainPlugin<AgentsClusterState, AgentsSimEvent> = {
-  metadata: {
-    id: 'agents',
-    name: 'Multi-Agent MCP Swarms',
-    version: '1.0.0',
-    category: 'AI_INFRA',
-    description:
-      'Multi-agent ReAct orchestration, Model Context Protocol (MCP) JSON-RPC 2.0 tool transport, hierarchical supervision, and acyclic loop cycle guards.',
-    fidelityTag: 'PROTOCOL_COMPATIBLE',
-    fidelityDisplayName: 'MCP 2024-11-05 / ReAct',
-    icon: '🤖',
-    color: '#8b5cf6',
-  },
-  createDefaultState: () => createDefaultAgentsCluster(),
-  reduceState: (state, event, rng) => pureAgentsTransition(state, event, rng),
-  validateInvariants: (state) => {
-    const checker = new AgentsInvariantChecker();
-    const violation = checker.check(state);
-    if (violation && !violation.isPedagogicalFlaw) {
-      return {
-        passed: false,
-        violation: { name: violation.invariantName, description: violation.description },
-      };
-    }
-    return { passed: true };
-  },
-  scenarioLibrary: [],
-};
 
 export const LLMServingDomainPlugin: DomainPlugin<LLMServingClusterState, LLMServingSimEvent> = {
   metadata: {
@@ -685,6 +629,64 @@ export const GPUClusterDomainPlugin: DomainPlugin<GPUClusterState, GPUClusterSim
   scenarioLibrary: [],
 };
 
+export const LlmPipelineDomainPlugin: DomainPlugin<LlmPipelineClusterState, LlmPipelineSimEvent> = {
+  metadata: {
+    id: 'llm-pipeline',
+    name: 'LLM Pipeline & Lineage',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'ETL document chunking, dense + BM25 hybrid search with RRF fusion, agentic tool DAG execution, and W3C PROV end-to-end lineage traceability.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'OpenLineage / W3C PROV / RRF',
+    icon: '🧬',
+    color: '#06b6d4',
+  },
+  createDefaultState: () => createDefaultLlmPipelineCluster(),
+  reduceState: (state, event, rng) => pureLlmPipelineTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new LlmPipelineInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const LlmGatewayDomainPlugin: DomainPlugin<LlmGatewayClusterState, LlmGatewaySimEvent> = {
+  metadata: {
+    id: 'llm-gateway',
+    name: 'LLM Gateway & Guardrails',
+    version: '1.0.0',
+    category: 'GATEWAY',
+    description:
+      'Multi-provider fallback routing with circuit breakers (CLOSED/OPEN/HALF_OPEN), cosine semantic caching, and pre-execution adversarial injection guardrails.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Martin Fowler FSM / Cosine Cache / Guardrails',
+    icon: '🛡️',
+    color: '#3b82f6',
+  },
+  createDefaultState: () => createDefaultLlmGatewayCluster(),
+  reduceState: (state, event, rng) => pureLlmGatewayTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new LlmGatewayInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
 export class DomainRegistry {
   private static readonly plugins = new Map<string, DomainPlugin>([
     ['kafka', KafkaDomainPlugin],
@@ -700,8 +702,8 @@ export class DomainRegistry {
     ['cdn-cache', CdnCacheDomainPlugin],
     ['id-gen', IdGenDomainPlugin],
     ['transactions', TransactionsDomainPlugin],
-    ['rag', RAGDomainPlugin],
-    ['agents', AgentsDomainPlugin],
+    ['llm-pipeline', LlmPipelineDomainPlugin],
+    ['llm-gateway', LlmGatewayDomainPlugin],
     ['llm-serving', LLMServingDomainPlugin],
     ['vectordb', VectorDBDomainPlugin],
     ['gpu-cluster', GPUClusterDomainPlugin],

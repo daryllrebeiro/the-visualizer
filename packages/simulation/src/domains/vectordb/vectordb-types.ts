@@ -94,6 +94,7 @@ export type VectorDBSimEvent =
         queryId: string;
         queryVector: number[];
         k?: number | undefined;
+        efSearch?: number | undefined;
       };
     }
   | {

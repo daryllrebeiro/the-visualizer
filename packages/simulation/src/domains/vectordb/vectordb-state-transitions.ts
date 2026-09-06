@@ -153,7 +153,7 @@ export function pureVectorDBTransition(
         neighborsByLayer[l] = sorted.slice(0, maxNeighbors).map((s) => s.id);
 
         const currentLayerNeighbors = neighborsByLayer[l] ?? [];
-        // Bi-directional connection
+        // Bi-directional connection (Malkov & Yashunin 2018 heuristic: keep closest neighbors)
         for (const neighborId of currentLayerNeighbors) {
           const neighbor = nextState.hnswGraph.nodes[neighborId];
           const neighborLayer = neighbor?.neighborsByLayer[l];
@@ -161,6 +161,18 @@ export function pureVectorDBTransition(
             if (!neighborLayer.includes(nodeId)) {
               if (neighborLayer.length < maxNeighbors) {
                 neighborLayer.push(nodeId);
+              } else {
+                const candNeighbors = [...neighborLayer, nodeId].map((id) => ({
+                  id,
+                  dist: euclideanDistance(
+                    neighbor.vector,
+                    id === nodeId ? vector : nextState.hnswGraph.nodes[id]!.vector,
+                  ),
+                }));
+                candNeighbors.sort((a, b) => a.dist - b.dist);
+                neighbor.neighborsByLayer[l] = candNeighbors
+                  .slice(0, maxNeighbors)
+                  .map((c) => c.id);
               }
             }
           }
@@ -187,6 +199,7 @@ export function pureVectorDBTransition(
 
     case 'VEC_QUERY_KNN': {
       const { queryId, queryVector, k = 3 } = event.payload;
+      const efSearch = (event.payload as any).efSearch ?? nextState.hnswGraph.efSearch ?? 16;
       const entryId = nextState.hnswGraph.entryPointNodeId ?? Object.keys(nextState.hnswGraph.nodes)[0]!;
       const entryNode = nextState.hnswGraph.nodes[entryId];
       const initialDist = entryNode ? euclideanDistance(queryVector, entryNode.vector) : 0;
@@ -220,27 +233,67 @@ export function pureVectorDBTransition(
         currLayer--;
       }
 
-      // At layer 0, collect efSearch candidates
+      // At layer 0, explore using efSearch-bounded candidate beam (Malkov & Yashunin 2018 Algorithm 2)
       const l0Node = nextState.hnswGraph.nodes[currId];
-      const l0Neighbors = l0Node?.neighborsByLayer[0] ?? [];
-      const allCandidates: VectorCandidate[] = [
-        { nodeId: currId, distance: euclideanDistance(queryVector, l0Node!.vector) },
-      ];
+      const startDist = l0Node ? euclideanDistance(queryVector, l0Node.vector) : Infinity;
 
-      for (const nId of l0Neighbors) {
-        const n = nextState.hnswGraph.nodes[nId];
-        if (n) {
-          allCandidates.push({ nodeId: nId, distance: euclideanDistance(queryVector, n.vector) });
-          nextState.activeQuery.visitedNodeIds.push(nId);
+      const visited = new Set<string>([currId]);
+      const C: VectorCandidate[] = [{ nodeId: currId, distance: startDist }];
+      const W: VectorCandidate[] = [{ nodeId: currId, distance: startDist }];
+
+      while (C.length > 0) {
+        const c = C.shift()!;
+        const f = W[W.length - 1]!;
+
+        if (c.distance > f.distance && W.length >= efSearch) {
+          break;
+        }
+
+        const cNode = nextState.hnswGraph.nodes[c.nodeId];
+        const neighbors = cNode?.neighborsByLayer[0] ?? [];
+
+        for (const nId of neighbors) {
+          if (!visited.has(nId)) {
+            visited.add(nId);
+            nextState.activeQuery.visitedNodeIds.push(nId);
+            const nNode = nextState.hnswGraph.nodes[nId];
+            if (nNode) {
+              const d = euclideanDistance(queryVector, nNode.vector);
+              nextState.activeQuery.distanceComputationsCount++;
+
+              if (d < f.distance || W.length < efSearch) {
+                C.push({ nodeId: nId, distance: d });
+                C.sort((a, b) => a.distance - b.distance);
+
+                W.push({ nodeId: nId, distance: d });
+                W.sort((a, b) => a.distance - b.distance);
+
+                if (W.length > efSearch) {
+                  W.pop();
+                }
+              }
+            }
+          }
         }
       }
-      nextState.activeQuery.distanceComputationsCount += l0Neighbors.length;
 
-      allCandidates.sort((a, b) => a.distance - b.distance);
-      nextState.activeQuery.kNearestResults = allCandidates.slice(0, k);
+      nextState.activeQuery.kNearestResults = W.slice(0, k);
       nextState.activeQuery.currentLayer = 0;
-      nextState.activeQuery.currentNodeId = currId;
+      nextState.activeQuery.currentNodeId = W[0]?.nodeId ?? currId;
       nextState.activeQuery.status = 'COMPLETED';
+
+      // Dynamic Recall@k computation against exact brute-force ground truth
+      const allBruteForce = Object.values(nextState.hnswGraph.nodes).map((n) => ({
+        id: n.id,
+        distance: euclideanDistance(queryVector, n.vector),
+      }));
+      allBruteForce.sort((a, b) => a.distance - b.distance);
+      const groundTruthTopK = new Set(allBruteForce.slice(0, k).map((x) => x.id));
+
+      const foundTopK = nextState.activeQuery.kNearestResults.map((r) => r.nodeId);
+      const hits = foundTopK.filter((id) => groundTruthTopK.has(id)).length;
+      nextState.metrics.recallAtK = Number((hits / k).toFixed(4));
+      nextState.metrics.avgDistanceCalcs = nextState.activeQuery.distanceComputationsCount;
       break;
     }
 

@@ -57,6 +57,41 @@ export interface RingAllReduceState {
   activeTransfers: Array<{ fromGPU: string; toGPU: string; chunkIndex: number }>;
 }
 
+export interface ModelWeightShard {
+  shardId: string;
+  rank: number;
+  layerRange: [number, number];
+  parameterHash: number;
+  fp32MasterWeightSum: number;
+}
+
+export interface OptimizerState {
+  step: number;
+  learningRate: number;
+  beta1: number;
+  beta2: number;
+  weightDecay: number;
+}
+
+export interface GPUCheckpoint {
+  checkpointId: string;
+  step: number;
+  epoch: number;
+  modelFlopsUtilizationPct: number;
+  weightShards: ModelWeightShard[];
+  optimizerState: OptimizerState;
+  checksum: string;
+  corrupted?: boolean;
+}
+
+export interface TrainingJobState {
+  jobId: string;
+  currentStep: number;
+  totalSteps: number;
+  status: 'TRAINING' | 'PREEMPTED' | 'RESTARTING' | 'COMPLETED';
+  lastCheckpoint: GPUCheckpoint | null;
+}
+
 export interface GPUClusterState {
   clusterId: string;
   tick: number;
@@ -66,6 +101,7 @@ export interface GPUClusterState {
   zeroStage: ZeROStage;
   pipelineSchedule: PipelineScheduleState;
   allReduceState: RingAllReduceState;
+  trainingJob?: TrainingJobState;
   metrics: {
     modelFlopsUtilizationPct: number;
     stepTimeMs: number;
@@ -122,4 +158,43 @@ export type GPUClusterSimEvent =
         sourceGPU: string;
         targetGPU: string;
       };
+    }
+  | {
+      id: string;
+      tick: number;
+      type: 'GPU_SPOT_PREEMPTION';
+      payload?: { saveCheckpoint?: boolean } | undefined;
+    }
+  | {
+      id: string;
+      tick: number;
+      type: 'GPU_RESUME_TRAINING';
+      payload?: { forceCorruptedCheckpoint?: boolean } | undefined;
+    }
+  | {
+      id: string;
+      tick: number;
+      type: 'GPU_CORRUPT_CHECKPOINT';
+      payload?: Record<string, unknown> | undefined;
+    }
+  | {
+      id: string;
+      tick: number;
+      type: 'GPU_CHECKPOINT_CORRUPT_RESTART';
+      payload: {
+        reason: string;
+        expectedChecksum?: string;
+        actualChecksum?: string;
+        restartedAtStep: number;
+      };
+    }
+  | {
+      id: string;
+      tick: number;
+      type: 'GPU_RESUME_FROM_CHECKPOINT';
+      payload: {
+        checkpointId: string;
+        resumedAtStep: number;
+      };
     };
+

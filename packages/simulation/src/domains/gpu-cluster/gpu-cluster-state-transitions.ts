@@ -9,8 +9,75 @@ import type {
   GPUNode,
   InterconnectLink,
   MicrobatchStep,
+  ModelWeightShard,
+  OptimizerState,
   ZeROStage,
 } from './gpu-cluster-types.js';
+
+export function generateModelWeightShards(step: number, epoch: number, numShards = 8): ModelWeightShard[] {
+  const shards: ModelWeightShard[] = [];
+  const layersPerShard = 10; // 80 layers total
+  for (let i = 0; i < numShards; i++) {
+    const startLayer = i * layersPerShard;
+    const endLayer = startLayer + layersPerShard - 1;
+    const paramHash = (0x9e3779b9 ^ (step * 7919) ^ (i * 1013) ^ (epoch * 503)) >>> 0;
+    const fp32Sum = Number((12345.678 + i * 42.1 + step * 0.5).toFixed(4));
+    shards.push({
+      shardId: `shard-${i}`,
+      rank: i,
+      layerRange: [startLayer, endLayer],
+      parameterHash: paramHash,
+      fp32MasterWeightSum: fp32Sum,
+    });
+  }
+  return shards;
+}
+
+export function generateOptimizerState(step: number): OptimizerState {
+  return {
+    step,
+    learningRate: 0.0001,
+    beta1: 0.9,
+    beta2: 0.999,
+    weightDecay: 0.01,
+  };
+}
+
+export function computeCheckpointChecksum(
+  checkpointId: string,
+  step: number,
+  epoch: number,
+  weightShards: ModelWeightShard[] = [],
+  optimizerState?: OptimizerState,
+): string {
+  let hash = 0x811c9dc5;
+  const updateString = (s: string) => {
+    for (let i = 0; i < s.length; i++) {
+      hash ^= s.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+  };
+  const updateInt = (n: number) => {
+    hash ^= (n >>> 0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  };
+
+  updateString(`${checkpointId}:${step}:${epoch}:zero-3d-parallel`);
+  for (const shard of weightShards) {
+    updateString(`${shard.shardId}:${shard.rank}:${shard.layerRange[0]}-${shard.layerRange[1]}`);
+    updateInt(shard.parameterHash);
+    updateString(shard.fp32MasterWeightSum.toFixed(4));
+  }
+  if (optimizerState) {
+    updateInt(optimizerState.step);
+    updateString(optimizerState.learningRate.toString());
+    updateString(optimizerState.beta1.toString());
+    updateString(optimizerState.beta2.toString());
+    updateString(optimizerState.weightDecay.toString());
+  }
+
+  return `0x${hash.toString(16).padStart(8, '0')}`;
+}
 
 function getZeROAllocatedMB(stage: ZeROStage): number {
   switch (stage) {
@@ -97,6 +164,13 @@ export function createDefaultGPUCluster(clusterId = 'gpu-cluster-1'): GPUCluster
       totalChunks: 8,
       activeTransfers: [],
     },
+    trainingJob: {
+      jobId: 'train-llama-70b',
+      currentStep: 150,
+      totalSteps: 1000,
+      status: 'TRAINING',
+      lastCheckpoint: null,
+    },
     metrics: {
       modelFlopsUtilizationPct: 54.2,
       stepTimeMs: 142.5,
@@ -114,6 +188,8 @@ export function pureGPUClusterTransition(
     JSON.stringify(state),
   ) as GPUClusterState;
   nextState.tick = event.tick;
+  const emittedEvents: GPUClusterSimEvent[] = [];
+
 
   switch (event.type) {
     case 'TICK' as any:
@@ -233,8 +309,123 @@ export function pureGPUClusterTransition(
       }
       break;
     }
+
+    case 'GPU_SPOT_PREEMPTION': {
+      if (!nextState.trainingJob) {
+        nextState.trainingJob = {
+          jobId: 'train-llama-70b',
+          currentStep: 150,
+          totalSteps: 1000,
+          status: 'TRAINING',
+          lastCheckpoint: null,
+        };
+      }
+      nextState.trainingJob.status = 'PREEMPTED';
+      if (event.payload?.saveCheckpoint !== false) {
+        const step = nextState.trainingJob.currentStep;
+        const epoch = Math.floor(step / 100);
+        const checkpointId = `ckpt-${nextState.tick}-${step}`;
+        const weightShards = generateModelWeightShards(step, epoch);
+        const optimizerState = generateOptimizerState(step);
+        const checksum = computeCheckpointChecksum(
+          checkpointId,
+          step,
+          epoch,
+          weightShards,
+          optimizerState,
+        );
+        nextState.trainingJob.lastCheckpoint = {
+          checkpointId,
+          step,
+          epoch,
+          modelFlopsUtilizationPct: nextState.metrics.modelFlopsUtilizationPct,
+          weightShards,
+          optimizerState,
+          checksum,
+          corrupted: false,
+        };
+      }
+      break;
+    }
+
+    case 'GPU_CORRUPT_CHECKPOINT': {
+      if (nextState.trainingJob?.lastCheckpoint) {
+        const firstShard = nextState.trainingJob.lastCheckpoint.weightShards?.[0];
+        if (firstShard) {
+          firstShard.parameterHash ^= 0xdeadbeef;
+        }
+        nextState.trainingJob.lastCheckpoint.corrupted = true;
+        nextState.trainingJob.lastCheckpoint.checksum = '0xDEADBEEF_CORRUPTED';
+      }
+      break;
+    }
+
+    case 'GPU_RESUME_TRAINING': {
+      if (!nextState.trainingJob) {
+        nextState.trainingJob = {
+          jobId: 'train-llama-70b',
+          currentStep: 0,
+          totalSteps: 1000,
+          status: 'TRAINING',
+          lastCheckpoint: null,
+        };
+      }
+      const job = nextState.trainingJob;
+      const ckpt = job.lastCheckpoint;
+      let isValid = false;
+      let failureReason = '';
+
+      if (!ckpt) {
+        failureReason = 'No checkpoint found; initiating fresh training';
+      } else if (ckpt.corrupted || event.payload?.forceCorruptedCheckpoint) {
+        failureReason = 'Explicit checkpoint corruption detected';
+      } else {
+        const expectedChecksum = computeCheckpointChecksum(
+          ckpt.checkpointId,
+          ckpt.step,
+          ckpt.epoch,
+          ckpt.weightShards,
+          ckpt.optimizerState,
+        );
+        if (ckpt.checksum !== expectedChecksum) {
+          failureReason = `Checksum mismatch: expected ${expectedChecksum}, got ${ckpt.checksum}`;
+        } else {
+          isValid = true;
+        }
+      }
+
+      if (isValid && ckpt) {
+        job.status = 'TRAINING';
+        job.currentStep = ckpt.step;
+        emittedEvents.push({
+          id: `resume-${nextState.tick}`,
+          tick: nextState.tick,
+          type: 'GPU_RESUME_FROM_CHECKPOINT',
+          payload: {
+            checkpointId: ckpt.checkpointId,
+            resumedAtStep: ckpt.step,
+          },
+        });
+      } else {
+        // Detected corruption or missing: enforce restart from scratch (step 0)
+        job.status = 'TRAINING';
+        job.currentStep = 0;
+        job.lastCheckpoint = null;
+        emittedEvents.push({
+          id: `restart-${nextState.tick}`,
+          tick: nextState.tick,
+          type: 'GPU_CHECKPOINT_CORRUPT_RESTART',
+          payload: {
+            reason: failureReason,
+            restartedAtStep: 0,
+          },
+        });
+      }
+      break;
+    }
   }
 
   (nextState as any).rngState = rng.getState();
-  return { nextState, emittedEvents: [] };
+  return { nextState, emittedEvents };
 }
+

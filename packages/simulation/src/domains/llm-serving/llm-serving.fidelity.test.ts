@@ -96,4 +96,192 @@ describe('Domain 11: LLM Inference Serving & PagedAttention Fidelity', () => {
     expect(state.kvBlockPool.freeBlockIndices.length).toBe(32);
     expect(state.metrics.totalCompleted).toBe(2);
   });
+
+  it('SERVE-3: ensures byte-identical output token sequence upon checkpoint-then-resume post preemption', () => {
+    // 1. Control Run: Single request runs to completion without any preemption
+    const rngControl = new DeterministicRNG(42);
+    let controlState = createDefaultLLMServingCluster();
+    // Clear default requests and submit single deterministic request
+    controlState.requests = {};
+    controlState.batchScheduler.runningRequestIds = [];
+    controlState.batchScheduler.preemptedRequestIds = [];
+
+    controlState = pureLLMServingTransition(
+      controlState,
+      {
+        id: 'sub-control',
+        tick: 1,
+        type: 'LLM_SUBMIT_REQUEST',
+        payload: { requestId: 'req-target', promptTokens: 32, maxGeneratedTokens: 12 },
+      },
+      rngControl,
+    ).nextState;
+
+    for (let t = 2; t <= 20; t++) {
+      controlState = pureLLMServingTransition(
+        controlState,
+        { id: `ctrl-step-${String(t)}`, tick: t, type: 'LLM_STEP_BATCH' },
+        rngControl,
+      ).nextState;
+      if (controlState.requests['req-target']?.state === 'FINISHED') break;
+    }
+
+    expect(controlState.requests['req-target']?.state).toBe('FINISHED');
+    const controlTokens = (controlState.requests['req-target'] as any).outputTokens;
+    expect(controlTokens).toBeDefined();
+    expect(controlTokens.length).toBe(12);
+
+    // 2. Preempted Run: Identical request, preempted partway through, then resumed to completion
+    const rngTest = new DeterministicRNG(42);
+    let testState = createDefaultLLMServingCluster();
+    testState.requests = {};
+    testState.batchScheduler.runningRequestIds = [];
+    testState.batchScheduler.preemptedRequestIds = [];
+
+    testState = pureLLMServingTransition(
+      testState,
+      {
+        id: 'sub-test',
+        tick: 1,
+        type: 'LLM_SUBMIT_REQUEST',
+        payload: { requestId: 'req-target', promptTokens: 32, maxGeneratedTokens: 12 },
+      },
+      rngTest,
+    ).nextState;
+
+    // Run 4 ticks: prefill then generate 2 tokens
+    for (let t = 2; t <= 5; t++) {
+      testState = pureLLMServingTransition(
+        testState,
+        { id: `test-step-${String(t)}`, tick: t, type: 'LLM_STEP_BATCH' },
+        rngTest,
+      ).nextState;
+    }
+
+    expect(testState.requests['req-target']?.state).toBe('DECODE');
+    expect(testState.requests['req-target']?.generatedTokens).toBeGreaterThan(0);
+
+    // Force preemption of req-target
+    testState = pureLLMServingTransition(
+      testState,
+      {
+        id: 'preempt-req',
+        tick: 6,
+        type: 'LLM_PREEMPT_REQUEST',
+        payload: { requestId: 'req-target' },
+      },
+      rngTest,
+    ).nextState;
+
+    expect(testState.requests['req-target']?.state).toBe('PREEMPTED');
+
+    // Run steps to let batch scheduler resume the preempted request and finish
+    for (let t = 7; t <= 30; t++) {
+      testState = pureLLMServingTransition(
+        testState,
+        { id: `test-resume-${String(t)}`, tick: t, type: 'LLM_STEP_BATCH' },
+        rngTest,
+      ).nextState;
+      if (testState.requests['req-target']?.state === 'FINISHED') break;
+    }
+
+    expect(testState.requests['req-target']?.state).toBe('FINISHED');
+    const resumedTokens = (testState.requests['req-target'] as any).outputTokens;
+    expect(resumedTokens).toBeDefined();
+    expect(resumedTokens.length).toBe(12);
+
+    // Byte-identical token sequence verification
+    expect(resumedTokens).toEqual(controlTokens);
+  });
+
+  it('SERVE-3b: detects token sequence divergence if checkpoint loses prior token context (mutation proof)', () => {
+    // 1. Control Run
+    const rngControl = new DeterministicRNG(42);
+    let controlState = createDefaultLLMServingCluster();
+    controlState.requests = {};
+    controlState.batchScheduler.runningRequestIds = [];
+    controlState.batchScheduler.preemptedRequestIds = [];
+
+    controlState = pureLLMServingTransition(
+      controlState,
+      {
+        id: 'sub-control',
+        tick: 1,
+        type: 'LLM_SUBMIT_REQUEST',
+        payload: { requestId: 'req-target', promptTokens: 32, maxGeneratedTokens: 12 },
+      },
+      rngControl,
+    ).nextState;
+
+    for (let t = 2; t <= 20; t++) {
+      controlState = pureLLMServingTransition(
+        controlState,
+        { id: `ctrl-step-${String(t)}`, tick: t, type: 'LLM_STEP_BATCH' },
+        rngControl,
+      ).nextState;
+      if (controlState.requests['req-target']?.state === 'FINISHED') break;
+    }
+    const controlTokens = (controlState.requests['req-target'] as any).outputTokens;
+
+    // 2. Broken checkpoint run: position is preserved but prior tokens in KV cache are lost
+    const rngTest = new DeterministicRNG(42);
+    let testState = createDefaultLLMServingCluster();
+    testState.requests = {};
+    testState.batchScheduler.runningRequestIds = [];
+    testState.batchScheduler.preemptedRequestIds = [];
+
+    testState = pureLLMServingTransition(
+      testState,
+      {
+        id: 'sub-test',
+        tick: 1,
+        type: 'LLM_SUBMIT_REQUEST',
+        payload: { requestId: 'req-target', promptTokens: 32, maxGeneratedTokens: 12 },
+      },
+      rngTest,
+    ).nextState;
+
+    for (let t = 2; t <= 5; t++) {
+      testState = pureLLMServingTransition(
+        testState,
+        { id: `test-step-${String(t)}`, tick: t, type: 'LLM_STEP_BATCH' },
+        rngTest,
+      ).nextState;
+    }
+
+    // Force preemption
+    testState = pureLLMServingTransition(
+      testState,
+      {
+        id: 'preempt-req',
+        tick: 6,
+        type: 'LLM_PREEMPT_REQUEST',
+        payload: { requestId: 'req-target' },
+      },
+      rngTest,
+    ).nextState;
+
+    // Deliberately simulate broken checkpoint that lost prior token cache
+    const targetReq = testState.requests['req-target'];
+    expect(targetReq?.checkpoint).toBeDefined();
+    if (targetReq?.checkpoint) {
+      targetReq.checkpoint.tokens = []; // Cleared tokens / lost context
+    }
+
+    // Resume from broken checkpoint
+    for (let t = 7; t <= 30; t++) {
+      testState = pureLLMServingTransition(
+        testState,
+        { id: `test-resume-${String(t)}`, tick: t, type: 'LLM_STEP_BATCH' },
+        rngTest,
+      ).nextState;
+      if (testState.requests['req-target']?.state === 'FINISHED') break;
+    }
+
+    const brokenResumedTokens = (testState.requests['req-target'] as any).outputTokens;
+    expect(brokenResumedTokens).toBeDefined();
+    // Divergence confirmed: broken checkpoint fails to reproduce identical token sequence
+    expect(brokenResumedTokens).not.toEqual(controlTokens);
+  });
 });
+
