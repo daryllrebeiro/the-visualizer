@@ -51,6 +51,18 @@ export {
 } from './reconstitution/scenario-generator.js';
 
 export {
+  ScenarioStudio,
+  type Keyframe,
+  type ScenarioRecording,
+} from './timeline/scenario-studio.js';
+export {
+  DomainPluginBuilder,
+  type InvariantCheckResult,
+  type StateReducer,
+  type InvariantValidator,
+} from './sdk/domain-builder.js';
+
+export {
   DomainRegistry,
   KafkaDomainPlugin,
   RaftDomainPlugin,
