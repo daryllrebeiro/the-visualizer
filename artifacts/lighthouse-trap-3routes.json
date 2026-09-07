@@ -1,0 +1,68 @@
+[
+  {
+    "route": "/kafka",
+    "htmlFile": "kafka.html",
+    "batch": "Original-8",
+    "baseline": {
+      "score": 67,
+      "tbt": 222,
+      "lcp": "5215.8"
+    },
+    "mutated": {
+      "score": 56,
+      "tbt": 804,
+      "lcp": "4315.2"
+    },
+    "recovered": {
+      "score": 73,
+      "tbt": 336,
+      "lcp": "4130.3"
+    },
+    "scoreDrop": 11,
+    "tbtIncrease": 582
+  },
+  {
+    "route": "/rate-limiter",
+    "htmlFile": "rate-limiter.html",
+    "batch": "System-Design-Canon",
+    "baseline": {
+      "score": 72,
+      "tbt": 351,
+      "lcp": "4213.7"
+    },
+    "mutated": {
+      "score": 58,
+      "tbt": 828,
+      "lcp": "4396.9"
+    },
+    "recovered": {
+      "score": 49,
+      "tbt": 1730,
+      "lcp": "4564.7"
+    },
+    "scoreDrop": 14,
+    "tbtIncrease": 477
+  },
+  {
+    "route": "/llm-gateway",
+    "htmlFile": "llm-gateway.html",
+    "batch": "LLM/AI Domain",
+    "baseline": {
+      "score": 60,
+      "tbt": 1327,
+      "lcp": "3349.5"
+    },
+    "mutated": {
+      "score": 81,
+      "tbt": 90,
+      "lcp": "4045.0"
+    },
+    "recovered": {
+      "score": 65,
+      "tbt": 875,
+      "lcp": "3409.8"
+    },
+    "scoreDrop": -21,
+    "tbtIncrease": -1237
+  }
+]
