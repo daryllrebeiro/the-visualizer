@@ -19,8 +19,8 @@ describe('API CORS Security & Origin Whitelist', () => {
         }
         const allowedEnv = process.env.ALLOWED_ORIGINS
           ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
-          : [];
-        if (allowedEnv.includes(origin) || origin.endsWith('.run.app')) {
+          : ['https://the-visualizer-frontend.run.app'];
+        if (allowedEnv.includes(origin)) {
           return origin;
         }
         return null;
@@ -45,6 +45,18 @@ describe('API CORS Security & Origin Whitelist', () => {
     expect(allowOrigin).toBeNull();
   });
 
+  it('rejects unlisted arbitrary Cloud Run origins from attacker-controlled tenants', async () => {
+    const res = await app.request('/test-cors', {
+      method: 'GET',
+      headers: {
+        Origin: 'https://attacker-random-tenant.run.app',
+      },
+    });
+
+    const allowOrigin = res.headers.get('Access-Control-Allow-Origin');
+    expect(allowOrigin).toBeNull();
+  });
+
   it('allows authorized localhost origins with credentials', async () => {
     const res = await app.request('/test-cors', {
       method: 'GET',
@@ -57,7 +69,7 @@ describe('API CORS Security & Origin Whitelist', () => {
     expect(res.headers.get('Access-Control-Allow-Credentials')).toBe('true');
   });
 
-  it('allows authorized Cloud Run production domains', async () => {
+  it('allows explicitly whitelisted production domain in ALLOWED_ORIGINS', async () => {
     const res = await app.request('/test-cors', {
       method: 'GET',
       headers: {

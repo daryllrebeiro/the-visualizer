@@ -4,7 +4,7 @@ services:
     container_name: kafka-visualizer-redis
     command: redis-server --requirepass redis_local_secret
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -22,7 +22,7 @@ services:
       POSTGRES_PASSWORD: visualizer_password
       POSTGRES_DB: visualizer_db
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped

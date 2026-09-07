@@ -45,7 +45,13 @@ export const authenticate: MiddlewareHandler = async (c, next) => {
         return;
       }
 
-      const payload = await verify(token, JWT_SECRET, 'HS256');
+      const payload = (await verify(token, JWT_SECRET, 'HS256')) as Record<string, unknown>;
+      // SEC-OFF-02: Reject refresh tokens and non-access tokens from general API routes
+      if (payload && (payload.type === 'refresh' || (payload.type && payload.type !== 'access'))) {
+        await next();
+        return;
+      }
+
       if (payload && typeof payload.id === 'string') {
         let user: { id: string; email: string; name?: string | null } | undefined;
         try {

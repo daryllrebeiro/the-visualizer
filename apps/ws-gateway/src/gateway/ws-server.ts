@@ -198,7 +198,6 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
           origin.startsWith('http://localhost:') ||
           origin.startsWith('https://localhost:') ||
           origin.startsWith('http://127.0.0.1:') ||
-          origin.endsWith('.run.app') ||
           (process.env.ALLOWED_ORIGINS
             ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).includes(origin)
             : false);
@@ -263,7 +262,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
         // Apply WebSocket message ingress rate-limiting
         const { allowed, terminate } = checkConnectionRateLimit(ws);
         if (terminate) {
-          wsRateLimitedMessagesTotal.inc({ userId: ws.userId || 'anonymous', tier: 'system' });
+          wsRateLimitedMessagesTotal.inc({ tier: 'system' });
           wsConnectionDropsTotal.inc({ reason: 'rate_limit_hard' });
           ws.send(
             pack({
@@ -281,7 +280,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
         }
 
         if (!allowed) {
-          wsRateLimitedMessagesTotal.inc({ userId: ws.userId || 'anonymous', tier: 'free' });
+          wsRateLimitedMessagesTotal.inc({ tier: 'free' });
           ws.send(
             pack({
               type: 'SESSION_ERROR',
@@ -341,12 +340,21 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             try {
               await roomManager.joinRoom(targetRoomId, domainId, ws.userId ?? '', ws);
             } catch (err: any) {
+              const isAccessDenied = err.message?.includes('Access denied');
+              const code = isAccessDenied ? 'ERR_FORBIDDEN' : 'ERR_DOMAIN_LOCKED';
+              logger.warn(
+                { event: 'SECURITY_AUDIT', action: 'WS_JOIN_ROOM_REJECTED', userId: ws.userId, roomId: targetRoomId, reason: err.message },
+                'Join room intent rejected',
+              );
               ws.send(
                 pack({
                   type: 'MSG_SESSION_ERROR',
-                  payload: { code: 'ERR_DOMAIN_LOCKED', message: err.message, fatal: true },
+                  payload: { code, message: err.message, fatal: true },
                 }),
               );
+              if (isAccessDenied) {
+                ws.close(1008, 'Policy Violation: Unauthorized room access');
+              }
               return;
             }
 
@@ -369,7 +377,9 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
             // Fetch current engine state if session exists
             const session = simulationRunner.getSession(targetRoomId);
-            const currentState = session ? session.engine.state : topology;
+            const currentState = session
+              ? (session.engine ? session.engine.state : session.domainState)
+              : topology;
 
             // Confirm join
             ws.send(

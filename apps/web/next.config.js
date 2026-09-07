@@ -6,9 +6,17 @@ const nextConfig = {
   },
   async headers() {
     const isProd = process.env.NODE_ENV === 'production';
+    const configuredHosts = [
+      process.env.NEXT_PUBLIC_API_URL,
+      process.env.NEXT_PUBLIC_WS_URL,
+      ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : []),
+    ]
+      .filter(Boolean)
+      .join(' ');
+
     const connectSrc = isProd
-      ? "connect-src 'self' https://*.run.app wss://*.run.app;"
-      : "connect-src 'self' https://*.run.app wss://*.run.app http://localhost:* ws://localhost:* https://localhost:* wss://localhost:*;";
+      ? `connect-src 'self' ${configuredHosts};`.replace(/\s+/g, ' ')
+      : `connect-src 'self' ${configuredHosts} http://localhost:* ws://localhost:* https://localhost:* wss://localhost:*;`.replace(/\s+/g, ' ');
     const scriptSrc = isProd
       ? "script-src 'self' 'unsafe-inline';"
       : "script-src 'self' 'unsafe-eval' 'unsafe-inline';";
@@ -32,8 +40,9 @@ const nextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              `default-src 'self'; ${scriptSrc} style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; ${connectSrc}`,
+              `default-src 'self'; frame-ancestors 'none'; ${scriptSrc} style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; ${connectSrc}`,
           },
+
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',

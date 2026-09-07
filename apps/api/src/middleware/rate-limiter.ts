@@ -72,14 +72,37 @@ export async function checkRateLimit(
 }
 
 /**
+ * Resolves reliable client IP address from proxy headers.
+ * Defends against X-Forwarded-For leftmost client header spoofing (SEC-OFF-03).
+ */
+export function extractClientIp(c: Parameters<MiddlewareHandler>[0]): string {
+  const cfConnectingIp = c.req.header('cf-connecting-ip');
+  if (cfConnectingIp) return cfConnectingIp.trim();
+
+  const realIp = c.req.header('x-real-ip');
+  if (realIp) return realIp.trim();
+
+  const forwardedFor = c.req.header('x-forwarded-for');
+  if (forwardedFor) {
+    const parts = forwardedFor.split(',').map((p) => p.trim()).filter(Boolean);
+    const lastIp = parts[parts.length - 1];
+    if (lastIp) {
+      return lastIp;
+    }
+  }
+
+  return 'ip-unknown';
+}
+
+/**
  * Hono Middleware enforcing Token Bucket rate limiting.
  */
 export function rateLimiter(
   config: RateLimitConfig = { limit: 60, refillRate: 1 },
 ): MiddlewareHandler {
   return async (c, next) => {
-    // Identify client by IP (x-forwarded-for or remote address)
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'ip-unknown';
+    // Identify client by IP (secure proxy header extraction) or authenticated user ID
+    const ip = extractClientIp(c);
     const user = c.get('user') as { id: string } | undefined;
     const identifier = user ? `user:${user.id}` : `ip:${ip}`;
 

@@ -15,6 +15,7 @@ describe('JWT Token Revocation & Session Invalidation', () => {
       id: 'revoked-user-1',
       email: 'revoked@example.com',
       name: 'Revoked User',
+      type: 'access',
       exp: Math.floor(Date.now() / 1000) + 3600,
     };
     const token = await sign(payload, secret);
@@ -45,21 +46,37 @@ describe('JWT Token Revocation & Session Invalidation', () => {
     expect(body.error?.code).toBe('UNAUTHORIZED');
   });
 
-  it('revokes tokens via the /auth/revoke endpoint', async () => {
+  it('rejects unauthenticated calls to /auth/revoke with 401', async () => {
+    const res = await app.request('/auth/revoke', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token: 'arbitrary-unauthenticated-token' }),
+    });
+
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as any;
+    expect(body.error?.code).toBe('UNAUTHORIZED');
+  });
+
+  it('revokes tokens via the /auth/revoke endpoint when authenticated', async () => {
     tokenRevocationStore.clear();
 
     const payload = {
       id: 'revoked-user-2',
       email: 'revoked2@example.com',
       name: 'Revoked User 2',
+      type: 'access',
       exp: Math.floor(Date.now() / 1000) + 3600,
     };
     const token = await sign(payload, secret);
 
-    // Call /auth/revoke
+    // Call /auth/revoke with valid Bearer token
     const revokeRes = await app.request('/auth/revoke', {
       method: 'POST',
       headers: {
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ token }),

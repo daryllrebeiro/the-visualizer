@@ -1,9 +1,11 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import type { Server as HttpServer } from 'node:http';
 
+import { RESOURCE_LIMITS } from '@the-visualizer/config';
 import { tokenRevocationStore } from '@the-visualizer/contracts';
 import { captureException, initGlobalExceptionHandling, register } from '@the-visualizer/logging';
 
@@ -46,6 +48,24 @@ app.onError((err, c) => {
 
 // 1. Global Middlewares
 app.use('*', secureHeaders());
+app.use(
+  '*',
+  bodyLimit({
+    maxSize: RESOURCE_LIMITS.FREE.maxTopologyUploadBytes, // 512 KB
+    onError: (c) => {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'PAYLOAD_TOO_LARGE',
+            message: 'Request payload exceeds maximum allowed size of 512KB',
+          },
+        },
+        413,
+      );
+    },
+  }),
+);
 if (process.env.NODE_ENV !== 'test' && process.env.ENABLE_RATE_LIMITER !== 'false') {
   app.use('*', rateLimiter({ limit: 60, refillRate: 1 }));
 }
@@ -64,11 +84,11 @@ app.use(
       ) {
         return origin;
       }
-      // Allow Cloud Run and configured production domains
+      // Allow configured production domains
       const allowedEnv = process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
         : [];
-      if (allowedEnv.includes(origin) || origin.endsWith('.run.app')) {
+      if (allowedEnv.includes(origin)) {
         return origin;
       }
       // Reject any unlisted/arbitrary origin

@@ -4,13 +4,19 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sign, verify } from 'hono/jwt';
 import { z } from 'zod';
 
-import { tokenRevocationStore } from '@the-visualizer/contracts';
+import { tokenRevocationStore, wsTicketStore } from '@the-visualizer/contracts';
+import { logger } from '@the-visualizer/logging';
 
 import { JWT_SECRET } from '../config.js';
+import { requireAuth } from '../middleware/auth.middleware.js';
 import { userRepository } from '../repositories/user.repository.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 
 const authRouter = new Hono();
+
+// Constant salt and key format matching scrypt output to neutralize user enumeration timing attacks
+const DUMMY_PASSWORD_HASH =
+  'a1b2c3d4e5f60718293a4b5c6d7e8f90:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 
 const registerSchema = z.object({
   email: z.string().email().max(255),
@@ -61,8 +67,23 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
 
   const existing = await userRepository.getUserByEmail(email);
   if (existing) {
+    // Execute dummy scrypt calculation to eliminate registration timing side-channel
+    await hashPassword(password);
+    logger.warn(
+      { event: 'SECURITY_AUDIT', action: 'USER_REGISTRATION_COLLISION', email },
+      'Registration attempt on existing email',
+    );
     return c.json(
-      { success: false, error: { code: 'USER_EXISTS', message: 'Email already registered' } },
+      {
+        success: false,
+        error: {
+          code: 'USER_EXISTS',
+          message:
+            process.env.NODE_ENV === 'production'
+              ? 'Unable to complete registration. Please check your credentials or log in.'
+              : 'Email already registered',
+        },
+      },
       409,
     );
   }
@@ -88,6 +109,11 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
     maxAge: 7 * 24 * 60 * 60,
   });
 
+  logger.info(
+    { event: 'SECURITY_AUDIT', action: 'USER_REGISTERED', userId: user.id, email: user.email },
+    'New user registered',
+  );
+
   return c.json(
     {
       success: true,
@@ -105,6 +131,8 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
 
   const user = await userRepository.getUserByEmail(email);
   if (!user || !user.passwordHash) {
+    // Execute dummy scrypt calculation to eliminate timing side-channel (CWE-208)
+    await verifyPassword(password, DUMMY_PASSWORD_HASH);
     return c.json(
       {
         success: false,
@@ -125,6 +153,7 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
     );
   }
 
+
   const { accessToken, refreshToken } = await generateTokens(user);
 
   setCookie(c, 'session_token', accessToken, {
@@ -142,6 +171,11 @@ authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
     path: '/auth/refresh',
     maxAge: 7 * 24 * 60 * 60,
   });
+
+  logger.info(
+    { event: 'SECURITY_AUDIT', action: 'USER_LOGGED_IN', userId: user.id, email: user.email },
+    'User authentication successful',
+  );
 
   return c.json({
     success: true,
@@ -219,8 +253,54 @@ authRouter.post('/refresh', async (c) => {
   }
 });
 
+// ─── 3b. WebSocket Single-Use Ticket Exchange ────────────────────────────────
+authRouter.post('/ws-ticket', async (c) => {
+  let token = getCookie(c, 'session_token');
+  if (!token) {
+    const authHeader = c.req.header('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
+
+  if (!token) {
+    return c.json(
+      { success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+      401,
+    );
+  }
+
+  if (await tokenRevocationStore.isRevoked(token)) {
+    return c.json(
+      { success: false, error: { code: 'TOKEN_REVOKED', message: 'Session has been revoked' } },
+      401,
+    );
+  }
+
+  try {
+    const payload = (await verify(token, JWT_SECRET, 'HS256')) as Record<string, unknown>;
+    const ticket = await wsTicketStore.createTicket(
+      {
+        userId: payload.id as string,
+        email: payload.email as string,
+        name: (payload.name as string) ?? '',
+        createdAt: Date.now(),
+      },
+      30, // 30 seconds expiry
+    );
+
+    return c.json({ success: true, ticket, expiresInSeconds: 30 });
+  } catch {
+    return c.json(
+      { success: false, error: { code: 'INVALID_TOKEN', message: 'Invalid access token' } },
+      401,
+    );
+  }
+});
+
 // ─── 4. Logout & Revocation ──────────────────────────────────────────────────
 authRouter.post('/logout', async (c) => {
+
   const sessionToken = getCookie(c, 'session_token');
   const refreshToken = getCookie(c, 'refresh_token');
   const authHeader = c.req.header('Authorization');
@@ -234,7 +314,10 @@ authRouter.post('/logout', async (c) => {
   if (bearerToken) await tokenRevocationStore.revoke(bearerToken);
 
   deleteCookie(c, 'session_token', { path: '/' });
-  deleteCookie(c, 'refresh_token', { path: '/auth/refresh' });
+  logger.info(
+    { event: 'SECURITY_AUDIT', action: 'USER_LOGGED_OUT' },
+    'User session logged out and tokens revoked',
+  );
   return c.json({ success: true, message: 'Successfully logged out and session revoked' });
 });
 
@@ -242,15 +325,20 @@ const revokeSchema = z.object({
   token: z.string().min(1),
 });
 
-authRouter.post('/revoke', zValidator('json', revokeSchema), async (c) => {
+authRouter.post('/revoke', requireAuth, zValidator('json', revokeSchema), async (c) => {
   const { token } = c.req.valid('json');
+  const user = c.get('user');
   await tokenRevocationStore.revoke(token);
+  logger.info(
+    { event: 'SECURITY_AUDIT', action: 'TOKEN_REVOKED', actorId: user?.id },
+    'Token successfully revoked',
+  );
   return c.json({ success: true, message: 'Token successfully revoked' });
 });
 
 // ─── 5. Dev Login (Strictly Gated from Production) ────────────────────────────
 authRouter.post('/dev-login', zValidator('json', devLoginSchema), async (c) => {
-  if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEV_LOGIN !== 'true') {
+  if (process.env.NODE_ENV === 'production') {
     return c.json(
       {
         success: false,

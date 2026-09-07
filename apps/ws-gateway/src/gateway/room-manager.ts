@@ -31,7 +31,7 @@ export class RoomManager {
   private unassignedSockets = new Set<WebSocket>();
 
   // Room metadata and lifecycle activity
-  private roomMetadata = new Map<string, { domainId: string }>();
+  private roomMetadata = new Map<string, { domainId: string; ownerId?: string }>();
   private roomLastActivity = new Map<string, number>();
   private roomStates = new Map<string, RoomLifecycleState>();
   private reaperInterval: NodeJS.Timeout | null = null;
@@ -92,6 +92,10 @@ export class RoomManager {
     return this.roomMetadata.get(roomId)?.domainId;
   }
 
+  public getRoomOwner(roomId: string): string | undefined {
+    return this.roomMetadata.get(roomId)?.ownerId;
+  }
+
   public async joinRoom(
     roomId: string,
     domainId: string,
@@ -101,18 +105,41 @@ export class RoomManager {
     // 1. Leave previous room if any
     await this.leaveRoom(socket);
 
+    const isPublicRoom =
+      roomId.startsWith('public-') ||
+      roomId.startsWith('demo-') ||
+      roomId === 'default';
+
     // 2. Add to local room set
     let clients = this.rooms.get(roomId);
     if (!clients) {
+      let ownerId = userId;
+      if (!isPublicRoom && this.pub.status === 'ready') {
+        const existingOwner = await this.pub.get(`room:${roomId}:owner`);
+        if (existingOwner && existingOwner !== userId) {
+          throw new Error(`Access denied: Room ${roomId} belongs to another user`);
+        }
+        if (!existingOwner && userId) {
+          await this.pub.set(`room:${roomId}:owner`, userId, 'EX', 86400);
+        } else if (existingOwner) {
+          ownerId = existingOwner;
+        }
+      }
+
       clients = new Set();
       this.rooms.set(roomId, clients);
-      this.roomMetadata.set(roomId, { domainId });
+      this.roomMetadata.set(roomId, { domainId, ownerId });
       // Subscribe to Redis channel for this room
       await this.sub.subscribe(`room:${roomId}`);
     } else {
       const existingDomain = this.roomMetadata.get(roomId)?.domainId;
       if (existingDomain && existingDomain !== domainId) {
         throw new Error(`Room ${roomId} is locked to domain ${existingDomain}`);
+      }
+
+      const existingOwner = this.roomMetadata.get(roomId)?.ownerId;
+      if (!isPublicRoom && existingOwner && existingOwner !== userId) {
+        throw new Error(`Access denied: Room ${roomId} belongs to another user`);
       }
     }
 
@@ -252,6 +279,7 @@ export class RoomManager {
           await this.pub.del(`room:${roomId}:intents`);
           await this.pub.del(`topology:${roomId}`);
           await this.pub.del(`simulation:${roomId}:replays`);
+          await this.pub.del(`room:${roomId}:owner`);
         }
         sequenceReconciler.clearRoom(roomId);
       }

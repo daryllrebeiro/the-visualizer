@@ -23,3 +23,5 @@ export * from './api/index.js';
 
 // Auth & Revocation
 export * from './auth/token-revocation.js';
+export * from './auth/ws-ticket-store.js';
+

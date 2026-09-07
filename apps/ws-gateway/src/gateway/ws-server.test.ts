@@ -19,6 +19,7 @@ describe('WebSocket Gateway Integration Tests', () => {
       id: 'test-user-uuid',
       email: 'test@gateway.com',
       name: 'Gateway Client',
+      type: 'access',
       exp: Math.floor(Date.now() / 1000) + 60 * 60,
     };
     testUserToken = await sign(payload, JWT_SECRET);
@@ -56,11 +57,31 @@ describe('WebSocket Gateway Integration Tests', () => {
     });
   });
 
+  it('should reject connection upgrade with 401 if refresh token is used (SEC-OFF-02)', async () => {
+    const refreshPayload = {
+      id: 'refresh-ws-user',
+      email: 'refresh-ws@gateway.com',
+      name: 'Refresh WS Client',
+      type: 'refresh',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    };
+    const refreshToken = await sign(refreshPayload, JWT_SECRET);
+
+    return new Promise<void>((resolve) => {
+      const client = new WebSocket(`ws://localhost:${String(port)}?token=${refreshToken}`);
+      client.on('error', (err: any) => {
+        expect(err.message).toContain('Unexpected server response: 401');
+        resolve();
+      });
+    });
+  });
+
   it('should reject connection upgrade with 401 if token is revoked', async () => {
     const revokedPayload = {
       id: 'revoked-ws-user',
       email: 'revoked-ws@gateway.com',
       name: 'Revoked WS Client',
+      type: 'access',
       exp: Math.floor(Date.now() / 1000) + 3600,
     };
     const revokedToken = await sign(revokedPayload, JWT_SECRET);
@@ -116,6 +137,44 @@ describe('WebSocket Gateway Integration Tests', () => {
       client.on('error', (err) => {
         reject(err);
       });
+    });
+  });
+
+  it('should reject User B with ERR_FORBIDDEN when attempting to join a private room owned by User A (SEC-OFF-01)', async () => {
+    // 1. User A joins private room
+    const clientA = new WebSocket(`ws://localhost:${String(port)}?token=${testUserToken}`);
+    await new Promise<void>((resolve, reject) => {
+      clientA.on('open', () => {
+        clientA.send(pack({ type: 'JOIN_ROOM', payload: { roomId: 'private-room-tenant-a' } }));
+      });
+      clientA.on('message', (data: Buffer) => {
+        const msg = unpack(data) as Record<string, any>;
+        if (msg.type === 'ROOM_JOINED') resolve();
+      });
+      clientA.on('error', reject);
+    });
+
+    // 2. User B attempts to join User A's private room
+    const userBToken = await sign(
+      { id: 'user-b-intruder', email: 'b@intruder.com', name: 'User B', type: 'access', exp: Math.floor(Date.now() / 1000) + 3600 },
+      JWT_SECRET,
+    );
+    const clientB = new WebSocket(`ws://localhost:${String(port)}?token=${userBToken}`);
+
+    await new Promise<void>((resolve, reject) => {
+      clientB.on('open', () => {
+        clientB.send(pack({ type: 'JOIN_ROOM', payload: { roomId: 'private-room-tenant-a' } }));
+      });
+      clientB.on('message', (data: Buffer) => {
+        const msg = unpack(data) as Record<string, any>;
+        if (msg.type === 'MSG_SESSION_ERROR') {
+          expect(msg.payload?.code).toBe('ERR_FORBIDDEN');
+          clientA.close();
+          clientB.close();
+          resolve();
+        }
+      });
+      clientB.on('error', reject);
     });
   });
 
