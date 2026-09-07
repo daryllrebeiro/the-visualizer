@@ -12,7 +12,12 @@ import {
   simTickDurationSeconds,
   simTicksProcessedTotal,
 } from '@the-visualizer/logging';
-import { SimulationEngine } from '@the-visualizer/simulation';
+import {
+  DeterministicRNG,
+  DomainRegistry,
+  type DomainPlugin,
+  SimulationEngine,
+} from '@the-visualizer/simulation';
 
 import { config } from '../config.js';
 import { roomManager } from './room-manager.js';
@@ -33,11 +38,14 @@ export interface AutoProducerSchedule {
 export interface RoomSession {
   roomId: string;
   domainId: string;
-  engine: SimulationEngine;
+  engine?: SimulationEngine | undefined;
+  domainPlugin?: DomainPlugin | undefined;
+  domainState?: any;
+  rng: DeterministicRNG;
   tickCount: number;
   timer: NodeJS.Timeout | null;
   isHalted: boolean;
-  isPaused?: boolean;
+  isPaused?: boolean | undefined;
   autoProducers: Map<string, AutoProducerSchedule>;
 }
 
@@ -62,42 +70,56 @@ export class SimulationRunner {
       return;
     }
 
-    const engineConfig = {
-      seed: 12345,
-      maxTicks: 1_000_000,
-      maxEvents: 5_000_000,
-      maxMemoryMb: 128,
-      speedMultiplier: 1.0,
-    };
+    const domainPlugin = DomainRegistry.get(domainId);
+    let engine: SimulationEngine | undefined;
+    let rng: DeterministicRNG;
+    let domainState: any = undefined;
 
-    const engine = new SimulationEngine(engineConfig);
+    if (domainId === 'kafka' || !domainPlugin) {
+      const engineConfig = {
+        seed: 12345,
+        maxTicks: 1_000_000,
+        maxEvents: 5_000_000,
+        maxMemoryMb: 128,
+        speedMultiplier: 1.0,
+      };
 
-    // Create callback targets
-    const callbacks = {
-      onEventBatch: () => {
-        // No-op - event batches are not broadcasted individually to save bandwidth
-      },
-      onInvariantViolation: (violation: any) => {
-        const message =
-          typeof violation === 'object' && violation !== null && 'message' in violation
-            ? String(violation.message)
-            : 'Invariant safety policy violated';
-        simInvariantViolationsTotal.inc({ invariant: message });
-        void this.haltSession(roomId, message);
-      },
-      onResourceLimitExceeded: (reason: string) => {
-        simResourceLimitsExceededTotal.inc({ reason });
-        void this.haltSession(roomId, reason);
-      },
-    };
+      engine = new SimulationEngine(engineConfig);
 
-    engine.registerCallbacks(callbacks);
-    engine.initialize(initialTopology);
+      // Create callback targets
+      const callbacks = {
+        onEventBatch: () => {
+          // No-op - event batches are not broadcasted individually to save bandwidth
+        },
+        onInvariantViolation: (violation: any) => {
+          const message =
+            typeof violation === 'object' && violation !== null && 'message' in violation
+              ? String(violation.message)
+              : 'Invariant safety policy violated';
+          simInvariantViolationsTotal.inc({ invariant: message });
+          void this.haltSession(roomId, message);
+        },
+        onResourceLimitExceeded: (reason: string) => {
+          simResourceLimitsExceededTotal.inc({ reason });
+          void this.haltSession(roomId, reason);
+        },
+      };
+
+      engine.registerCallbacks(callbacks);
+      engine.initialize(initialTopology);
+      rng = engine.rng;
+    } else {
+      rng = new DeterministicRNG(12345);
+      domainState = initialTopology ?? domainPlugin.createDefaultState();
+    }
 
     const session: RoomSession = {
       roomId,
       domainId,
       engine,
+      domainPlugin,
+      domainState,
+      rng,
       tickCount: 0,
       timer: null,
       isHalted: false,
@@ -122,7 +144,7 @@ export class SimulationRunner {
 
     const startTime = performance.now();
     try {
-      const { roomId, engine } = session;
+      const { roomId } = session;
 
       // 1. Drain pending intents from Redis List room:<roomId>:intents
       const intentsKey = `room:${roomId}:intents`;
@@ -134,7 +156,145 @@ export class SimulationRunner {
 
       // Record queue size metric
       const queueLen = await this.redis.llen(intentsKey);
-      simQueueSize.set({ roomId }, queueLen);
+      simQueueSize.set({ domain: session.domainId }, queueLen);
+
+      // Handle generic non-Kafka domain sessions
+      if (session.domainPlugin && session.domainState) {
+        for (const raw of intentsRaw) {
+          try {
+            const intent = JSON.parse(raw) as Record<string, any>;
+            if (typeof intent.type === 'string') {
+              let normalizedType = intent.type;
+              if (!normalizedType.startsWith('INTENT_')) {
+                normalizedType = `INTENT_${normalizedType}`;
+              }
+
+              if (normalizedType === 'INTENT_DOMAIN_ACTION') {
+                const actionPayload = intent.payload || {};
+                const action = actionPayload.action || intent.action;
+                const payload = actionPayload.payload || {};
+                const nextTick = session.tickCount + 1;
+                const ev = {
+                  id: intent.id || `${session.domainId}-action-${String(Date.now())}`,
+                  tick: nextTick,
+                  type: action,
+                  payload,
+                };
+
+                const res = session.domainPlugin.reduceState(session.domainState, ev, session.rng);
+                session.domainState = res.nextState;
+
+                const invCheck = session.domainPlugin.validateInvariants(session.domainState);
+                if (!invCheck.passed && invCheck.violation) {
+                  simInvariantViolationsTotal.inc({ invariant: invCheck.violation.name });
+                  void this.haltSession(roomId, invCheck.violation.description);
+                }
+
+                await roomManager.publishRoomUpdate(roomId, {
+                  type: 'INTENT_ACK',
+                  payload: {
+                    intentId: intent.id || '',
+                    status: 'ACCEPTED',
+                  },
+                });
+              } else if (normalizedType === 'INTENT_RESET') {
+                session.domainState = session.domainPlugin.createDefaultState();
+                session.tickCount = 0;
+                session.isHalted = false;
+                session.isPaused = false;
+
+                if (this.redis.status === 'ready') {
+                  await this.redis.del(`room:${roomId}:intents`);
+                  await this.redis.del(`topology:${roomId}`);
+                  await this.redis.del(`simulation:${roomId}:replays`);
+                }
+
+                await roomManager.publishRoomUpdate(roomId, {
+                  type: 'MSG_INIT_SNAPSHOT',
+                  payload: {
+                    sessionId: roomId,
+                    serverTick: 0,
+                    topology: session.domainState,
+                  },
+                });
+
+                await roomManager.publishRoomUpdate(roomId, {
+                  type: 'INTENT_ACK',
+                  payload: {
+                    intentId: intent.id || '',
+                    status: 'ACCEPTED',
+                  },
+                });
+              } else if (normalizedType === 'INTENT_SIM_CONTROL') {
+                const action = intent.payload?.action;
+                if (action === 'PLAY') session.isPaused = false;
+                else if (action === 'PAUSE') session.isPaused = true;
+
+                await roomManager.publishRoomUpdate(roomId, {
+                  type: 'INTENT_ACK',
+                  payload: {
+                    intentId: intent.id,
+                    status: 'ACCEPTED',
+                  },
+                });
+              }
+            }
+          } catch (err) {
+            logger.warn({ err, roomId }, 'Failed to parse client domain intent');
+          }
+        }
+
+        const previousState = JSON.parse(JSON.stringify(session.domainState));
+        const nextTick = session.tickCount + 1;
+        const tickEvent = {
+          id: `${session.domainId}-tick-${String(nextTick)}`,
+          tick: nextTick,
+          type: `${session.domainId.toUpperCase().replace(/-/g, '_')}_TICK`,
+          payload: {},
+        };
+
+        const res = session.domainPlugin.reduceState(session.domainState, tickEvent, session.rng);
+        session.domainState = res.nextState;
+        session.tickCount++;
+
+        const invCheck = session.domainPlugin.validateInvariants(session.domainState);
+        if (!invCheck.passed && invCheck.violation) {
+          simInvariantViolationsTotal.inc({ invariant: invCheck.violation.name });
+          void this.haltSession(roomId, invCheck.violation.description);
+        }
+
+        const patch = compare(previousState, session.domainState);
+        if (patch.length > 0) {
+          await roomManager.publishRoomUpdate(roomId, {
+            type: 'EVENT_BATCH',
+            payload: {
+              tick: session.tickCount,
+              patch,
+            },
+          });
+        }
+
+        if (session.tickCount % 50 === 0 && session.domainState) {
+          const replayFrame = {
+            roomId,
+            tick: session.tickCount,
+            state: session.domainState,
+            timestamp: Date.now(),
+          };
+          const replaysKey = `simulation:${roomId}:replays`;
+          await this.redis.lpush(replaysKey, JSON.stringify(replayFrame));
+          await this.redis.ltrim(replaysKey, 0, 499);
+          await this.redis.expire(replaysKey, 86400);
+        }
+
+        simTicksProcessedTotal.inc();
+        const durationSec = (performance.now() - startTime) / 1000;
+        simTickDurationSeconds.observe(durationSec);
+        return;
+      }
+
+      if (!session.engine) return;
+      const engine = session.engine;
 
       // 2. Queue intents on simulation engine
       for (const raw of intentsRaw) {
@@ -161,7 +321,8 @@ export class SimulationRunner {
                 groupId: intent.payload.groupId,
                 clientId: intent.payload.clientId,
                 memberId:
-                  intent.payload.memberId || `member-${Math.random().toString(36).substring(7)}`,
+                  intent.payload.memberId ||
+                  `member-${session.engine.rng.nextInt(100000, 999999).toString(36)}`,
                 topics: intent.payload.topics || ['orders'],
               };
             } else if (normalizedType === 'INTENT_CONSUMER_LEAVE') {
@@ -343,7 +504,7 @@ export class SimulationRunner {
               if (partitionObj.highWatermark > currentCommit) {
                 engine.scheduleEvent(
                   engine.currentTick,
-                  `consume-${ap.topic}-${String(ap.partition)}-${Math.random().toString(36).substring(7)}`,
+                  `consume-${ap.topic}-${String(ap.partition)}-${session.engine.rng.nextInt(100000, 999999).toString(36)}`,
                   'RECORD_CONSUMED' as any,
                   {
                     groupId,
@@ -373,8 +534,7 @@ export class SimulationRunner {
             );
 
             if (activePartitions.length > 0) {
-              const targetPart =
-                activePartitions[Math.floor(Math.random() * activePartitions.length)]!;
+              const targetPart = session.engine.rng.pick(activePartitions);
               engine.scheduleEvent(
                 engine.currentTick,
                 `auto-${entry.producerId}-${String(session.tickCount)}`,
@@ -383,7 +543,7 @@ export class SimulationRunner {
                   topic: entry.topic,
                   partition: targetPart.partition,
                   key: `auto-${entry.producerId}-${String(session.tickCount)}`,
-                  value: `auto-val-${Math.random().toString(36).substring(7)}`,
+                  value: `auto-val-${session.engine.rng.nextInt(100000, 999999).toString(36)}`,
                   acks: 1,
                 },
               );
@@ -408,14 +568,14 @@ export class SimulationRunner {
 
       // Guard: Check heap memory usage to prevent OOM
       const heapUsedMb = process.memoryUsage().heapUsed / 1024 / 1024;
-      if (heapUsedMb > 128) {
+      if (heapUsedMb > 256) {
         logger.warn(
           { roomId, heapUsedMb },
-          'Simulation session memory threshold exceeded. Purging historical checkpoints.',
+          'Simulation session memory threshold warning. Purging historical checkpoints.',
         );
         engine.clearHistory();
 
-        if (heapUsedMb > 256) {
+        if (heapUsedMb > 512) {
           simResourceLimitsExceededTotal.inc({ reason: 'max_memory' });
           await this.haltSession(
             roomId,
@@ -450,7 +610,10 @@ export class SimulationRunner {
           state: currentState,
           timestamp: Date.now(),
         };
-        await this.redis.lpush(`simulation:${roomId}:replays`, JSON.stringify(replayFrame));
+        const replaysKey = `simulation:${roomId}:replays`;
+        await this.redis.lpush(replaysKey, JSON.stringify(replayFrame));
+        await this.redis.ltrim(replaysKey, 0, 499);
+        await this.redis.expire(replaysKey, 86400);
       }
 
       // Record tick execution metrics

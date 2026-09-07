@@ -56,7 +56,7 @@ export const wsConnectionDropsTotal = new client.Counter({
 export const wsRateLimitedMessagesTotal = new client.Counter({
   name: 'ws_rate_limited_messages_total',
   help: 'Total number of WebSocket messages rate limited',
-  labelNames: ['userId', 'tier'],
+  labelNames: ['tier'],
   registers: [register],
 });
 
@@ -84,7 +84,7 @@ export const simTickDurationSeconds = new client.Histogram({
 export const simQueueSize = new client.Gauge({
   name: 'sim_queue_size',
   help: 'Current size of the simulation intents queue',
-  labelNames: ['roomId'],
+  labelNames: ['domain'],
   registers: [register],
 });
 

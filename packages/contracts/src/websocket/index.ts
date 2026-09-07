@@ -109,6 +109,13 @@ export const IntentGapRecoverySchema = IntentBaseSchema.extend({
   fromSequence: z.number().nonnegative(),
 });
 
+export const IntentDomainActionSchema = IntentBaseSchema.extend({
+  type: z.literal('INTENT_DOMAIN_ACTION'),
+  domainId: z.string().min(1).max(255),
+  action: z.string().min(1).max(255),
+  payload: z.record(z.string(), z.unknown()),
+});
+
 /**
  * Discriminated union of all valid client intents.
  * Validated on the server before any simulation action is taken.
@@ -116,6 +123,7 @@ export const IntentGapRecoverySchema = IntentBaseSchema.extend({
 export const ClientIntentSchema = z.discriminatedUnion('type', [
   IntentJoinRoomSchema,
   IntentGapRecoverySchema,
+  IntentDomainActionSchema,
   IntentProduceSchema,
   IntentConsumerJoinSchema,
   IntentConsumerLeaveSchema,

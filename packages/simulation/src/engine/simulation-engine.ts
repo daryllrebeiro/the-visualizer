@@ -57,6 +57,10 @@ export class SimulationEngine {
     return this._state;
   }
 
+  get rng(): DeterministicRNG {
+    return this._rng;
+  }
+
   public registerCallbacks(callbacks: SimulationEngineCallbacks): void {
     this.callbacks = callbacks;
   }
