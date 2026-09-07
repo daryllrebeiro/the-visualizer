@@ -111,27 +111,11 @@ import {
 import { DataTableModal, OnboardingTour } from '@the-visualizer/ui';
 
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { CdnCacheVisualizer } from '../components/cdn-cache/CdnCacheVisualizer';
-import { HashRingVisualizer } from '../components/database/HashRingVisualizer';
-import { DistributedLockVisualizer } from '../components/distributed-lock/DistributedLockVisualizer';
+import { DomainCanvasAdapter } from '../components/domains/DomainCanvasAdapter';
 import { DomainDirectoryModal } from '../components/domains/DomainDirectoryModal';
-import { IdGenVisualizer } from '../components/id-gen/IdGenVisualizer';
 import { EntityInspector, type InspectableEntity } from '../components/inspector/EntityInspector';
-import { K8sClusterVisualizer } from '../components/kubernetes/K8sClusterVisualizer';
-import { NetworkingVisualizer } from '../components/networking/NetworkingVisualizer';
-import { RabbitMQVisualizer } from '../components/rabbitmq/RabbitMQVisualizer';
-import { RaftVisualizer } from '../components/raft/RaftVisualizer';
-import { RateLimiterVisualizer } from '../components/rate-limiter/RateLimiterVisualizer';
-import { RedisClusterVisualizer } from '../components/redis/RedisClusterVisualizer';
 import { ScenarioRunner } from '../components/scenarios/ScenarioRunner';
 import { TraceImportModal } from '../components/scenarios/TraceImportModal';
-import { StorageEngineVisualizer } from '../components/storage/StorageEngineVisualizer';
-import { TransactionsVisualizer } from '../components/transactions/TransactionsVisualizer';
-import { LlmServingVisualizer } from '../components/llm-serving/LlmServingVisualizer';
-import { VectordbVisualizer } from '../components/vectordb/VectordbVisualizer';
-import { GpuClusterVisualizer } from '../components/gpu-cluster/GpuClusterVisualizer';
-import { LlmPipelineVisualizer } from '../components/llm-pipeline/LlmPipelineVisualizer';
-import { LlmGatewayVisualizer } from '../components/llm-gateway/LlmGatewayVisualizer';
 import { CommandPaletteModal } from '../components/palette/CommandPaletteModal';
 import { InterviewPrepModal } from '../components/interview/InterviewPrepModal';
 import { CompositePipelineModal } from '../components/composite/CompositePipelineModal';
@@ -4788,178 +4772,164 @@ export default function VisualizerApp({
             onToggle={() => setShowFpsMonitor((prev) => !prev)}
           />
           <ErrorBoundary fallbackTitle={`${selectedDomain.toUpperCase()} Visualizer Fault`}>
-            {selectedDomain === 'kafka' ? (
-              <Visualizer
-                state={renderedState}
-                producers={producers}
-                consumers={consumers}
-                produceTrigger={produceTrigger}
-                resetTrigger={resetCounter}
-                onHoverDetails={setHoverDetails}
-                onSelectEntity={(entity) => setInspectEntity(entity)}
-                onPerfMetrics={setPerfMetrics}
-              />
-            ) : selectedDomain === 'raft' ? (
-              <RaftVisualizer
-                state={raftState}
-                onProposeCommand={handleRaftProposeCommand}
-                onCrashNode={handleRaftCrashNode}
-                onRecoverNode={handleRaftRecoverNode}
-                onTogglePartition={handleRaftTogglePartition}
-              />
-            ) : selectedDomain === 'database' ? (
-              <HashRingVisualizer
-                state={dbState}
-                onWriteKey={handleDBWriteKey}
-                onReadKey={handleDBReadKey}
-                onAddNode={handleDBAddNode}
-                onCrashNode={handleDBCrashNode}
-                onRecoverNode={handleDBRecoverNode}
-                onUpdateConsistency={handleDBUpdateConsistency}
-                onConfigureFidelity={handleDBConfigureFidelity}
-              />
-            ) : selectedDomain === 'redis' ? (
-              <RedisClusterVisualizer
-                state={redisState}
-                onSetKey={handleRedisSetKey}
-                onGetKey={handleRedisGetKey}
-                onDelKey={handleRedisDelKey}
-                onReshard={handleRedisReshard}
-                onCrashNode={handleRedisCrashNode}
-                onRecoverNode={handleRedisRecoverNode}
-                onSetEvictionPolicy={handleRedisSetEvictionPolicy}
-              />
-            ) : selectedDomain === 'kubernetes' ? (
-              <K8sClusterVisualizer
-                state={k8sState}
-                onScaleDeployment={handleK8sScaleDeployment}
-                onUpdateImage={handleK8sUpdateImage}
-                onNodeCordon={handleK8sNodeCordon}
-                onNodeDrain={handleK8sNodeDrain}
-                onNodeCrash={handleK8sNodeCrash}
-                onNodeRecover={handleK8sNodeRecover}
-              />
-            ) : selectedDomain === 'rabbitmq' ? (
-              <RabbitMQVisualizer
-                state={rabbitState}
-                onPublish={handleRabbitPublish}
-                onAck={handleRabbitAck}
-                onNack={handleRabbitNack}
-                onReject={handleRabbitReject}
-              />
-            ) : selectedDomain === 'storage' ? (
-              <StorageEngineVisualizer
-                state={storageState}
-                onWrite={handleStorageWrite}
-                onRead={handleStorageRead}
-                onSwitchEngine={handleStorageSwitchEngine}
-                onTriggerFlush={handleStorageTriggerFlush}
-                onTriggerCompaction={handleStorageTriggerCompaction}
-                onConfigureFidelity={handleStorageConfigureFidelity}
-              />
-            ) : selectedDomain === 'networking' ? (
-              <NetworkingVisualizer
-                state={networkingState}
-                onStartHandshake={handleNetworkingStartHandshake}
-                onSendData={handleNetworkingSendData}
-                onDropPacket={handleNetworkingDropPacket}
-                onConfigureFidelity={handleNetworkingConfigureFidelity}
-              />
-            ) : selectedDomain === 'rate-limiter' ? (
-              <RateLimiterVisualizer
-                state={rateLimiterState}
-                onRequest={handleRateLimiterRequest}
-                onBurst={handleRateLimiterBurst}
-                onTriggerBoundaryBurst={handleRateLimiterTriggerBoundaryBurst}
-                onUpdateConfig={handleRateLimiterUpdateConfig}
-              />
-            ) : selectedDomain === 'distributed-lock' ? (
-              <DistributedLockVisualizer
-                state={distLockState}
-                onAcquire={handleDistLockAcquire}
-                onRelease={handleDistLockRelease}
-                onInjectGcPause={handleDistLockInjectGcPause}
-                onWriteProtectedResource={handleDistLockWriteProtectedResource}
-                onToggleFencing={handleDistLockToggleFencing}
-                onToggleNodeStatus={handleDistLockToggleNodeStatus}
-              />
-            ) : selectedDomain === 'cdn-cache' ? (
-              <CdnCacheVisualizer
-                state={cdnCacheState}
-                onRequest={handleCdnRequest}
-                onFlashCrowd={handleCdnFlashCrowd}
-                onPurge={handleCdnPurge}
-                onTogglePopStatus={handleCdnTogglePopStatus}
-                onToggleCoalescing={handleCdnToggleCoalescing}
-                onUpdateOrigin={handleCdnUpdateOrigin}
-              />
-            ) : selectedDomain === 'id-gen' ? (
-              <IdGenVisualizer
-                state={idGenState}
-                onGenerate={handleIdGenGenerate}
-                onInjectClockSkew={handleIdGenInjectClockSkew}
-                onFloodOverflow={handleIdGenFloodOverflow}
-                onAssignDuplicateWorker={handleIdGenAssignDuplicateWorker}
-                onSwitchGeneratorType={handleIdGenSwitchGeneratorType}
-              />
-            ) : selectedDomain === 'transactions' ? (
-              <TransactionsVisualizer
-                state={txnState}
-                onStart2PC={handleTxnStart2PC}
-                onVoteParticipant={handleTxnVoteParticipant}
-                onCrashCoordinator={handleTxnCrashCoordinator}
-                onRecoverCoordinator={handleTxnRecoverCoordinator}
-                onStartSaga={handleTxnStartSaga}
-                onStepSaga={handleTxnStepSaga}
-                onSwitchProtocol={handleTxnSwitchProtocol}
-              />
-            ) : selectedDomain === 'llm-serving' ? (
-              <LlmServingVisualizer
-                state={llmServingState}
-                onSubmitRequest={handleLlmSubmitRequest}
-                onStepBatch={handleLlmStepBatch}
-                onToggleSpeculative={handleLlmToggleSpeculative}
-                onPreemptRequest={handleLlmPreemptRequest}
-                onInjectOOM={handleLlmInjectOOM}
-              />
-            ) : selectedDomain === 'vectordb' ? (
-              <VectordbVisualizer
-                state={vectorDbState}
-                onInsertVector={handleVectorDbInsertVector}
-                onQueryKNN={handleVectorDbQueryKNN}
-                onToggleIndexType={handleVectorDbToggleIndexType}
-              />
-            ) : selectedDomain === 'llm-pipeline' ? (
-              <LlmPipelineVisualizer
-                state={llmPipelineState}
-                onIngestDoc={handleLlmPipelineIngestDoc}
-                onExecuteHybridSearch={handleLlmPipelineExecuteSearch}
-                onDispatchAgentStep={handleLlmPipelineDispatchAgentStep}
-                onSynthesizeResponse={handleLlmPipelineSynthesizeResponse}
-                onSeverLineage={handleLlmPipelineSeverLineage}
-                onInjectToolFailure={handleLlmPipelineInjectToolFailure}
-              />
-            ) : selectedDomain === 'llm-gateway' ? (
-              <LlmGatewayVisualizer
-                state={llmGatewayState}
-                onDispatchRequest={handleLlmGatewayDispatchRequest}
-                onSetProviderOutage={handleLlmGatewaySetProviderOutage}
-                onTriggerFailures={handleLlmGatewayTriggerFailures}
-                onResetCircuitBreaker={handleLlmGatewayResetCircuitBreaker}
-                onUpdateCacheThreshold={handleLlmGatewayUpdateCacheThreshold}
-                onToggleGuardrail={handleLlmGatewayToggleGuardrail}
-                onTick={handleLlmGatewayTick}
-              />
-            ) : (
-              <GpuClusterVisualizer
-                state={gpuClusterState}
-                onStep1F1B={handleGpuClusterStep1F1B}
-                onStepAllReduce={handleGpuClusterStepAllReduce}
-                onSetZeroStage={handleGpuClusterSetZeroStage}
-                onThrottleStraggler={handleGpuClusterThrottleStraggler}
-                onSeverNVLink={handleGpuClusterSeverNVLink}
-              />
-            )}
+            <DomainCanvasAdapter
+              selectedDomain={selectedDomain}
+              kafkaComponent={
+                <Visualizer
+                  state={renderedState}
+                  producers={producers}
+                  consumers={consumers}
+                  produceTrigger={produceTrigger}
+                  resetTrigger={resetCounter}
+                  onHoverDetails={setHoverDetails}
+                  onSelectEntity={(entity) => setInspectEntity(entity)}
+                  onPerfMetrics={setPerfMetrics}
+                />
+              }
+              raft={{
+                state: raftState,
+                onProposeCommand: handleRaftProposeCommand,
+                onCrashNode: handleRaftCrashNode,
+                onRecoverNode: handleRaftRecoverNode,
+                onTogglePartition: handleRaftTogglePartition,
+              }}
+              database={{
+                state: dbState,
+                onWriteKey: handleDBWriteKey,
+                onReadKey: handleDBReadKey,
+                onAddNode: handleDBAddNode,
+                onCrashNode: handleDBCrashNode,
+                onRecoverNode: handleDBRecoverNode,
+                onUpdateConsistency: handleDBUpdateConsistency,
+                onConfigureFidelity: handleDBConfigureFidelity,
+              }}
+              redis={{
+                state: redisState,
+                onSetKey: handleRedisSetKey,
+                onGetKey: handleRedisGetKey,
+                onDelKey: handleRedisDelKey,
+                onReshard: handleRedisReshard,
+                onCrashNode: handleRedisCrashNode,
+                onRecoverNode: handleRedisRecoverNode,
+                onSetEvictionPolicy: handleRedisSetEvictionPolicy,
+              }}
+              kubernetes={{
+                state: k8sState,
+                onScaleDeployment: handleK8sScaleDeployment,
+                onUpdateImage: handleK8sUpdateImage,
+                onNodeCordon: handleK8sNodeCordon,
+                onNodeDrain: handleK8sNodeDrain,
+                onNodeCrash: handleK8sNodeCrash,
+                onNodeRecover: handleK8sNodeRecover,
+              }}
+              rabbitmq={{
+                state: rabbitState,
+                onPublish: handleRabbitPublish,
+                onAck: handleRabbitAck,
+                onNack: handleRabbitNack,
+                onReject: handleRabbitReject,
+              }}
+              storage={{
+                state: storageState,
+                onWrite: handleStorageWrite,
+                onRead: handleStorageRead,
+                onSwitchEngine: handleStorageSwitchEngine,
+                onTriggerFlush: handleStorageTriggerFlush,
+                onTriggerCompaction: handleStorageTriggerCompaction,
+                onConfigureFidelity: handleStorageConfigureFidelity,
+              }}
+              networking={{
+                state: networkingState,
+                onStartHandshake: handleNetworkingStartHandshake,
+                onSendData: handleNetworkingSendData,
+                onDropPacket: handleNetworkingDropPacket,
+                onConfigureFidelity: handleNetworkingConfigureFidelity,
+              }}
+              rateLimiter={{
+                state: rateLimiterState,
+                onRequest: handleRateLimiterRequest,
+                onBurst: handleRateLimiterBurst,
+                onTriggerBoundaryBurst: handleRateLimiterTriggerBoundaryBurst,
+                onUpdateConfig: handleRateLimiterUpdateConfig,
+              }}
+              distributedLock={{
+                state: distLockState,
+                onAcquire: handleDistLockAcquire,
+                onRelease: handleDistLockRelease,
+                onInjectGcPause: handleDistLockInjectGcPause,
+                onWriteProtectedResource: handleDistLockWriteProtectedResource,
+                onToggleFencing: handleDistLockToggleFencing,
+                onToggleNodeStatus: handleDistLockToggleNodeStatus,
+              }}
+              cdnCache={{
+                state: cdnCacheState,
+                onRequest: handleCdnRequest,
+                onFlashCrowd: handleCdnFlashCrowd,
+                onPurge: handleCdnPurge,
+                onTogglePopStatus: handleCdnTogglePopStatus,
+                onToggleCoalescing: handleCdnToggleCoalescing,
+                onUpdateOrigin: handleCdnUpdateOrigin,
+              }}
+              idGen={{
+                state: idGenState,
+                onGenerate: handleIdGenGenerate,
+                onInjectClockSkew: handleIdGenInjectClockSkew,
+                onFloodOverflow: handleIdGenFloodOverflow,
+                onAssignDuplicateWorker: handleIdGenAssignDuplicateWorker,
+                onSwitchGeneratorType: handleIdGenSwitchGeneratorType,
+              }}
+              transactions={{
+                state: txnState,
+                onStart2PC: handleTxnStart2PC,
+                onVoteParticipant: handleTxnVoteParticipant,
+                onCrashCoordinator: handleTxnCrashCoordinator,
+                onRecoverCoordinator: handleTxnRecoverCoordinator,
+                onStartSaga: handleTxnStartSaga,
+                onStepSaga: handleTxnStepSaga,
+                onSwitchProtocol: handleTxnSwitchProtocol,
+              }}
+              llmServing={{
+                state: llmServingState,
+                onSubmitRequest: handleLlmSubmitRequest,
+                onStepBatch: handleLlmStepBatch,
+                onToggleSpeculative: handleLlmToggleSpeculative,
+                onPreemptRequest: handleLlmPreemptRequest,
+                onInjectOOM: handleLlmInjectOOM,
+              }}
+              vectordb={{
+                state: vectorDbState,
+                onInsertVector: handleVectorDbInsertVector,
+                onQueryKNN: handleVectorDbQueryKNN,
+                onToggleIndexType: handleVectorDbToggleIndexType,
+              }}
+              llmPipeline={{
+                state: llmPipelineState,
+                onIngestDoc: handleLlmPipelineIngestDoc,
+                onExecuteHybridSearch: handleLlmPipelineExecuteSearch,
+                onDispatchAgentStep: handleLlmPipelineDispatchAgentStep,
+                onSynthesizeResponse: handleLlmPipelineSynthesizeResponse,
+                onSeverLineage: handleLlmPipelineSeverLineage,
+                onInjectToolFailure: handleLlmPipelineInjectToolFailure,
+              }}
+              llmGateway={{
+                state: llmGatewayState,
+                onDispatchRequest: handleLlmGatewayDispatchRequest,
+                onSetProviderOutage: handleLlmGatewaySetProviderOutage,
+                onTriggerFailures: handleLlmGatewayTriggerFailures,
+                onResetCircuitBreaker: handleLlmGatewayResetCircuitBreaker,
+                onUpdateCacheThreshold: handleLlmGatewayUpdateCacheThreshold,
+                onToggleGuardrail: handleLlmGatewayToggleGuardrail,
+                onTick: handleLlmGatewayTick,
+              }}
+              gpuCluster={{
+                state: gpuClusterState,
+                onStep1F1B: handleGpuClusterStep1F1B,
+                onStepAllReduce: handleGpuClusterStepAllReduce,
+                onSetZeroStage: handleGpuClusterSetZeroStage,
+                onThrottleStraggler: handleGpuClusterThrottleStraggler,
+                onSeverNVLink: handleGpuClusterSeverNVLink,
+              }}
+            />
           </ErrorBoundary>
           {hoverDetails && selectedDomain === 'kafka' && (
             <div className="hover-tooltip">
