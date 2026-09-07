@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { pureStateTransition } from '../engine/state-transitions.js';
 import type { SimEvent } from '../engine/types.js';
+import { InvariantChecker } from '../invariants/invariant-checker.js';
 import { DeterministicRNG } from '../prng/deterministic-rng.js';
 import { createDefaultBaselineState } from '../reconstitution/event-log-parser.js';
 
@@ -207,6 +208,21 @@ describe('Kafka Domain Fidelity Test Suite (Apache Kafka 4.0 KRaft)', () => {
         (e) => e.type === 'PARTITION_LEADER_ELECTED' && e.payload['unclean'] === true,
       );
       expect(uncleanEvent).toBeDefined();
+    });
+  });
+
+  describe('INV-3: High-Watermark Monotonicity & Leader LEO Bound', () => {
+    it('catches constructed state where high-watermark exceeds leader log end offset', () => {
+      const state = createDefaultBaselineState();
+      const partition = state.topics['orders']![0]!;
+      const leaderReplica = partition.replicas.find((r) => r.brokerId === partition.leaderBrokerId)!;
+      leaderReplica.logEndOffset = 10;
+      partition.highWatermark = 15; // HW exceeds LEO
+
+      const checker = new InvariantChecker();
+      const violation = checker.check(state);
+      expect(violation).toBeDefined();
+      expect(violation?.invariantName).toBe('HIGH_WATERMARK_BOUND');
     });
   });
 });

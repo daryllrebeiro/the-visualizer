@@ -193,4 +193,40 @@ describe('Kubernetes Domain Fidelity Test Suite (Kubernetes v1.31 Control Plane)
       expect(res.nextState.pods[runningPods[0]!.id]!.status).toBe('Running');
     });
   });
+
+  describe('K8S-1: Resource Fit & Non-Overcommit Enforcement', () => {
+    it('rejects scheduling when requested pod resources exceed node capacity', () => {
+      const scheduler = new K8sScheduler();
+      const node: K8sNode = {
+        id: 'node-1',
+        name: 'worker-1',
+        role: 'worker',
+        status: 'Ready',
+        capacity: { cpuMillis: 1000, memoryMb: 1024 },
+        allocated: { cpuMillis: 800, memoryMb: 800 },
+        taints: [],
+        podIds: [],
+        color: '#fff',
+      };
+      // Requires 300m CPU (800 + 300 = 1100 > 1000 capacity)
+      const pod: PodSpec = {
+        id: 'pod-overcommit',
+        name: 'overcommit-pod',
+        namespace: 'default',
+        deploymentId: null,
+        replicaSetId: null,
+        image: 'test:1.0',
+        resources: { cpuMillis: 300, memoryMb: 100 },
+        tolerations: [],
+        nodeName: null,
+        status: 'Pending',
+        restarts: 0,
+        createdAtTick: 1,
+        pendingReason: null,
+      };
+      const decision = scheduler.schedule(pod, [node]);
+      expect(decision.selectedNode).toBeNull();
+      expect(decision.failureReasons['node-1']).toContain('Insufficient CPU');
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DeterministicRNG } from '../../prng/deterministic-rng.js';
+import { DBInvariantChecker } from './db-invariants.js';
 import { createDefaultDBCluster, pureDBTransition } from './db-state-transitions.js';
 import type { DBSimEvent } from './db-types.js';
 import { ConsistentHashRing } from './hash-ring.js';
@@ -49,6 +50,16 @@ describe('Distributed Database Domain Fidelity Test Suite (Cassandra 5.0 / Dynam
       };
       const resOne = pureDBTransition(cluster, writeOne, rng);
       expect(resOne.emittedEvents.some((e) => e.type === 'DB_WRITE_ACK')).toBe(true);
+    });
+
+    it('flags insufficient quorum overlap (DB-2) when R + W <= N', () => {
+      const cluster = createDefaultDBCluster('test-db', 4, 3);
+      cluster.readConsistency = 'ONE';
+      cluster.writeConsistency = 'ONE';
+      const checker = new DBInvariantChecker();
+      const violation = checker.check(cluster);
+      expect(violation).toBeDefined();
+      expect(violation?.ruleId).toBe('DB-2');
     });
   });
 

@@ -17,6 +17,42 @@ export class DBInvariantChecker {
     const inv2 = this.checkNodeStates(state);
     if (inv2) return inv2;
 
+    // 3. Quorum overlap (DB-2: R + W > N)
+    const inv3 = this.checkQuorumOverlap(state);
+    if (inv3) return inv3;
+
+    return undefined;
+  }
+
+  public checkQuorumOverlap(state: DBClusterState): DBInvariantViolation | undefined {
+    const getCount = (level: string, rf: number): number => {
+      switch (level) {
+        case 'ONE':
+          return 1;
+        case 'TWO':
+          return Math.min(2, rf);
+        case 'THREE':
+          return Math.min(3, rf);
+        case 'ALL':
+          return rf;
+        case 'QUORUM':
+        case 'LOCAL_QUORUM':
+        case 'EACH_QUORUM':
+        default:
+          return Math.floor(rf / 2) + 1;
+      }
+    };
+
+    const r = getCount(state.readConsistency, state.replicationFactor);
+    const w = getCount(state.writeConsistency, state.replicationFactor);
+    if (r + w <= state.replicationFactor) {
+      return {
+        ruleId: 'DB-2',
+        invariantName: 'Quorum Overlap (R + W > N)',
+        description: `Insufficient quorum overlap: R (${r}) + W (${w}) <= N (${state.replicationFactor}). Eventual consistency only.`,
+        affectedNodeIds: Object.keys(state.nodes),
+      };
+    }
     return undefined;
   }
 

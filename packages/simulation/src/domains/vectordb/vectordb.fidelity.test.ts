@@ -183,5 +183,30 @@ describe('Domain 12: Vector Database & HNSW / IVF-PQ Fidelity', () => {
       stateEf1.activeQuery!.distanceComputationsCount,
     );
   });
+
+  describe('VDB-1: Node Deletion & Graph Connectivity (No Orphaned Nodes)', () => {
+    it('removes deleted node from all neighbor adjacency lists and leaves no orphaned nodes', () => {
+      let state = createDefaultVectorDBCluster();
+      // vec-1 is the central hub connected to vec-2, vec-3, vec-4
+      state = pureVectorDBTransition(
+        state,
+        { id: 'del-1', tick: 1, type: 'VEC_DELETE_NODE', payload: { nodeId: 'vec-1' } },
+        rng,
+      ).nextState;
+
+      expect(state.hnswGraph.nodes['vec-1']).toBeUndefined();
+      for (const node of Object.values(state.hnswGraph.nodes)) {
+        for (const neighbors of Object.values(node.neighborsByLayer)) {
+          expect(neighbors).not.toContain('vec-1');
+        }
+      }
+      // Check that remaining nodes are still connected (no orphaned nodes)
+      const orphaned = Object.entries(state.hnswGraph.nodes).filter(([_, n]) => {
+        const allNeighbors = Object.values(n.neighborsByLayer).flat();
+        return allNeighbors.length === 0;
+      });
+      expect(orphaned.length).toBe(0);
+    });
+  });
 });
 

@@ -137,4 +137,35 @@ describe('Raft Consensus Domain Fidelity Test Suite (Ongaro & Ousterhout 2014 & 
       expect(resp?.payload['readIndex']).toBe(42);
     });
   });
+
+  describe('RAFT-1: Strict Majority Quorum for Leader Election', () => {
+    it('requires strict majority (> N/2) votes and rejects minority vote candidate promotion', () => {
+      const rng = new DeterministicRNG(42);
+      let cluster = createDefaultRaftCluster('raft-cluster-1', 5, 42);
+
+      // Trigger timeout on node 1
+      const timeoutEv: RaftSimEvent = {
+        id: 'to-1',
+        tick: 1,
+        type: 'RAFT_ELECTION_TIMEOUT',
+        payload: { candidateId: '1' },
+      };
+      cluster = pureRaftTransition(cluster, timeoutEv, rng).nextState;
+      expect(cluster.nodes['1']!.role).toBe('CANDIDATE');
+      expect(cluster.nodes['1']!.votesReceived).toEqual(['1']);
+
+      // Peer 2 grants vote -> 2 votes out of 5 is a MINORITY (2 <= 2.5)
+      const vote2: RaftSimEvent = {
+        id: 'v-2',
+        tick: 2,
+        type: 'RAFT_VOTE_REPLY',
+        payload: { candidateId: '1', fromNodeId: '2', term: 1, voteGranted: true },
+      };
+      cluster = pureRaftTransition(cluster, vote2, rng).nextState;
+
+      // Must NOT become leader with only 2/5 votes
+      expect(cluster.nodes['1']!.role).toBe('CANDIDATE');
+      expect(cluster.activeLeaderId).toBeNull();
+    });
+  });
 });

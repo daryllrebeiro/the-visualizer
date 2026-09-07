@@ -74,19 +74,31 @@ describe('LLM Gateway & Guardrails Domain Fidelity Tests', () => {
     expect(state.transitionLog.some((t) => t.from === 'OPEN' && t.to === 'HALF_OPEN')).toBe(true);
     expect(checker.check(state)).toBeUndefined();
 
-    // 5. Dispatch 2 probe requests while HALF_OPEN -> HALF_OPEN -> CLOSED
-    for (let i = 0; i < 2; i++) {
-      state = pureLlmGatewayTransition(
-        state,
-        {
-          id: `probe-${i}`,
-          tick: 8 + i,
-          type: 'GW_DISPATCH_REQUEST',
-          payload: { prompt: `Health probe verification ${i}`, angleDeg: 310 + i },
-        },
-        rng,
-      ).nextState;
-    }
+    // 5. Dispatch probe 0 (1st success < threshold of 2) -> remains HALF_OPEN
+    state = pureLlmGatewayTransition(
+      state,
+      {
+        id: 'probe-0',
+        tick: 8,
+        type: 'GW_DISPATCH_REQUEST',
+        payload: { prompt: 'Health probe verification 0', angleDeg: 310 },
+      },
+      rng,
+    ).nextState;
+    expect(state.providers[primaryId]?.circuitBreaker.state).toBe('HALF_OPEN');
+    expect(state.providers[primaryId]?.circuitBreaker.consecutiveSuccesses).toBe(1);
+
+    // Dispatch probe 1 (2nd success reaches threshold of 2) -> transitions to CLOSED
+    state = pureLlmGatewayTransition(
+      state,
+      {
+        id: 'probe-1',
+        tick: 9,
+        type: 'GW_DISPATCH_REQUEST',
+        payload: { prompt: 'Health probe verification 1', angleDeg: 311 },
+      },
+      rng,
+    ).nextState;
 
     expect(state.providers[primaryId]?.circuitBreaker.state).toBe('CLOSED');
     expect(state.providers[primaryId]?.circuitBreaker.consecutiveSuccesses).toBe(0);
