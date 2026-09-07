@@ -46,7 +46,6 @@ console.log('ALL-18-DOMAIN BEHAVIORAL VERIFICATION SUITE — THEVISUALIZER PLATF
 console.log('================================================================================\n');
 
 const EXPECTED_DOMAINS = [
-  'agents',
   'cdn-cache',
   'database',
   'distributed-lock',
@@ -54,11 +53,12 @@ const EXPECTED_DOMAINS = [
   'id-gen',
   'kafka',
   'kubernetes',
+  'llm-gateway',
+  'llm-pipeline',
   'llm-serving',
   'networking',
   'rabbitmq',
   'raft',
-  'rag',
   'rate-limiter',
   'redis',
   'storage',
