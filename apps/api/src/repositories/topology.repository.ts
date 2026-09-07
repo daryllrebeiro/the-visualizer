@@ -1,7 +1,5 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-
-import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 import { db } from '../db/index.js';
 import { memberships, topologies } from '../db/schema.js';
@@ -34,9 +32,10 @@ export class TopologyRepository {
     orgId: string,
     userId: string,
     name: string,
-    definition: KafkaClusterState,
+    definition: Record<string, unknown>,
     description?: string,
     visibility: 'PRIVATE' | 'UNLISTED' | 'PUBLIC' = 'PRIVATE',
+    domainId: string = 'kafka',
   ) {
     // Verify user belongs to the target organization
     const hasAccess = await this.userCanMutateInOrg(userId, orgId);
@@ -51,6 +50,7 @@ export class TopologyRepository {
       .values({
         orgId,
         createdBy: userId,
+        domainId,
         name,
         definition,
         description,
@@ -64,26 +64,32 @@ export class TopologyRepository {
   }
 
   public async getTopologyById(id: string, userId?: string) {
-    const [topology] = await db.select().from(topologies).where(eq(topologies.id, id));
-    if (!topology) return null;
-
-    // Visibility checks
-    if (topology.visibility === 'PUBLIC') {
-      return topology;
-    }
-
     if (!userId) {
-      // If no user is logged in and visibility is not PUBLIC, block access
-      return null;
+      const [pub] = await db
+        .select()
+        .from(topologies)
+        .where(and(eq(topologies.id, id), eq(topologies.visibility, 'PUBLIC')));
+      return pub || null;
     }
 
-    // Check if the user is a member of the organization
-    const hasOrgAccess = await this.userHasAccessToOrg(userId, topology.orgId);
-    if (hasOrgAccess) {
-      return topology;
-    }
+    // Single-query indexed LEFT JOIN checking public visibility or organization membership
+    const [row] = await db
+      .select({
+        topology: topologies,
+      })
+      .from(topologies)
+      .leftJoin(
+        memberships,
+        and(eq(memberships.orgId, topologies.orgId), eq(memberships.userId, userId)),
+      )
+      .where(
+        and(
+          eq(topologies.id, id),
+          or(eq(topologies.visibility, 'PUBLIC'), sql`${memberships.userId} IS NOT NULL`),
+        ),
+      );
 
-    return null;
+    return row?.topology || null;
   }
 
   public async getTopologyByShareToken(shareToken: string) {
@@ -95,12 +101,27 @@ export class TopologyRepository {
   }
 
   public async listTopologiesForOrg(orgId: string, userId: string) {
-    const hasOrgAccess = await this.userHasAccessToOrg(userId, orgId);
-    if (!hasOrgAccess) {
-      throw new Error('Unauthorized: User is not a member of this organization');
+    // Single-query indexed INNER JOIN checking membership access
+    const rows = await db
+      .select({
+        topology: topologies,
+      })
+      .from(topologies)
+      .innerJoin(
+        memberships,
+        and(eq(memberships.orgId, orgId), eq(memberships.userId, userId)),
+      )
+      .where(eq(topologies.orgId, orgId));
+
+    if (rows.length === 0) {
+      const hasOrgAccess = await this.userHasAccessToOrg(userId, orgId);
+      if (!hasOrgAccess) {
+        throw new Error('Unauthorized: User is not a member of this organization');
+      }
+      return [];
     }
 
-    return db.select().from(topologies).where(eq(topologies.orgId, orgId));
+    return rows.map((r) => r.topology);
   }
 
   public async updateTopology(
@@ -109,7 +130,7 @@ export class TopologyRepository {
     updates: {
       name?: string;
       description?: string;
-      definition?: KafkaClusterState;
+      definition?: Record<string, unknown>;
       visibility?: 'PRIVATE' | 'UNLISTED' | 'PUBLIC';
     },
   ) {

@@ -2,8 +2,6 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import type { KafkaClusterState } from '@the-visualizer/contracts';
-
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireOrgRole } from '../middleware/role.middleware.js';
 import { topologyRepository } from '../repositories/topology.repository.js';
@@ -13,10 +11,11 @@ const topologyRouter = new Hono();
 // Schemas
 const createTopologyBodySchema = z.object({
   orgId: z.string().uuid(),
+  domainId: z.string().min(1).max(64).default('kafka').optional(),
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional(),
   visibility: z.enum(['PRIVATE', 'UNLISTED', 'PUBLIC']).optional().default('PRIVATE'),
-  definition: z.record(z.string(), z.unknown()) as any,
+  definition: z.record(z.string(), z.unknown()),
 });
 
 const updateTopologyBodySchema = createTopologyBodySchema.omit({ orgId: true }).partial();
@@ -33,7 +32,7 @@ topologyRouter.post(
     return body.orgId;
   }),
   async (c) => {
-    const { orgId, name, description, visibility, definition } = c.req.valid('json');
+    const { orgId, domainId, name, description, visibility, definition } = c.req.valid('json');
     const user = c.get('user')!;
 
     try {
@@ -41,9 +40,10 @@ topologyRouter.post(
         orgId,
         user.id,
         name,
-        definition as KafkaClusterState,
+        definition,
         description,
         visibility,
+        domainId || 'kafka',
       );
 
       return c.json({

@@ -1,4 +1,5 @@
 import {
+  index,
   integer,
   jsonb,
   pgTable,
@@ -8,8 +9,6 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-
-import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -41,38 +40,57 @@ export const memberships = pgTable(
       .$type<'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'>()
       .notNull(),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.orgId] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.orgId] }),
+    index('idx_memberships_user_id').on(table.userId),
+  ],
 );
 
-export const topologies = pgTable('topologies', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id')
-    .references(() => organizations.id, { onDelete: 'cascade' })
-    .notNull(),
-  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
-  name: varchar('name', { length: 255 }).notNull(),
-  description: text('description'),
-  visibility: varchar('visibility', { length: 32 })
-    .$type<'PRIVATE' | 'UNLISTED' | 'PUBLIC'>()
-    .default('PRIVATE')
-    .notNull(),
-  shareToken: varchar('share_token', { length: 64 }).unique(),
-  specVersion: integer('spec_version').default(1).notNull(),
-  definition: jsonb('definition').$type<KafkaClusterState>().notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const topologies = pgTable(
+  'topologies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .references(() => organizations.id, { onDelete: 'cascade' })
+      .notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    domainId: varchar('domain_id', { length: 64 }).default('kafka').notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    description: text('description'),
+    visibility: varchar('visibility', { length: 32 })
+      .$type<'PRIVATE' | 'UNLISTED' | 'PUBLIC'>()
+      .default('PRIVATE')
+      .notNull(),
+    shareToken: varchar('share_token', { length: 64 }).unique(),
+    specVersion: integer('spec_version').default(1).notNull(),
+    definition: jsonb('definition').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_topologies_org_id').on(table.orgId),
+    index('idx_topologies_created_by').on(table.createdBy),
+    index('idx_topologies_domain_org').on(table.domainId, table.orgId),
+  ],
+);
 
-export const simulationReplays = pgTable('simulation_replays', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  topologyId: uuid('topology_id')
-    .references(() => topologies.id, { onDelete: 'cascade' })
-    .notNull(),
-  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
-  seed: integer('seed').notNull(),
-  durationTicks: integer('duration_ticks').notNull(),
-  totalEvents: integer('total_events').notNull(),
-  artifactStorageUrl: text('artifact_storage_url').notNull(),
-  metadata: jsonb('metadata').default({}).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const simulationReplays = pgTable(
+  'simulation_replays',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    topologyId: uuid('topology_id')
+      .references(() => topologies.id, { onDelete: 'cascade' })
+      .notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    seed: integer('seed').notNull(),
+    durationTicks: integer('duration_ticks').notNull(),
+    totalEvents: integer('total_events').notNull(),
+    artifactStorageUrl: text('artifact_storage_url').notNull(),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_simulation_replays_topology_id').on(table.topologyId),
+    index('idx_simulation_replays_created_by').on(table.createdBy),
+  ],
+);
