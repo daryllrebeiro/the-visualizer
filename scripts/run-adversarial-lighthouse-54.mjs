@@ -25,7 +25,7 @@ const ROUTES = [
   '/gpu-cluster',
 ];
 
-const RAW_JSON_ROUTES = ['/database', '/redis', '/storage', '/rabbitmq', '/llm-pipeline'];
+const RAW_JSON_ROUTES = ROUTES;
 const ARTIFACT_DIR = path.resolve('artifacts');
 if (!fs.existsSync(ARTIFACT_DIR)) {
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
