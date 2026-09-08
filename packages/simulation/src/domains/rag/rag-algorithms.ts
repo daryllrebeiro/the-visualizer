@@ -9,6 +9,11 @@
 
 import type { RAGChunk, RRFMatch, RetrievalMatch } from './rag-types.js';
 
+// BM25 arithmetic lives in the shared core (search-index/bm25-score.ts)
+// so /rag and /search-index cannot fork. This re-export preserves the
+// exact simplified form /rag has always used (golden hashes unchanged).
+export { computeBM25Score } from '../search-index/bm25-score.js';
+
 export function cosineSimilarity(vecA: number[], vecB: number[]): number {
   if (vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) return 0;
   let dotProduct = 0;
@@ -27,31 +32,6 @@ export function cosineSimilarity(vecA: number[], vecB: number[]): number {
   const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   // Normalize to [0, 1] range for stability
   return Math.max(0, Math.min(1, (similarity + 1) / 2));
-}
-
-export function computeBM25Score(
-  queryTokens: string[],
-  docTerms: Record<string, number>,
-  docLength: number,
-  avgDocLength = 100,
-  k1 = 1.2,
-  b = 0.75,
-): number {
-  if (queryTokens.length === 0 || docLength === 0) return 0;
-  let score = 0;
-
-  for (const token of queryTokens) {
-    const termFreq = docTerms[token.toLowerCase()] ?? 0;
-    if (termFreq > 0) {
-      const idf = 1.5; // Normalized IDF constant for deterministic simulation
-      const numerator = termFreq * (k1 + 1);
-      const denominator = termFreq + k1 * (1 - b + b * (docLength / Math.max(1, avgDocLength)));
-      score += idf * (numerator / Math.max(0.001, denominator));
-    }
-  }
-
-  // Normalize into [0, 1] range via sigmoid approximation
-  return 1 / (1 + Math.exp(-score / 2));
 }
 
 /**
