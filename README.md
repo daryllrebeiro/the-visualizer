@@ -1,12 +1,12 @@
 # TheVisualizer — Interactive Distributed Systems & System Design Simulation Platform
 
-A high-performance, deterministic simulation, visualization, and chaos engineering platform for **18 distributed systems and AI infrastructure architectures**.
+A high-performance, deterministic simulation, visualization, and chaos engineering platform for **28 distributed systems, AI infrastructure, and algorithms architectures**.
 
 TheVisualizer makes invisible distributed system and AI infrastructure behaviors visible, allowing engineers, SREs, and architects to model, test, and master complex protocol mechanics—including **consensus quorums**, **partition log storage**, **distributed locks**, **rate limiting algorithms**, **hierarchical edge caching**, **64-bit snowflake ID generation**, **2PC vs Saga transactions**, **congestion control**, **Modular RAG & RRF fusion**, **Autonomous Agent Swarms**, **PagedAttention KV caching**, **HNSW vector graphs**, and **GPU 3D Parallelism with 1F1B pipelining**—in real time with zero-I/O discrete-event simulation.
 
 ---
 
-## 🧭 Visualizer Navigation Matrix (18 Domains)
+## 🧭 Visualizer Navigation Matrix (28 Domains)
 
 Every domain is accessible directly via its own dedicated routing endpoint (`http://localhost:3002/[domain]`):
 
@@ -30,6 +30,18 @@ Every domain is accessible directly via its own dedicated routing endpoint (`htt
 | **LLM Serving** | [`/llm-serving`](http://localhost:3002/llm-serving) | vLLM PagedAttention (SOSP '23), Orca | KV-cache virtual page table, prefill vs decode phase visualization, continuous iteration-level batching, token eviction | `LLM-1` (Zero Fragmentation KV Pages)<br>`LLM-2` (Continuous Batch Fairness)<br>`LLM-3` (Prefill Prioritization)<br>`LLM-4` (Context Window Preservation) |
 | **Vector Database** | [`/vectordb`](http://localhost:3002/vectordb) | Malkov & Yashunin HNSW (TPAMI '18) | Multi-layer HNSW graph visualization, entry point skip-list traversal, dynamic $efSearch$ beam exploration, IVFPQ quantization | `VEC-1` (HNSW Layer Monotonicity)<br>`VEC-2` (Recall-Latency Tradeoff)<br>`VEC-3` (Quantization Error Bound)<br>`VEC-4` (Dynamic Index Stability) |
 | **GPU Cluster** | [`/gpu-cluster`](http://localhost:3002/gpu-cluster) | Megatron-LM 3D, Narayanan 1F1B | Data / Tensor / Pipeline 3D parallelism topology, NVLink vs InfiniBand interconnect saturation, 1F1B schedule bubble minimization | `GPU-1` (3D Tensor Size Conservation)<br>`GPU-2` (1F1B Pipeline Activation Bound)<br>`GPU-3` (AllReduce Ring Consistency)<br>`GPU-4` (NVLink Bandwidth Saturation) |
+| **LLM Pipeline** | [`/llm-pipeline`](http://localhost:3002/llm-pipeline) | W3C PROV-DM, OpenLineage, Modular RAG | ETL chunking, hybrid BM25 + dense RRF retrieval, agent tool DAG, end-to-end lineage traceability | `PIPE-8` (Provenance Lineage Traceability) |
+| **LLM Gateway** | [`/llm-gateway`](http://localhost:3002/llm-gateway) | Martin Fowler Circuit Breaker, GPTCache, NeMo | Multi-provider fallback routing, circuit breaker FSM, cosine semantic cache, injection guardrails | `GW-1` (Circuit Breaker FSM Rigor) |
+| **Load Balancer** | [`/load-balancer`](http://localhost:3002/load-balancer) | HAProxy / nginx / AWS ALB, Karger STOC '97 | Live routing-decision reasoning, smooth WRR, sticky sessions on a consistent-hash ring, rolling deploy with graceful drain | `LB-1` (Health-Gated Routing)<br>`LB-2` (Weighted Distribution)<br>`LB-3` (Sticky Session Consistency)<br>`LB-4` (Graceful Drain) |
+| **Search Index** | [`/search-index`](http://localhost:3002/search-index) | Robertson & Zaragoza BM25, Lucene, Elasticsearch | BM25 score breakdown arithmetic (flagship), live inverted index table, k1/b sliders, scatter-gather with replica failover | `SEARCH-1` (Posting List Completeness)<br>`SEARCH-2` (BM25 Score Parity)<br>`SEARCH-3` (Shard Coverage)<br>`SEARCH-4` (Replica Consistency) |
+| **Task Scheduler** | [`/task-scheduler`](http://localhost:3002/task-scheduler) | Chronos / Airflow, Brooker 2015 jitter | DAG execution graph, leader lease with failover, split-brain dispatch probe, retry timeline with jitter modes | `SCHED-1` (Single Active Scheduler)<br>`SCHED-2` (Exactly-Once Dispatch)<br>`SCHED-3` (DAG Ordering)<br>`SCHED-4` (Bounded Retry with Backoff) |
+| **Chat & Presence** | [`/chat-presence`](http://localhost:3002/chat-presence) | RFC 6455 WebSocket, Kleppmann DDIA | Per-recipient delivery ticks, out-of-order reordering, presence staleness bounds, redelivery dedup | `CHAT-1` (Message Ordering)<br>`CHAT-2` (Presence Staleness Bound)<br>`CHAT-3` (Fanout Completeness)<br>`CHAT-4` (At-Least-Once with Dedup) |
+| **Feature Store** | [`/feature-store`](http://localhost:3002/feature-store) | Feast / Tecton / Uber Michelangelo | Draggable as-of timeline (flagship PIT join), online/offline sync-lag window, staleness flags, versioned definitions | `FS-1` (Point-in-Time Correctness)<br>`FS-2` (Online/Offline Consistency)<br>`FS-3` (Freshness Bound)<br>`FS-4` (Definition Immutability) |
+| **Model Rollout** | [`/model-rollout`](http://localhost:3002/model-rollout) | Argo Rollouts / Flagger, Kohavi 2020 | Traffic-split lanes with separated shadow lane, automatic rollback snap-back, z-test significance gate, eval gate | `ROLL-1` (Shadow Non-Impact)<br>`ROLL-2` (Canary Percentage Bound)<br>`ROLL-3` (Automatic Rollback)<br>`ROLL-4` (Significance Gate)<br>`ROLL-5` (Eval Gate Blocking) |
+| **LLM Eval Suite** | [`/llm-eval`](http://localhost:3002/llm-eval) | HELM / OpenAI Evals / Perez 2022 red-teaming | Red-team regression grid (flagship), eval results by risk area, policy version rescoring, deployment gate | `EVAL-1` (Full Suite Coverage)<br>`EVAL-2` (Red-Team Regression Detection)<br>`EVAL-3` (Policy Version Pinning)<br>`EVAL-4` (Deployment Gate) |
+| **Consistent Hashing** | [`/consistent-hashing`](http://localhost:3002/consistent-hashing) | Karger STOC '97, Lamping-Veach 2014, HRW 1996 | Ring visualization with vnode ticks (flagship), 3-algorithm movement counters vs naive baseline, load histograms | `CHASH-1` (Minimal Disruption)<br>`CHASH-2` (Vnode Load Balance)<br>`CHASH-3` (Jump Growth Consistency)<br>`CHASH-4` (HRW Determinism) |
+| **Probabilistic DS** | [`/probabilistic-structures`](http://localhost:3002/probabilistic-structures) | Bloom 1970, Fan 2000/2014, Flajolet 2007, Cormode 2005 | 5-structure comparison table (flagship), live bit array + HLL registers, deletion safety, adversarial CMS probes | `PROB-1` (No False Negatives)<br>`PROB-2` (Counting Bloom Deletion Safety)<br>`PROB-3` (HLL Error Bound)<br>`PROB-4` (CMS Overestimation-Only) |
+| **Merkle Trees** | [`/merkle-trees`](http://localhost:3002/merkle-trees) | Merkle 1979, Dynamo, Ethereum MPT | Bottom-up tree-hash construction (flagship), sibling proof paths, anti-entropy walk vs full-scan counter, Patricia non-membership proofs | `MERKLE-1` (Root Sensitivity)<br>`MERKLE-2` (Proof Soundness)<br>`MERKLE-3` (Divergence Localization)<br>`MERKLE-4` (Non-Membership Proof) |
 
 ---
 
@@ -37,7 +49,7 @@ Every domain is accessible directly via its own dedicated routing endpoint (`htt
 
 ### 1. Universal Cross-Domain Command Palette (`Cmd+K` / `Ctrl+K`)
 - Global keyboard shortcut accessible from any view.
-- Real-time full-text indexing across all **18 domains**, **50+ distributed systems concepts**, and simulation control actions.
+- Real-time full-text indexing across all **28 domains**, **50+ distributed systems concepts**, and simulation control actions.
 - Keyboard navigation (`↑`, `↓`, `Enter`, `Escape`) with active element auto-scroll.
 
 ### 2. System Design Interview Prep Mode
@@ -92,11 +104,11 @@ Unlike toy simulators that artificially prevent failures, TheVisualizer intentio
 ```text
 the-visualizer/
 ├── apps/
-│   ├── web/                    # Next.js 15 App Router (Canvas renderer, HUD, 18 visualizers, E2E)
+│   ├── web/                    # Next.js 15 App Router (Canvas renderer, HUD, 28 visualizers, E2E)
 │   ├── api/                    # Hono REST API with Drizzle ORM (PostgreSQL & Redis)
 │   └── ws-gateway/             # Stateful WebSocket Gateway (MessagePack, rate limits, session runner)
 ├── packages/
-│   ├── simulation/             # Pure deterministic simulation engine, reducers, and invariants (18 domains)
+│   ├── simulation/             # Pure deterministic simulation engine, reducers, and invariants (28 domains)
 │   ├── contracts/              # Shared Zod schemas, domain types, and wire protocol definitions
 │   ├── config/                 # Monorepo environment configuration and validation
 │   ├── logging/                # Structured Pino logging & OpenTelemetry metrics
@@ -104,7 +116,7 @@ the-visualizer/
 │   └── test-utils/             # Deterministic PRNG helpers, factories, and test harnesses
 ├── infrastructure/             # k6 automated load test suites (api.js, websocket.js)
 ├── docs/                       # Architecture specifications, runbooks, and fidelity references
-│   ├── FEATURE_EXPLAINER.md    # In-depth architectural breakdown of all 18 domains
+│   ├── FEATURE_EXPLAINER.md    # In-depth architectural breakdown of all 28 domains
 │   └── architecture/
 │       └── FIDELITY_REFERENCES.md # Formal RFC citations and config knob parity tables
 └── docker-compose.yml          # Multi-container production stack (Postgres, Redis, API, WS, Web)

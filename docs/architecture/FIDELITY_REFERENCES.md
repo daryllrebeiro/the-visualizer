@@ -248,5 +248,140 @@ The LLM Gateway simulation models multi-provider upstream orchestration, semanti
 | `prompt_injection_guard`| `injectionFilterEnabled`  | Boolean                                        |  Yes (Toggle)  | NeMo Guardrails / Llama Guard      |
 | `provider_outage_chaos` | `isOutageSimulated`       | Boolean                                        |  Yes (Chaos)   | GW-1 Circuit Trip Chaos Drill      |
 
+### U. Load Balancer (`/load-balancer`)
+
+The Load Balancer simulation models **HAProxy's `balance` directive algorithms** and **nginx's `ngx_http_upstream_module`** (smooth weighted round-robin, `max_fails`/`fail_timeout` health semantics, drain state), with sticky sessions on a **Karger et al. (STOC '97)** consistent-hash ring and AWS ALB-style deregistration delay for graceful drain.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `balance`               | `routingPolicy`           | `'ROUND_ROBIN' \| 'WEIGHTED_RR' \| 'LEAST_CONNECTIONS' \| 'LEAST_RESPONSE_TIME' \| 'CONSISTENT_HASH'` | Yes (Select) | HAProxy balance directive / nginx upstream |
+| `weight`                | `backends[].weight`       | Integer (1–100 per backend)                    | Yes (Stepper)  | nginx `weight` (smooth WRR)        |
+| `check interval`        | `healthChecker.interval`  | Integer ticks (default: 3)                     | Yes (Inspect)  | HAProxy active health checks       |
+| `fall` / `rise`         | `healthChecker.failureThreshold` / `successThreshold` | Integer (default: 2/2)      | Yes (Inspect)  | HAProxy `fall`/`rise`             |
+| `deregistration delay`  | `drainTimeoutTicks`       | Integer ticks (default: 20)                    | Yes (Inspect)  | AWS ALB deregistration_delay       |
+
+*Fidelity Verification Note (Load Balancer)*: Smooth weighted round-robin reproduces nginx's current-weight algorithm exactly (LB-2: 10,000 requests at weights 5:3:1:1 yield exactly 5000/3000/1000/1000); consistent-hash sessions reassign only the failed backend's keys on failure (LB-3, the CHASH-1 subset property); rolling deploy completes with zero dropped requests (LB-4, tested in `packages/simulation/src/domains/load-balancer/load-balancer.fidelity.test.ts`).
+
+### V. Distributed Search & Inverted Index (`/search-index`)
+
+The search simulation implements the **Lucene `BM25Similarity`** scoring formula (Robertson & Zaragoza 2009 practical BM25; ln(1 + (N-df+0.5)/(df+0.5)) IDF variant) with per-shard local statistics (Elasticsearch `query_then_fetch` default), analyzer modes, posting lists with positions, and bounded replica propagation.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `similarity.k1`         | `bm25.k1`                 | Float (0–10, default: 1.2)                     | Yes (Buttons)  | Lucene BM25Similarity              |
+| `similarity.b`          | `bm25.b`                  | Float (0–1, default: 0.75)                     | Yes (Buttons)  | Lucene length normalization        |
+| `analysis.analyzer`     | `analyzer.tokenizer`      | `'STANDARD' \| 'SIMPLE' \| 'KEYWORD'`          | Yes (Select)   | Elasticsearch analyzer pipeline    |
+| `number_of_replicas`    | shard `replicas[]`        | 2 per shard                                    | Yes (Inspect)  | Elasticsearch replica shards       |
+| (internal)              | `propagationBoundTicks`   | Integer ticks (default: 3)                     | Yes (Inspect)  | SEARCH-4 replica consistency bound |
+
+*Fidelity Verification Note (Search Index)*: Merged query scores recompute exactly from per-shard statistics with the full formula (SEARCH-2 parity, quantized at 1e-6 per the platform float rule); posting lists are the exact bidirectional mirror of the forward store including after deletes (SEARCH-1); a killed primary is served by its replica with identical results (SEARCH-3, tested in `packages/simulation/src/domains/search-index/search-index.fidelity.test.ts`). The simplified sigmoid form historically used by `/rag` is preserved byte-identically in the shared core `search-index/bm25-score.ts` (rag golden hashes unchanged).
+
+### W. Distributed Task Scheduler & Cron (`/task-scheduler`)
+
+The scheduler simulation models **Chronos/Airflow-style** leader-elected dispatch with a lease (semantics mirroring the platform's `/distributed-lock`), exactly-once dispatch via idempotency keys (`jobId@fireTick`), DAG dependency ordering with transitive upstream-failure skips, and **Brooker (2015, AWS Architecture Blog)** exponential backoff with full/equal/no jitter.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `every` (cron interval) | `jobs[].every`            | Integer ticks                                  | Yes (Declare)  | Vixie cron interval form          |
+| `max_active_retries`    | DAG `retry.maxAttempts`   | Integer (default: 3)                           | Yes (Declare)  | Airflow retry policy              |
+| `retry_exponential_backoff` | `retry.base`/`multiplier` | Integers (default: 2/2)                     | Yes (Declare)  | Airflow exponential backoff       |
+| `retry_jitter`          | `retry.jitter`            | `'NONE' \| 'EQUAL' \| 'FULL'`                  | Yes (Declare)  | Brooker 2015 (AWS blog)           |
+| (lease)                 | `leaseDurationTicks`      | Integer ticks (default: 5)                     | Yes (Inspect)  | Chronos leader lease              |
+
+*Fidelity Verification Note (Task Scheduler)*: NONE-jitter backoff is exactly `min(max, base·multiplier^failureNumber)` with terminal failure after maxAttempts (SCHED-4, mode-exact); a split-brain dispatch by a non-lease-holder is rejected (SCHED-1); a leader failover replaying the fire window hits the idempotency dedup (SCHED-2, tested in `packages/simulation/src/domains/task-scheduler/task-scheduler.fidelity.test.ts`).
+
+### X. Real-Time Chat & Presence (`/chat-presence`)
+
+The chat simulation models **RFC 6455 WebSocket** connection semantics with per-conversation sequence numbers, client-side reordering buffers and dedup (Kleppmann DDIA ch. 8: at-least-once + idempotent consumer = effectively-once), presence staleness bounds, and fanout-on-write with offline queuing.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| (heartbeat)             | `heartbeatInterval`       | Integer ticks (default: 3)                     | Yes (Inspect)  | WebSocket keepalive cadence        |
+| (away bound)            | 2×interval+1 (computed)   | Derived                                        | —              | CHAT-2 staleness bound             |
+| (offline TTL)           | `offlineTtl`              | Integer ticks (default: 20)                    | Yes (Inspect)  | Presence expiry                    |
+| (typing TTL)            | `typingTtl`               | Integer ticks (default: 10)                    | Yes (Inspect)  | Ephemeral typing indicator         |
+| (send throttle)         | `sendThrottle`            | 1 message/user/tick (Q.5: /rate-limiter seam)  | Yes (Inspect)  | Per-user send throttling           |
+
+*Fidelity Verification Note (Chat)*: A wire-level swap of adjacent deliveries is fully reassembled in sequence order via the receive buffer (CHAT-1); a redelivered message (reconnect before ack) never advances the client cursor twice (CHAT-4); every group member reaches a terminal disposition — delivered or offline-queued (CHAT-3, tested in `packages/simulation/src/domains/chat-presence/chat-presence.fidelity.test.ts`).
+
+### Y. ML Feature Store (`/feature-store`)
+
+The feature store simulation models **Feast/Tecton-style** offline/online stores with point-in-time joins (the anti-training-skew mechanism of Uber Michelangelo), sync watermarks, freshness TTLs, and versioned feature definitions.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| (as-of timestamp)       | training set `labelTimestamp` | Integer ticks (draggable marker)           | Yes (Slider)   | Feast point-in-time join           |
+| (sync interval)         | `syncInterval`            | Integer ticks (default: 4)                     | Yes (Inspect)  | Offline→online materialization     |
+| (feature TTL)           | `definitions[].ttlTicks`  | Integer ticks (default: 10)                    | Yes (Set)      | Tecton freshness semantics         |
+| (definition version)    | `definitions[].version`   | Monotonic integer                              | Yes (Edit)     | FS-4 immutability                  |
+
+*Fidelity Verification Note (Feature Store)*: Training rows recompute exactly as the latest offline value with eventTime ≤ label timestamp (FS-1; constructed leak rows fail the checker); online values equal the offline point-in-time value at each feature's sync watermark (FS-2); lookups past the TTL carry `stale: true` — never silently fresh (FS-3, tested in `packages/simulation/src/domains/feature-store/feature-store.fidelity.test.ts`).
+
+### Z. Model Deployment & Canary Rollout (`/model-rollout`)
+
+The rollout simulation models **Argo Rollouts/Flagger-style** progressive delivery: model registry staging, shadow traffic mirroring with zero client impact, percentage canary with statistical split bounds, automatic metric-threshold rollback (a canary-health FSM with GW-1 semantics — Q.5 swaps in the real breaker machine), and **Kohavi/Tang/Xu (2020)** two-proportion z-test promotion gating with the `/llm-eval` deployment gate seam (ROLL-5 / EVAL-4).
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `canaryStrategy.steps`  | `trafficSplit.canaryPercent` | Integer percent (0–100)                      | Yes (Buttons)  | Argo Rollouts canary steps         |
+| `analysis.errorRateThreshold` | `rolloutPolicy.errorRateThreshold` | Float (default: 0.05)             | Yes (Inject)   | Flagger metric threshold           |
+| (evaluation window)     | `rolloutPolicy.evaluationWindowTicks` | Integer ticks (default: 3)         | Yes (Inspect)  | Flagger analysis interval          |
+| `minSampleSize`         | `rolloutPolicy.minSamplePerArm` | Integer (default: 1000)                  | Yes (Inspect)  | Kohavi et al. 2020 (min N)         |
+| (significance α)        | `rolloutPolicy.significanceAlpha` | 0.05 (z > 1.959964)                  | Yes (Inspect)  | Two-proportion z-test              |
+| (eval gate)             | `evalGate`                | `{sourceRunId, policyVersion, criticalPassed, blocked}` | Yes (Set) | EVAL-4 cross-domain contract (Q.5 wiring) |
+
+*Fidelity Verification Note (Model Rollout)*: A 100%-error shadow model leaves live metrics byte-identical (ROLL-1); a 15%-error canary against a 5% threshold rolls back automatically within window+1 ticks with zero manual events (ROLL-3); a 70%-vs-60% conversion uplift at n≈50/arm is blocked pending significance while n≈2000/arm promotes (ROLL-4; tested in `packages/simulation/src/domains/model-rollout/model-rollout.fidelity.test.ts`).
+
+### AA. LLM Evaluation & Guardrails Pipeline (`/llm-eval`)
+
+The eval simulation models offline evaluation per **HELM (Liang et al. 2022)** and **OpenAI Evals** structures, with red-teaming per **Perez et al. (2022)**, against deterministic scripted model profiles (no real inference — regressions are constructible and golden-reproducible). The deployment gate output (`EVAL-4`) is the concrete contract consumed by `/model-rollout`'s ROLL-5.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| (suite cases)           | `evalSuite[]`             | prompt/expected/riskArea/severity              | Yes (Inspect)  | OpenAI Evals case structure        |
+| (policy threshold)      | `policies[].severityThreshold` | `'CRITICAL' \| 'HIGH' \| 'MEDIUM'`        | Yes (Declare)  | NeMo Guardrails rule sets          |
+| (model profile)         | `modelProfiles[]`         | violation rates + per-case overrides           | Yes (Declare)  | Scripted deterministic responder   |
+| (baseline model)        | `baselineModelVersion`    | Registry id                                    | Yes (Inspect)  | EVAL-2 regression baseline         |
+
+*Fidelity Verification Note (LLM Eval)*: A partial run is never reported complete (EVAL-1); a scripted red-team regression on a new version is flagged against the stable baseline, not absorbed into the aggregate pass rate (EVAL-2); re-scoring under a stricter policy creates a distinct version-pinned record without rewriting the run's violations (EVAL-3); Critical-failing versions produce blocked gates (EVAL-4, tested in `packages/simulation/src/domains/llm-eval/llm-eval.fidelity.test.ts`).
+
+### AB. Consistent Hashing Deep-Dive (`/consistent-hashing`)
+
+The algorithm simulation implements ring-based consistent hashing with virtual nodes per **Karger et al. (STOC '97)** and Dynamo's vnodes (DeCandia et al. SOSP '07), **Jump Consistent Hash** per Lamping & Veach (arXiv:1406.2294 — BigInt-exact recurrence, growth-only by construction), and **Rendezvous/HRW** per Thaler & Ravishankar (1996), compared live against the naive `hash % N` baseline.
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| (vnode count)           | `vnodesPerNode`           | Integer (1–512, default: 100)                  | Yes (Buttons)  | Dynamo virtual nodes               |
+| (node set)              | `ringNodes[]`             | Add/remove live                                | Yes (Buttons)  | Karger et al. 1997 ring            |
+| (jump buckets)          | `jumpBuckets`             | Integer (1–32)                                 | Yes (Buttons)  | Lamping & Veach §2                 |
+| (key set)               | `keyOrder[]`              | Batches up to 50,000 keys                      | Yes (Batch)    | CHASH-1 movement measurement       |
+
+*Fidelity Verification Note (Consistent Hashing)*: Adding one node moves ≈K/(N+1) keys under ring and exactly the keys landing in bucket n under jump — while naive hash % N moves ~5/6 of keys (CHASH-1, exact seeded assertions); jump growth consistency (`jump(k,n+1) ∈ {jump(k,n), n}`) is property-checked for all keys across n ∈ [1,64] (CHASH-3); HRW removal moves exactly the removed node's argmax set (CHASH-4; tested in `packages/simulation/src/domains/consistent-hashing/consistent-hashing.fidelity.test.ts`).
+
+### AC. Bloom Filters & Probabilistic Structures (`/probabilistic-structures`)
+
+The comparative structure simulation implements **Bloom (1970)** with Kirsch-Mitzenmacher double hashing, **counting Bloom** (Fan et al. 2000 Summary Cache, 4-bit counters with underflow guards), **cuckoo filters** (Fan et al. CoNEXT '14, 12-bit fingerprints, XOR alternate buckets, full kick-chain rollback), **HyperLogLog** (Flajolet et al. 2007 — α_m·m²·(Σ2^-M)^-1 with linear-counting bias correction, σ = 1.04/√m), and **Count-Min Sketch** (Cormode & Muthukrishnan 2005, min-over-rows one-sided error).
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| `m` (bits)              | `bloom.m`                 | Integer (16–16384, default: 8192)              | Yes (Buttons)  | Bloom 1970 bit-array size          |
+| `k` (hashes)            | `bloom.k`                 | Integer (1–16, default: 7)                     | Yes (Buttons)  | Kirsch-Mitzenmacher double hashing |
+| `m` (registers)         | `hll.m`                   | Power of two (16–16384, default: 1024)         | Yes (Buttons)  | Flajolet et al. 2007               |
+| (cuckoo buckets)        | `cuckoo.bucketsCount`     | Integer (default: 512 × 4 slots)               | Yes (Inspect)  | Fan et al. CoNEXT '14              |
+
+*Fidelity Verification Note (Probabilistic Structures)*: No false negatives across the Bloom family over the full stream, including cuckoo after displacement kicks (PROB-1); counting-Bloom deletion never breaks a colliding still-present neighbor and never underflows (PROB-2); the HLL estimate stays within z=4 of the documented 1.04/√m standard error with multi-seed empirical-SE convergence (PROB-3, the corrected statistical form); CMS only ever overestimates on constructed adversarial collisions (PROB-4; tested in `packages/simulation/src/domains/probabilistic-structures/probabilistic-structures.fidelity.test.ts`).
+
+### AD. Merkle Trees & Distributed Verification (`/merkle-trees`)
+
+The verification simulation implements Merkle (1979/1987) bottom-up tree hashing over power-of-two-padded leaves with a domain-separated 128-bit SHA-like deterministic stub, sibling-path inclusion proofs, instrumented anti-entropy divergence walks (the Dynamo replica-repair mechanism), and a radix-2 **Merkle-Patricia trie** (Ethereum MPT-style: leaf/branch/extension nodes, compressed paths, membership AND non-membership proofs).
+
+| Real System Config Name | Simulation State Property | Unit / Type                                    | Tunable in UI? | Reference Spec                     |
+| :---------------------- | :------------------------ | :--------------------------------------------- | :------------: | :--------------------------------- |
+| (leaf data)             | `primary.leaves[]`        | Blocks (≤1024, padded to power of two)         | Yes (Build)    | Merkle 1979 construction           |
+| (divergence set)        | replica `leafIndices`     | Up to 128 leaves                               | Yes (Chaos)    | Dynamo anti-entropy drill          |
+| (trie keys)             | `patricia`                | ≤256 keys, 32-bit paths                        | Yes (Insert)   | Ethereum MPT key encoding          |
+
+*Fidelity Verification Note (Merkle Trees)*: Flipping one bit in any leaf changes the root (MERKLE-1, property-tested over all 64 leaves); tampered leaf data, sibling hashes, and roots all fail proof verification (MERKLE-2, both directions); the anti-entropy walk localizes D divergent leaves in ≤ 2·D·log₂(L)+1 hash comparisons against a full-scan cost of L (MERKLE-3, instrumented counts); the Patricia trie produces valid non-membership proofs for absent keys and rejects forged absence proofs for present keys (MERKLE-4, tested in `packages/simulation/src/domains/merkle-trees/merkle-trees.fidelity.test.ts`).
+
 
 

@@ -334,3 +334,22 @@ _Comprehensive specifications and phased implementation roadmap available in [`d
    - Classroom/team training mode where multiple engineers join a collaborative room to diagnose and repair simulated production outages together in real time.
 4. **WebAssembly High-Throughput Reconstitutor**:
    - Rust-compiled Wasm core for ingesting and validating multi-gigabyte production event logs at 5,000,000 events/second in the browser.
+
+## 5. Domains 19-28 Batch: System Design, AI Infra & Classic DSA
+
+Ten domains added in the Q expansion batch (see docs/architecture/DOMAINS_19_28_EXPANSION_PLAN.md), all with pure seeded-RNG reducers, mutation-tested invariant suites, and golden determinism fixtures:
+
+| # | Domain | Route | Flagship Visual | Invariants |
+| :-- | :----- | :---- | :-------------- | :--------- |
+| 19 | Load Balancer (L4/L7) | /load-balancer | Routing-decision reasoning line | LB-1..LB-4 |
+| 20 | Distributed Search & Inverted Index | /search-index | BM25 score breakdown arithmetic | SEARCH-1..SEARCH-4 |
+| 21 | Task Scheduler & Cron | /task-scheduler | DAG execution graph | SCHED-1..SCHED-4 |
+| 22 | Real-Time Chat & Presence | /chat-presence | Fanout with per-recipient status | CHAT-1..CHAT-4 |
+| 23 | ML Feature Store | /feature-store | Draggable as-of PIT-join timeline | FS-1..FS-4 |
+| 24 | Model Deployment & Canary Rollout | /model-rollout | Traffic-split + rollback snap-back | ROLL-1..ROLL-5 |
+| 25 | LLM Evaluation & Guardrails | /llm-eval | Red-team regression grid | EVAL-1..EVAL-4 |
+| 26 | Consistent Hashing Deep-Dive | /consistent-hashing | 3-algorithm ring comparison | CHASH-1..CHASH-4 |
+| 27 | Bloom Filters & Probabilistic Structures | /probabilistic-structures | 5-structure comparison table | PROB-1..PROB-4 |
+| 28 | Merkle Trees & Distributed Verification | /merkle-trees | Bottom-up tree-hash construction | MERKLE-1..MERKLE-4 |
+
+Fidelity references and config-knob parity tables: docs/architecture/FIDELITY_REFERENCES.md sections U-AD.

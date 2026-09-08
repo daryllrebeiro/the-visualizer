@@ -2,7 +2,7 @@
   "name": "the-visualizer",
   "version": "1.0.0",
   "private": true,
-  "description": "Interactive deterministic simulation, visualization, and chaos engineering platform for 18 distributed systems and AI infrastructure architectures",
+  "description": "Interactive deterministic simulation, visualization, and chaos engineering platform for 28 distributed systems, AI infrastructure, and algorithms architectures",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"

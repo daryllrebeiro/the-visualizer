@@ -237,3 +237,16 @@ Architecture of [`apps/web/src/app/visualizer.tsx`](file:///c:/Users/Lenovo%20La
 5. **Screen-Space Radar Minimap**:
    - Rendered outside the camera matrix at fixed canvas coordinates `(width - 144, height - 94)`.
    - Displays miniature color-coded radar blips for brokers, partitions, producers, and consumers with a bounding box indicating the active camera viewport.
+
+## 3. Domains 19-28: System Design, AI Infra & Classic Algorithms
+
+- **Load Balancer** (/load-balancer): 5 routing policies (round robin, smooth WRR, least connections, least response time, consistent-hash sticky), active health checking with fail/ho thresholds, graceful connection drain, rolling deploy with zero dropped requests.
+- **Search Index** (/search-index): STANDARD/SIMPLE/KEYWORD analyzers with stopword removal, inverted index with posting lists and positions, real Lucene BM25 with per-term breakdown and live k1/b tuning, 3-shard scatter-gather with replica promotion.
+- **Task Scheduler** (/task-scheduler): leader-elected dispatch via lease with split-brain rejection, idempotency-key exactly-once dispatch across leader failover, DAG runs with upstream-failure transitive skips, exponential backoff with NONE/EQUAL/FULL jitter.
+- **Chat & Presence** (/chat-presence): per-conversation sequence numbers with client receive buffers and dedup, presence ONLINE/AWAY/OFFLINE with staleness bounds, group fanout with offline queue drain on reconnect, TTL typing indicators.
+- **Feature Store** (/feature-store): point-in-time joins against offline history, periodic offline-to-online sync with watermark consistency, TTL staleness flags on serving lookups, versioned feature definitions pinning materialized training sets.
+- **Model Rollout** (/model-rollout): model registry staging, shadow traffic with strictly separate metrics, percentage canary, automatic error-threshold rollback FSM, two-proportion z-test promotion gate, eval-gate blocking seam (EVAL-4 contract).
+- **LLM Eval Suite** (/llm-eval): deterministic scripted model profiles (no real inference), full-suite coverage enforcement, cross-version red-team regression detection vs a stable baseline, policy version-pinned rescoring, deployment gate outputs.
+- **Consistent Hashing** (/consistent-hashing): ring with virtual nodes, Jump Consistent Hash (BigInt-exact recurrence, growth-only), Rendezvous/HRW, naive hash % N baseline; live movement counters per algorithm on identical add/remove events.
+- **Probabilistic Structures** (/probabilistic-structures): standard/counting Bloom, cuckoo with full kick-chain rollback, HyperLogLog with bias correction, Count-Min Sketch; identical stream feeding all five with memory-vs-accuracy comparison.
+- **Merkle Trees** (/merkle-trees): bottom-up tree hashing with power-of-two padding, sibling-path inclusion proofs with tamper drills, instrumented anti-entropy divergence walks, Merkle-Patricia trie with membership and non-membership proofs.

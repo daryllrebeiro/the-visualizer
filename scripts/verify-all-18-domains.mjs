@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * All-18-Domain Behavioral Verification Suite — TheVisualizer Platform
+ * All-28-Domain Behavioral Verification Suite — TheVisualizer Platform
  *
  * Programmatically exercises all 18 registered domains via DomainRegistry:
  * 1. Kafka
@@ -42,26 +42,36 @@ import {
 } from '../packages/simulation/dist/index.js';
 
 console.log('================================================================================');
-console.log('ALL-18-DOMAIN BEHAVIORAL VERIFICATION SUITE — THEVISUALIZER PLATFORM');
+console.log('ALL-28-DOMAIN BEHAVIORAL VERIFICATION SUITE — THEVISUALIZER PLATFORM');
 console.log('================================================================================\n');
 
 const EXPECTED_DOMAINS = [
   'cdn-cache',
+  'chat-presence',
+  'consistent-hashing',
   'database',
   'distributed-lock',
+  'feature-store',
   'gpu-cluster',
   'id-gen',
   'kafka',
   'kubernetes',
+  'llm-eval',
   'llm-gateway',
   'llm-pipeline',
   'llm-serving',
+  'load-balancer',
+  'merkle-trees',
+  'model-rollout',
   'networking',
+  'probabilistic-structures',
   'rabbitmq',
   'raft',
   'rate-limiter',
   'redis',
+  'search-index',
   'storage',
+  'task-scheduler',
   'transactions',
   'vectordb',
 ];
@@ -80,17 +90,128 @@ function assert(condition, message) {
 // -----------------------------------------------------------------------------
 // SECTION 1: Registry Integrity & Taxonomy Verification
 // -----------------------------------------------------------------------------
-console.log('>>> SECTION 1: Universal Domain Registry Verification (18 Domains)');
+console.log('>>> SECTION 1: Universal Domain Registry Verification (28 Domains)');
 const registered = DomainRegistry.list();
-assert(registered.length === 18, `Expected 18 domains registered, found ${registered.length}`);
+assert(registered.length === 28, `Expected 28 domains registered, found ${registered.length}`);
 
 const registeredIds = registered.map(d => d.id).sort();
 assert(
   JSON.stringify(registeredIds) === JSON.stringify(EXPECTED_DOMAINS),
   'Registered domain IDs match expected canonical 18-domain taxonomy'
 );
-console.log(`✅ All 18 domains successfully registered in DomainRegistry.`);
+console.log(`✅ All 28 domains successfully registered in DomainRegistry.`);
 totalPassed++;
+
+// -----------------------------------------------------------------------------
+// SECTION 1.5: Deep Behavioral Checks — Domains 19-28
+// -----------------------------------------------------------------------------
+console.log('\n>>> SECTION 1.5: Domains 19-28 Behavioral Spot-Checks');
+
+// Check 1.5.1: Load Balancer — smooth WRR exact ratio (LB-2)
+{
+  process.stdout.write('Checking Load Balancer smooth WRR 5:3:2:1 exact counts (LB-2)... ');
+  const { createDefaultLBCluster, pureLBTransition } = await import('../packages/simulation/dist/index.js');
+  const rng = new DeterministicRNG(42);
+  let state = createDefaultLBCluster();
+  state = pureLBTransition(state, { id: 'w1', tick: 0, type: 'LB_SET_WEIGHT', payload: { backendId: 'backend-1', weight: 5 } }, rng).nextState;
+  state = pureLBTransition(state, { id: 'w2', tick: 0, type: 'LB_SET_WEIGHT', payload: { backendId: 'backend-2', weight: 3 } }, rng).nextState;
+  state = pureLBTransition(state, { id: 'w3', tick: 0, type: 'LB_SET_WEIGHT', payload: { backendId: 'backend-3', weight: 2 } }, rng).nextState;
+  state = pureLBTransition(state, { id: 'p', tick: 0, type: 'LB_SET_POLICY', payload: { policy: 'WEIGHTED_RR' } }, rng).nextState;
+  state = pureLBTransition(state, { id: 'lt', tick: 0, type: 'LB_LOAD_TEST', payload: { count: 11 } }, rng).nextState;
+  assert(
+    state.backends['backend-1'].dispatchCount === 5 &&
+      state.backends['backend-2'].dispatchCount === 3 &&
+      state.backends['backend-3'].dispatchCount === 2 &&
+      state.backends['backend-4'].dispatchCount === 1,
+    'Smooth WRR produced exact 5:3:2:1 interleaving over one round'
+  );
+  console.log('✅ PASS (Exact Weighted Split)');
+  totalPassed++;
+}
+
+// Check 1.5.2: Consistent Hashing — minimal disruption (CHASH-1)
+{
+  process.stdout.write('Checking Consistent Hashing minimal disruption on node add (CHASH-1)... ');
+  const { createDefaultConsistentHashingCluster, pureConsistentHashingTransition } = await import('../packages/simulation/dist/index.js');
+  const rng = new DeterministicRNG(42);
+  let state = createDefaultConsistentHashingCluster();
+  const keys = Array.from({ length: 1000 }, (_, i) => `k-${i}`);
+  state = pureConsistentHashingTransition(state, { id: 'keys', tick: 0, type: 'CHASH_ADD_KEY_BATCH', payload: { keys } }, rng).nextState;
+  state = pureConsistentHashingTransition(state, { id: 'add', tick: 1, type: 'CHASH_ADD_NODE', payload: { nodeId: 'node-F' } }, rng).nextState;
+  const m = state.lastMovement;
+  assert(m !== null, 'Rebalance movement recorded');
+  assert(m.ring < (m.totalKeys * 2.5) / 6, `Ring moved ${m.ring}/${m.totalKeys} keys (expected ~K/6)`);
+  assert(m.naive > m.ring * 2, `Naive baseline moved ${m.naive} vs ring ${m.ring} — naive must reshuffle far more`);
+  console.log(`✅ PASS (ring ${m.ring} vs naive ${m.naive} of ${m.totalKeys})`);
+  totalPassed++;
+}
+
+// Check 1.5.3: Bloom family no false negatives (PROB-1)
+{
+  process.stdout.write('Checking Bloom family no false negatives (PROB-1)... ');
+  const { createDefaultProbabilisticStructuresCluster, pureProbabilisticStructuresTransition } = await import('../packages/simulation/dist/index.js');
+  const rng = new DeterministicRNG(42);
+  let state = createDefaultProbabilisticStructuresCluster();
+  const elements = Array.from({ length: 500 }, (_, i) => `el-${i}`);
+  state = pureProbabilisticStructuresTransition(state, { id: 'ins', tick: 0, type: 'PROB_INSERT_BATCH', payload: { elements } }, rng).nextState;
+  for (const el of elements) {
+    state = pureProbabilisticStructuresTransition(state, { id: `lk-${el}`, tick: 1, type: 'PROB_LOOKUP', payload: { element: el } }, rng).nextState;
+    assert(state.lastOp.bloom === true, `Bloom false negative for ${el}`);
+    assert(state.lastOp.countingBloom === true, `Counting Bloom false negative for ${el}`);
+  }
+  console.log('✅ PASS (500/500 membership)');
+  totalPassed++;
+}
+
+// Check 1.5.4: Merkle root sensitivity (MERKLE-1)
+{
+  process.stdout.write('Checking Merkle root sensitivity to a single bit flip (MERKLE-1)... ');
+  const { createDefaultMerkleTreesCluster, pureMerkleTreesTransition } = await import('../packages/simulation/dist/index.js');
+  const rng = new DeterministicRNG(42);
+  let state = createDefaultMerkleTreesCluster();
+  const rootBefore = state.primary.root;
+  state = pureMerkleTreesTransition(state, { id: 'flip', tick: 1, type: 'MERKLE_FLIP_BIT', payload: { leafIndex: 2 } }, rng).nextState;
+  assert(state.primary.root !== rootBefore, 'Root hash changed after single-bit leaf flip');
+  console.log('✅ PASS (Root Changed)');
+  totalPassed++;
+}
+
+// Check 1.5.5: Task scheduler exactly-once across failover (SCHED-2)
+{
+  process.stdout.write('Checking Task Scheduler exactly-once dispatch across leader failover (SCHED-2)... ');
+  const { createDefaultTaskSchedulerCluster, pureTaskSchedulerTransition } = await import('../packages/simulation/dist/index.js');
+  const rng = new DeterministicRNG(42);
+  let state = createDefaultTaskSchedulerCluster();
+  state = pureTaskSchedulerTransition(state, { id: 'd1', tick: 3, type: 'SCHED_TRIGGER_JOB', payload: { jobId: 'job-report', fireTick: 3 } }, rng).nextState;
+  state = pureTaskSchedulerTransition(state, { id: 'kill', tick: 4, type: 'SCHED_KILL_SCHEDULER', payload: { schedulerId: 'scheduler-1' } }, rng).nextState;
+  for (let t = 5; t <= 12; t++) {
+    state = pureTaskSchedulerTransition(state, { id: `t${t}`, tick: t, type: 'SCHED_TICK', payload: {} }, rng).nextState;
+  }
+  assert(state.currentLeader === 'scheduler-2', 'Failover elected scheduler-2');
+  state = pureTaskSchedulerTransition(state, { id: 'replay', tick: 13, type: 'SCHED_ATTEMPT_DISPATCH', payload: { schedulerId: 'scheduler-2', jobId: 'job-report', fireTick: 3 } }, rng).nextState;
+  assert(state.stats.dedupRejections >= 1, 'Replayed dispatch was deduplicated');
+  assert(state.dispatchLog['job-report@3'].dispatchedBy === 'scheduler-1', 'Original dispatch preserved');
+  console.log('✅ PASS (Exactly-Once Held)');
+  totalPassed++;
+}
+
+// Check 1.5.6: Model rollout automatic rollback (ROLL-3)
+{
+  process.stdout.write('Checking Model Rollout automatic rollback on error threshold (ROLL-3)... ');
+  const { createDefaultModelRolloutCluster, pureModelRolloutTransition } = await import('../packages/simulation/dist/index.js');
+  const rng = new DeterministicRNG(42);
+  let state = createDefaultModelRolloutCluster();
+  state = pureModelRolloutTransition(state, { id: 'canary', tick: 0, type: 'ROLL_SET_CANARY', payload: { version: 'model-v2', percent: 50 } }, rng).nextState;
+  state = pureModelRolloutTransition(state, { id: 'rates', tick: 0, type: 'ROLL_SET_RATES', payload: { version: 'model-v2', errorRate: 0.15 } }, rng).nextState;
+  for (let t = 1; t <= 4; t++) {
+    state = pureModelRolloutTransition(state, { id: `tr${t}`, tick: t, type: 'ROLL_SEND_TRAFFIC', payload: { count: 300 } }, rng).nextState;
+    state = pureModelRolloutTransition(state, { id: `tk${t}`, tick: t, type: 'ROLL_TICK', payload: {} }, rng).nextState;
+  }
+  assert(state.rollback.fsm === 'ROLLED_BACK', 'Automatic rollback fired');
+  assert(state.trafficSplit.canaryPercent === 0, 'Traffic snapped back to baseline');
+  console.log('✅ PASS (Auto Rollback)');
+  totalPassed++;
+}
 
 // -----------------------------------------------------------------------------
 // SECTION 2: Per-Domain State Lifecycle & Invariant Cleanliness
@@ -100,7 +221,7 @@ console.log('\n>>> SECTION 2: Per-Domain Reducer & Invariant Verification');
 for (let i = 0; i < registered.length; i++) {
   const meta = registered[i];
   const plugin = DomainRegistry.get(meta.id);
-  const domainLabel = `[Domain ${String(i + 1).padStart(2, '0')}/18] ${meta.id.padEnd(17)}`;
+  const domainLabel = `[Domain ${String(i + 1).padStart(2, '0')}/28] ${meta.id.padEnd(24)}`;
 
   try {
     process.stdout.write(`${domainLabel} | Init & 10-Tick State Transitions... `);
@@ -223,7 +344,7 @@ console.log('\n>>> SECTION 3: Deep Behavioral Scenario Verifications');
 // -----------------------------------------------------------------------------
 // SECTION 4: Universal Permalink Compatibility Across All 18 Domains
 // -----------------------------------------------------------------------------
-console.log('\n>>> SECTION 4: Universal Permalink Serialization for All 18 Domains');
+console.log('\n>>> SECTION 4: Universal Permalink Serialization for All 28 Domains');
 {
   for (const domain of EXPECTED_DOMAINS) {
     const raw = JSON.stringify({ domain, tick: 42, scenarioId: 'default' });
@@ -235,12 +356,12 @@ console.log('\n>>> SECTION 4: Universal Permalink Serialization for All 18 Domai
     const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
     assert(decoded.domain === domain && decoded.tick === 42, `Permalink roundtrip verified for ${domain}`);
   }
-  console.log(`✅ Verified URL-safe permalink roundtrip encoding for all 18 domains.`);
+  console.log(`✅ Verified URL-safe permalink roundtrip encoding for all 28 domains.`);
   totalPassed++;
 }
 
 console.log('\n================================================================================');
-console.log(`FINAL RESULT: ${totalPassed} / 23 VERIFICATION CHECKS PASSED (${totalFailed} failures)`);
+console.log(`FINAL RESULT: ${totalPassed} VERIFICATION CHECKS PASSED (${totalFailed} failures)`);
 console.log('================================================================================\n');
 
 if (totalFailed > 0) {
