@@ -21,7 +21,17 @@ export interface DomainCardInfo {
     | 'vectordb'
     | 'gpu-cluster'
     | 'llm-pipeline'
-    | 'llm-gateway';
+    | 'llm-gateway'
+    | 'load-balancer'
+    | 'search-index'
+    | 'task-scheduler'
+    | 'chat-presence'
+    | 'feature-store'
+    | 'model-rollout'
+    | 'llm-eval'
+    | 'consistent-hashing'
+    | 'probabilistic-structures'
+    | 'merkle-trees';
   name: string;
   category: string;
   icon: string;
@@ -357,6 +367,186 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
       'Interactive Polar Cosine Similarity Radar',
       'Zero-Cost Semantic Cache with Acceptance Radius',
       'Pre-Execution Adversarial Injection Scanner',
+    ],
+  },
+  {
+    id: 'load-balancer',
+    name: 'Load Balancer (LB-1..LB-4)',
+    category: 'SYSTEM_DESIGN',
+    icon: '⚖️',
+    tagline:
+      'Round robin, smooth weighted round robin (nginx), least connections, least response time (EWMA), and consistent-hash sticky sessions with health-check failover and graceful drain.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'HAProxy / nginx / ALB',
+    oracleSystem: 'HAProxy balance algorithms / nginx upstream / AWS ALB',
+    color: '#3b82f6',
+    highlights: [
+      'Live Routing-Decision Reasoning Line (flagship)',
+      'Weighted Distribution Accuracy (LB-2, chi-square)',
+      'Health-Check Failover with Sticky Reassignment (LB-3)',
+      'Rolling Deploy with Zero Downtime (LB-4)',
+    ],
+  },
+  {
+    id: 'search-index',
+    name: 'Distributed Search & Inverted Index (BM25)',
+    category: 'SYSTEM_DESIGN',
+    icon: '🔍',
+    tagline:
+      'Analyzer pipeline, inverted index posting lists, real Robertson-Zaragoza/Lucene BM25 with per-term arithmetic, shard replicas, and scatter-gather fan-out.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Elasticsearch / Lucene BM25',
+    oracleSystem: 'Lucene BM25Similarity / Elasticsearch query_then_fetch',
+    color: '#f59e0b',
+    highlights: [
+      'Flagship BM25 Score Breakdown (tf, idf, length normalization)',
+      'Live Inverted Index Table on Ingest',
+      'Posting-List Cleanup on Delete (SEARCH-1)',
+      'Scatter-Gather with Replica Failover (SEARCH-3)',
+    ],
+  },
+  {
+    id: 'task-scheduler',
+    name: 'Distributed Task Scheduler & Cron',
+    category: 'SYSTEM_DESIGN',
+    icon: '⏰',
+    tagline:
+      'Leader-elected dispatcher with lease (SCHED-1), exactly-once idempotency-key dispatch (SCHED-2), DAG ordering with upstream skips (SCHED-3), backoff with jitter (SCHED-4).',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Chronos / Airflow',
+    oracleSystem: 'Apache Airflow scheduler / Chronos / Brooker 2015 jitter',
+    color: '#10b981',
+    highlights: [
+      'DAG Execution Graph with Live Task Status',
+      'Split-Brain Dispatch Rejection (SCHED-1)',
+      'Exactly-Once Dispatch Across Leader Failover (SCHED-2)',
+      'Retry Timeline with Jitter Scatter (SCHED-4)',
+    ],
+  },
+  {
+    id: 'chat-presence',
+    name: 'Real-Time Chat & Presence',
+    category: 'SYSTEM_DESIGN',
+    icon: '💬',
+    tagline:
+      'Sequence-number ordering with client reordering and dedup (at-least-once), presence staleness bounds, group fanout with offline queuing, TTL typing indicators.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'RFC 6455 / DDIA ch. 8',
+    oracleSystem: 'RFC 6455 WebSocket / Kleppmann delivery semantics',
+    color: '#06b6d4',
+    highlights: [
+      'Per-Recipient Delivery Status Ticks',
+      'Out-of-Order Delivery Reordering (CHAT-1)',
+      'Presence ONLINE→AWAY→OFFLINE Bounds (CHAT-2)',
+      'Redelivery Dedup (CHAT-4)',
+    ],
+  },
+  {
+    id: 'feature-store',
+    name: 'ML Feature Store (FS-1..FS-4)',
+    category: 'AI_INFRA',
+    icon: '🗄️',
+    tagline:
+      'Point-in-time-correct training-set joins (no label leakage), online/offline consistency at the sync watermark, staleness TTL flags, versioned definitions.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Feast / Tecton / Michelangelo',
+    oracleSystem: 'Feast point-in-time joins / Uber Michelangelo',
+    color: '#8b5cf6',
+    highlights: [
+      'Flagship Draggable As-Of Timeline (PIT join live)',
+      'Leak Detection on Training Rows (FS-1)',
+      'Sync-Lag Window Visualization (FS-2)',
+      'Staleness Flag Enforcement (FS-3)',
+    ],
+  },
+  {
+    id: 'model-rollout',
+    name: 'Model Deployment & Canary Rollout',
+    category: 'AI_INFRA',
+    icon: '🚀',
+    tagline:
+      'Shadow traffic with zero client impact (ROLL-1), percentage canary (ROLL-2), automatic threshold rollback (ROLL-3), z-test significance gate (ROLL-4), eval-gate blocking (ROLL-5).',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Argo Rollouts / Flagger',
+    oracleSystem: 'Argo Rollouts / Flagger / Kohavi 2020 experiments',
+    color: '#ec4899',
+    highlights: [
+      'Traffic-Split Lanes with Visually Separated Shadow',
+      'Automatic Rollback Snap-Back Animation (ROLL-3)',
+      'Small-Sample Promotion Blocked Pending Significance (ROLL-4)',
+      'Eval Gate Blocking a Real Promotion Attempt (ROLL-5)',
+    ],
+  },
+  {
+    id: 'llm-eval',
+    name: 'LLM Evaluation & Guardrails Pipeline',
+    category: 'AI_INFRA',
+    icon: '🧪',
+    tagline:
+      'Offline eval suite with deterministic scripted model profiles, red-team regression detection across versions, version-pinned policy re-scoring, deployment gate.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'HELM / OpenAI Evals / NeMo',
+    oracleSystem: 'HELM (Liang 2022) / Perez 2022 red-teaming / OpenAI Evals',
+    color: '#ef4444',
+    highlights: [
+      'Flagship Red-Team Regression Grid (newly-red cell)',
+      'Full Suite Coverage Enforcement (EVAL-1)',
+      'Policy Version-Pinned Rescoring (EVAL-3)',
+      'Deployment Gate Blocking (EVAL-4 → /model-rollout)',
+    ],
+  },
+  {
+    id: 'consistent-hashing',
+    name: 'Consistent Hashing Deep-Dive',
+    category: 'ALGORITHMS',
+    icon: '🌀',
+    tagline:
+      'Ring with virtual nodes (Karger 1997), Jump Consistent Hash (Lamping & Veach 2014, growth-only), and Rendezvous/HRW — compared live against naive hash % N.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Karger STOC \'97 / Lamping-Veach / HRW',
+    oracleSystem: 'Karger et al. STOC 1997 / arXiv:1406.2294 / Thaler-Ravishankar 1996',
+    color: '#f59e0b',
+    highlights: [
+      'Flagship Ring Visualization with Colored Vnode Ticks',
+      '3-Algorithm Key-Movement Counter on Identical Events (CHASH-1)',
+      'Virtual-Node Load Balance Slider (CHASH-2)',
+      'Instrumented Lookup Complexity (O(log vN) vs O(N))',
+    ],
+  },
+  {
+    id: 'probabilistic-structures',
+    name: 'Bloom Filters & Probabilistic Structures',
+    category: 'ALGORITHMS',
+    icon: '🎲',
+    tagline:
+      'Standard Bloom, Counting Bloom, Cuckoo (full rollback kick chains), HyperLogLog (1.04/√m), and Count-Min Sketch fed one identical stream.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Bloom / Fan / Flajolet / Cormode',
+    oracleSystem: 'Bloom 1970 / Fan 2000 / Fan CoNEXT 2014 / Flajolet 2007 / Cormode 2005',
+    color: '#10b981',
+    highlights: [
+      'Flagship 5-Structure Comparison Table (memory vs accuracy)',
+      'Live Bit Array and HLL Register Visuals',
+      'Counting-Bloom Deletion Safety on Colliding Neighbors (PROB-2)',
+      'CMS One-Sided Error on Adversarial Collisions (PROB-4)',
+    ],
+  },
+  {
+    id: 'merkle-trees',
+    name: 'Merkle Trees & Distributed Verification',
+    category: 'ALGORITHMS',
+    icon: '🌳',
+    tagline:
+      'Bottom-up tree-hash construction, sibling-path proofs (verify and tamper), instrumented anti-entropy divergence localization, Merkle-Patricia membership AND non-membership proofs.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Merkle 1979 / Dynamo / Ethereum MPT',
+    oracleSystem: 'Merkle 1979/1987 / Dynamo SOSP 2007 / Ethereum MPT / Git',
+    color: '#06b6d4',
+    highlights: [
+      'Flagship Bottom-Up Tree-Hash Construction',
+      'Single-Bit Flip Root Sensitivity (MERKLE-1)',
+      'Anti-Entropy Walk vs Full-Scan Comparison Counter (MERKLE-3)',
+      'Patricia Non-Membership Proof + Forgery Rejection (MERKLE-4)',
     ],
   },
 ];

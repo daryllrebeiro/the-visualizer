@@ -17,7 +17,17 @@ export type DomainKey =
   | 'vectordb'
   | 'gpu-cluster'
   | 'llm-pipeline'
-  | 'llm-gateway';
+  | 'llm-gateway'
+  | 'load-balancer'
+  | 'search-index'
+  | 'task-scheduler'
+  | 'chat-presence'
+  | 'feature-store'
+  | 'model-rollout'
+  | 'llm-eval'
+  | 'consistent-hashing'
+  | 'probabilistic-structures'
+  | 'merkle-trees';
 
 export const DOMAIN_OPTIONS: ReadonlyArray<{
   id: DomainKey;
@@ -170,5 +180,85 @@ export const DOMAIN_OPTIONS: ReadonlyArray<{
     category: 'Routing, Semantic Cache & Guardrails (GW-1)',
     path: '/llm-gateway',
     color: '#3b82f6',
+  },
+  {
+    id: 'load-balancer',
+    name: 'Load Balancer',
+    icon: '⚖️',
+    category: 'L4/L7 Routing & Health Checks',
+    path: '/load-balancer',
+    color: '#3b82f6',
+  },
+  {
+    id: 'search-index',
+    name: 'Search Index',
+    icon: '🔍',
+    category: 'Inverted Index & BM25 Scoring',
+    path: '/search-index',
+    color: '#f59e0b',
+  },
+  {
+    id: 'task-scheduler',
+    name: 'Task Scheduler',
+    icon: '⏰',
+    category: 'Distributed Cron & DAG Ordering',
+    path: '/task-scheduler',
+    color: '#10b981',
+  },
+  {
+    id: 'chat-presence',
+    name: 'Chat & Presence',
+    icon: '💬',
+    category: 'WebSocket Ordering & Fanout',
+    path: '/chat-presence',
+    color: '#06b6d4',
+  },
+  {
+    id: 'feature-store',
+    name: 'Feature Store',
+    icon: '🗄️',
+    category: 'Point-in-Time Joins & Freshness',
+    path: '/feature-store',
+    color: '#8b5cf6',
+  },
+  {
+    id: 'model-rollout',
+    name: 'Model Rollout',
+    icon: '🚀',
+    category: 'Canary Deploy & Auto Rollback',
+    path: '/model-rollout',
+    color: '#ec4899',
+  },
+  {
+    id: 'llm-eval',
+    name: 'LLM Eval Suite',
+    icon: '🧪',
+    category: 'Red-Team Regressions & Gate',
+    path: '/llm-eval',
+    color: '#ef4444',
+  },
+  {
+    id: 'consistent-hashing',
+    name: 'Consistent Hashing',
+    icon: '🌀',
+    category: 'Ring vs Jump vs Rendezvous',
+    path: '/consistent-hashing',
+    color: '#f59e0b',
+  },
+  {
+    id: 'probabilistic-structures',
+    name: 'Probabilistic DS',
+    icon: '🎲',
+    category: 'Bloom, Cuckoo, HLL, CMS',
+    path: '/probabilistic-structures',
+    color: '#10b981',
+  },
+  {
+    id: 'merkle-trees',
+    name: 'Merkle Trees',
+    icon: '🌳',
+    category: 'Proofs & Anti-Entropy Repair',
+    path: '/merkle-trees',
+    color: '#06b6d4',
   },
 ];

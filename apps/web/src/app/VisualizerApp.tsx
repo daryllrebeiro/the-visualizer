@@ -4929,6 +4929,14 @@ export default function VisualizerApp({
                 onThrottleStraggler: handleGpuClusterThrottleStraggler,
                 onSeverNVLink: handleGpuClusterSeverNVLink,
               }}
+              newDomain={{
+                domainId: selectedDomain as import('../components/new-domains/NewDomainsPanel').NewDomainId,
+                isPaused,
+                onHalt: (message: string) => {
+                  setIsHalted(true);
+                  setHaltError(message);
+                },
+              }}
             />
           </ErrorBoundary>
           {hoverDetails && selectedDomain === 'kafka' && (

@@ -293,6 +293,137 @@ export function CommandPaletteModal({
         },
       },
 
+      {
+        id: 'domain-load-balancer',
+        title: 'Load Balancer (L4/L7 Routing & Health Checks)',
+        category: 'DOMAINS',
+        icon: '⚖️',
+        badge: 'System Design',
+        description: 'Round robin, smooth WRR, least connections/response time, consistent-hash sticky sessions, graceful drain.',
+        keywords: ['load-balancer', 'load balancer', 'round robin', 'wrr', 'least connections', 'sticky', 'drain', 'lb-1'],
+        action: () => {
+          onSelectDomain('load-balancer');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-search-index',
+        title: 'Distributed Search & Inverted Index (BM25)',
+        category: 'DOMAINS',
+        icon: '🔍',
+        badge: 'System Design',
+        description: 'Analyzer pipeline, posting lists, real BM25 score breakdown, shard scatter-gather with replica failover.',
+        keywords: ['search-index', 'search', 'bm25', 'inverted index', 'tf-idf', 'shards', 'scatter gather', 'elasticsearch'],
+        action: () => {
+          onSelectDomain('search-index');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-task-scheduler',
+        title: 'Distributed Task Scheduler & Cron (DAG)',
+        category: 'DOMAINS',
+        icon: '⏰',
+        badge: 'System Design',
+        description: 'Leader lease, exactly-once idempotency-key dispatch, DAG ordering, exponential backoff with jitter.',
+        keywords: ['task-scheduler', 'cron', 'dag', 'airflow', 'scheduler', 'backoff', 'jitter', 'idempotency'],
+        action: () => {
+          onSelectDomain('task-scheduler');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-chat-presence',
+        title: 'Real-Time Chat & Presence (WebSocket)',
+        category: 'DOMAINS',
+        icon: '💬',
+        badge: 'System Design',
+        description: 'Sequence ordering, at-least-once dedup, presence staleness bounds, group fanout with offline queue.',
+        keywords: ['chat-presence', 'chat', 'websocket', 'presence', 'fanout', 'dedup', 'seq'],
+        action: () => {
+          onSelectDomain('chat-presence');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-feature-store',
+        title: 'ML Feature Store (Offline/Online PIT Joins)',
+        category: 'DOMAINS',
+        icon: '🗄️',
+        badge: 'AI Infrastructure',
+        description: 'Point-in-time joins without label leakage, online/offline consistency, freshness TTL, versioned definitions.',
+        keywords: ['feature-store', 'feature store', 'point-in-time', 'pit', 'leakage', 'feast', 'training skew'],
+        action: () => {
+          onSelectDomain('feature-store');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-model-rollout',
+        title: 'Model Deployment & Canary Rollout',
+        category: 'DOMAINS',
+        icon: '🚀',
+        badge: 'AI Infrastructure',
+        description: 'Shadow traffic, percentage canary, automatic rollback, significance-gated promotion, eval gate.',
+        keywords: ['model-rollout', 'canary', 'rollout', 'shadow', 'rollback', 'significance', 'argo'],
+        action: () => {
+          onSelectDomain('model-rollout');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-llm-eval',
+        title: 'LLM Evaluation & Guardrails Pipeline',
+        category: 'DOMAINS',
+        icon: '🧪',
+        badge: 'AI Infrastructure',
+        description: 'Eval suite scoring, red-team regression detection, policy version pinning, deployment gate.',
+        keywords: ['llm-eval', 'eval', 'red team', 'regression', 'guardrails', 'helm', 'gate'],
+        action: () => {
+          onSelectDomain('llm-eval');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-consistent-hashing',
+        title: 'Consistent Hashing (Ring, Jump, Rendezvous)',
+        category: 'DOMAINS',
+        icon: '🌀',
+        badge: 'Algorithms',
+        description: 'Ring with virtual nodes vs Jump hash vs Rendezvous/HRW, against the naive hash % N baseline.',
+        keywords: ['consistent-hashing', 'consistent hashing', 'ring', 'jump hash', 'rendezvous', 'hrw', 'vnodes', 'karger'],
+        action: () => {
+          onSelectDomain('consistent-hashing');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-probabilistic-structures',
+        title: 'Bloom Filters & Probabilistic Structures',
+        category: 'DOMAINS',
+        icon: '🎲',
+        badge: 'Algorithms',
+        description: 'Bloom, counting Bloom, cuckoo, HyperLogLog, Count-Min Sketch on one stream with memory-vs-accuracy.',
+        keywords: ['probabilistic-structures', 'bloom filter', 'cuckoo', 'hyperloglog', 'hll', 'count-min sketch', 'cms'],
+        action: () => {
+          onSelectDomain('probabilistic-structures');
+          onClose();
+        },
+      },
+      {
+        id: 'domain-merkle-trees',
+        title: 'Merkle Trees & Distributed Verification',
+        category: 'DOMAINS',
+        icon: '🌳',
+        badge: 'Algorithms',
+        description: 'Tree-hash construction, sibling proofs, anti-entropy divergence localization, Patricia non-membership.',
+        keywords: ['merkle-trees', 'merkle', 'merkle tree', 'proof', 'anti-entropy', 'patricia', 'dynamo'],
+        action: () => {
+          onSelectDomain('merkle-trees');
+          onClose();
+        },
+      },
+
       // ── Scenarios & Chaos Drills ──
       {
         id: 'scen-burst',
@@ -364,6 +495,71 @@ export function CommandPaletteModal({
       },
 
       // ── Core Concepts & Glossary ──
+      {
+        id: 'concept-bm25',
+        title: 'BM25 (Robertson & Zaragoza)',
+        category: 'CONCEPTS',
+        icon: '📖',
+        badge: 'Search Relevance',
+        description: 'score = Σ idf(t) · tf·(k1+1)/(tf + k1·(1-b+b·dl/avgdl)); idf = ln(1+(N-df+0.5)/(df+0.5)) (Lucene variant).',
+        keywords: ['bm25', 'tf-idf', 'relevance', 'robertson', 'lucene', 'k1', 'saturation'],
+        action: () => {
+          onSelectDomain('search-index');
+          onClose();
+        },
+      },
+      {
+        id: 'concept-jump-hash',
+        title: 'Jump Consistent Hash (Lamping & Veach)',
+        category: 'CONCEPTS',
+        icon: '📖',
+        badge: 'Algorithms',
+        description: 'Growth-only bucket assignment in O(ln n) with no memory: growing n→n+1 only reassigns keys to bucket n.',
+        keywords: ['jump hash', 'lamping', 'veach', 'consistent hashing', 'growth only', 'arxiv 1406.2294'],
+        action: () => {
+          onSelectDomain('consistent-hashing');
+          onClose();
+        },
+      },
+      {
+        id: 'concept-hll',
+        title: 'HyperLogLog Standard Error',
+        category: 'CONCEPTS',
+        icon: '📖',
+        badge: 'Cardinality',
+        description: 'σ = 1.04/√m registers; harmonic-mean estimator α_m·m²·(Σ2^-M)^-1 with linear-counting bias correction.',
+        keywords: ['hyperloglog', 'hll', 'cardinality', 'flajolet', 'standard error', 'registers'],
+        action: () => {
+          onSelectDomain('probabilistic-structures');
+          onClose();
+        },
+      },
+      {
+        id: 'concept-pit-join',
+        title: 'Point-in-Time Correct Join',
+        category: 'CONCEPTS',
+        icon: '📖',
+        badge: 'Feature Store',
+        description: 'A training row at label time T may only use feature values with eventTime ≤ T — the anti-leakage rule.',
+        keywords: ['point-in-time', 'pit join', 'label leakage', 'feature store', 'training skew', 'feast'],
+        action: () => {
+          onSelectDomain('feature-store');
+          onClose();
+        },
+      },
+      {
+        id: 'concept-anti-entropy',
+        title: 'Merkle Anti-Entropy (Dynamo)',
+        category: 'CONCEPTS',
+        icon: '📖',
+        badge: 'Replica Repair',
+        description: 'Two replicas compare tree hashes top-down, descending only where they differ — O(divergence × depth) instead of a full scan.',
+        keywords: ['anti-entropy', 'merkle', 'dynamo', 'replica repair', 'divergence'],
+        action: () => {
+          onSelectDomain('merkle-trees');
+          onClose();
+        },
+      },
       {
         id: 'concept-fencing',
         title: 'Fencing Tokens (Monotonic Counter)',

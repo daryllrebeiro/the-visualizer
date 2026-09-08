@@ -13,6 +13,7 @@ import { LlmGatewayVisualizer } from '../llm-gateway/LlmGatewayVisualizer';
 import { LlmPipelineVisualizer } from '../llm-pipeline/LlmPipelineVisualizer';
 import { LlmServingVisualizer } from '../llm-serving/LlmServingVisualizer';
 import { NetworkingVisualizer } from '../networking/NetworkingVisualizer';
+import { NewDomainsPanel, type NewDomainId } from '../new-domains/NewDomainsPanel';
 import { RabbitMQVisualizer } from '../rabbitmq/RabbitMQVisualizer';
 import { RaftVisualizer } from '../raft/RaftVisualizer';
 import { RateLimiterVisualizer } from '../rate-limiter/RateLimiterVisualizer';
@@ -41,6 +42,12 @@ export interface DomainCanvasAdapterProps {
   llmPipeline: React.ComponentProps<typeof LlmPipelineVisualizer>;
   llmGateway: React.ComponentProps<typeof LlmGatewayVisualizer>;
   gpuCluster: React.ComponentProps<typeof GpuClusterVisualizer>;
+  /** Domains 19-28 batch (self-contained panel owning state + tick loop) */
+  newDomain: {
+    domainId: NewDomainId;
+    isPaused: boolean;
+    onHalt: (message: string) => void;
+  };
 }
 
 export function DomainCanvasAdapter(props: DomainCanvasAdapterProps): React.JSX.Element | null {
@@ -83,6 +90,17 @@ export function DomainCanvasAdapter(props: DomainCanvasAdapterProps): React.JSX.
       return <LlmGatewayVisualizer {...props.llmGateway} />;
     case 'gpu-cluster':
       return <GpuClusterVisualizer {...props.gpuCluster} />;
+    case 'load-balancer':
+    case 'search-index':
+    case 'task-scheduler':
+    case 'chat-presence':
+    case 'feature-store':
+    case 'model-rollout':
+    case 'llm-eval':
+    case 'consistent-hashing':
+    case 'probabilistic-structures':
+    case 'merkle-trees':
+      return <NewDomainsPanel {...props.newDomain} />;
     default:
       return null;
   }
