@@ -67,25 +67,35 @@ describe('Golden Determinism Suite', () => {
 
   // Verify all registered domains
   it('should have all domains registered', () => {
-    expect(domains.length).toBe(18);
+    expect(domains.length).toBe(28);
     const ids = domains.map((d) => d.id).sort();
     expect(ids).toEqual([
       'cdn-cache',
+      'chat-presence',
+      'consistent-hashing',
       'database',
       'distributed-lock',
+      'feature-store',
       'gpu-cluster',
       'id-gen',
       'kafka',
       'kubernetes',
+      'llm-eval',
       'llm-gateway',
       'llm-pipeline',
       'llm-serving',
+      'load-balancer',
+      'merkle-trees',
+      'model-rollout',
       'networking',
+      'probabilistic-structures',
       'rabbitmq',
       'raft',
       'rate-limiter',
       'redis',
+      'search-index',
       'storage',
+      'task-scheduler',
       'transactions',
       'vectordb',
     ]);

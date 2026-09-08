@@ -102,6 +102,49 @@ import { LlmGatewayInvariantChecker } from './llm-gateway/llm-gateway-invariants
 import { createDefaultLlmGatewayCluster, pureLlmGatewayTransition } from './llm-gateway/llm-gateway-state-transitions.js';
 import type { LlmGatewayClusterState, LlmGatewaySimEvent } from './llm-gateway/llm-gateway-types.js';
 
+import { LBInvariantChecker } from './load-balancer/load-balancer-invariants.js';
+import { createDefaultLBCluster, pureLBTransition } from './load-balancer/load-balancer-state-transitions.js';
+import type { LBClusterState, LBSimEvent } from './load-balancer/load-balancer-types.js';
+
+import { SearchIndexInvariantChecker } from './search-index/search-index-invariants.js';
+import { createDefaultSearchIndexCluster, pureSearchIndexTransition } from './search-index/search-index-state-transitions.js';
+import type { SearchIndexClusterState, SearchIndexSimEvent } from './search-index/search-index-types.js';
+
+import { TaskSchedulerInvariantChecker } from './task-scheduler/task-scheduler-invariants.js';
+import { createDefaultTaskSchedulerCluster, pureTaskSchedulerTransition } from './task-scheduler/task-scheduler-state-transitions.js';
+import type { TaskSchedulerClusterState, TaskSchedulerSimEvent } from './task-scheduler/task-scheduler-types.js';
+
+import { ChatPresenceInvariantChecker } from './chat-presence/chat-presence-invariants.js';
+import { createDefaultChatPresenceCluster, pureChatPresenceTransition } from './chat-presence/chat-presence-state-transitions.js';
+import type { ChatPresenceClusterState, ChatPresenceSimEvent } from './chat-presence/chat-presence-types.js';
+
+import { FeatureStoreInvariantChecker } from './feature-store/feature-store-invariants.js';
+import { createDefaultFeatureStoreCluster, pureFeatureStoreTransition } from './feature-store/feature-store-state-transitions.js';
+import type { FeatureStoreClusterState, FeatureStoreSimEvent } from './feature-store/feature-store-types.js';
+
+import { ModelRolloutInvariantChecker } from './model-rollout/model-rollout-invariants.js';
+import { createDefaultModelRolloutCluster, pureModelRolloutTransition } from './model-rollout/model-rollout-state-transitions.js';
+import type { ModelRolloutClusterState, ModelRolloutSimEvent } from './model-rollout/model-rollout-types.js';
+
+import { LlmEvalInvariantChecker } from './llm-eval/llm-eval-invariants.js';
+import { createDefaultLlmEvalCluster, pureLlmEvalTransition } from './llm-eval/llm-eval-state-transitions.js';
+import type { LlmEvalClusterState, LlmEvalSimEvent } from './llm-eval/llm-eval-types.js';
+
+import { ConsistentHashingInvariantChecker } from './consistent-hashing/consistent-hashing-invariants.js';
+import { createDefaultConsistentHashingCluster, pureConsistentHashingTransition } from './consistent-hashing/consistent-hashing-state-transitions.js';
+import type { ConsistentHashingClusterState, ConsistentHashingSimEvent } from './consistent-hashing/consistent-hashing-types.js';
+
+import { ProbabilisticStructuresInvariantChecker } from './probabilistic-structures/probabilistic-structures-invariants.js';
+import { createDefaultProbabilisticStructuresCluster, pureProbabilisticStructuresTransition } from './probabilistic-structures/probabilistic-structures-state-transitions.js';
+import type {
+  ProbabilisticStructuresClusterState,
+  ProbabilisticStructuresSimEvent,
+} from './probabilistic-structures/probabilistic-structures-types.js';
+
+import { MerkleTreesInvariantChecker } from './merkle-trees/merkle-trees-invariants.js';
+import { createDefaultMerkleTreesCluster, pureMerkleTreesTransition } from './merkle-trees/merkle-trees-state-transitions.js';
+import type { MerkleTreesClusterState, MerkleTreesSimEvent } from './merkle-trees/merkle-trees-types.js';
+
 export interface DomainPluginMetadata {
   id: string;
   name: string;
@@ -115,7 +158,8 @@ export interface DomainPluginMetadata {
     | 'NETWORKING'
     | 'GATEWAY'
     | 'SYSTEM_DESIGN'
-    | 'AI_INFRA';
+    | 'AI_INFRA'
+    | 'ALGORITHMS';
   description: string;
   fidelityTag:
     'CONCEPTUAL' | 'BEHAVIORAL' | 'ORACLE_TESTED' | 'PROTOCOL_COMPATIBLE' | 'VERSION_COMPATIBLE';
@@ -687,6 +731,299 @@ export const LlmGatewayDomainPlugin: DomainPlugin<LlmGatewayClusterState, LlmGat
   scenarioLibrary: [],
 };
 
+export const LoadBalancerDomainPlugin: DomainPlugin<LBClusterState, LBSimEvent> = {
+  metadata: {
+    id: 'load-balancer',
+    name: 'Load Balancer (L4/L7 Routing & Health Checks)',
+    version: '1.0.0',
+    category: 'SYSTEM_DESIGN',
+    description:
+      'Round robin, smooth weighted round robin (nginx), least connections, least response time (EWMA), and consistent-hash sticky sessions with active health checking and graceful connection draining.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'HAProxy / nginx / ALB',
+    icon: '⚖️',
+    color: '#3b82f6',
+  },
+  createDefaultState: () => createDefaultLBCluster(),
+  reduceState: (state, event, rng) => pureLBTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new LBInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const SearchIndexDomainPlugin: DomainPlugin<SearchIndexClusterState, SearchIndexSimEvent> = {
+  metadata: {
+    id: 'search-index',
+    name: 'Distributed Search & Inverted Index (BM25)',
+    version: '1.0.0',
+    category: 'SYSTEM_DESIGN',
+    description:
+      'Analyzer pipeline, inverted index construction with posting lists, real BM25 relevance scoring (Robertson & Zaragoza / Lucene formula with per-term breakdown), sharding with replicas, and scatter-gather query fan-out.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Elasticsearch / Lucene BM25',
+    icon: '🔍',
+    color: '#f59e0b',
+  },
+  createDefaultState: () => createDefaultSearchIndexCluster(),
+  reduceState: (state, event, rng) => pureSearchIndexTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new SearchIndexInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const TaskSchedulerDomainPlugin: DomainPlugin<TaskSchedulerClusterState, TaskSchedulerSimEvent> = {
+  metadata: {
+    id: 'task-scheduler',
+    name: 'Distributed Task Scheduler & Cron (DAG)',
+    version: '1.0.0',
+    category: 'SYSTEM_DESIGN',
+    description:
+      'Leader-elected dispatcher with a lease (single active scheduler), exactly-once dispatch via idempotency keys, DAG dependency ordering with upstream-failure skips, and retries with exponential backoff and jitter (Brooker 2015).',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Chronos / Airflow',
+    icon: '⏰',
+    color: '#10b981',
+  },
+  createDefaultState: () => createDefaultTaskSchedulerCluster(),
+  reduceState: (state, event, rng) => pureTaskSchedulerTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new TaskSchedulerInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const ChatPresenceDomainPlugin: DomainPlugin<ChatPresenceClusterState, ChatPresenceSimEvent> = {
+  metadata: {
+    id: 'chat-presence',
+    name: 'Real-Time Chat & Presence (WebSocket)',
+    version: '1.0.0',
+    category: 'SYSTEM_DESIGN',
+    description:
+      'Sequence-number message ordering with client-side reordering and dedup (at-least-once delivery), presence staleness bounds (ONLINE/AWAY/OFFLINE), fanout completeness with offline queuing, and TTL-based typing indicators.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'RFC 6455 / DDIA ch. 8',
+    icon: '💬',
+    color: '#06b6d4',
+  },
+  createDefaultState: () => createDefaultChatPresenceCluster(),
+  reduceState: (state, event, rng) => pureChatPresenceTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new ChatPresenceInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const FeatureStoreDomainPlugin: DomainPlugin<FeatureStoreClusterState, FeatureStoreSimEvent> = {
+  metadata: {
+    id: 'feature-store',
+    name: 'ML Feature Store (Offline/Online PIT Joins)',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Point-in-time-correct training-set joins (no label leakage), offline/online consistency at the sync watermark, staleness TTL flags, and versioned feature definitions that never mutate materialized data.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Feast / Tecton / Michelangelo',
+    icon: '🗄️',
+    color: '#8b5cf6',
+  },
+  createDefaultState: () => createDefaultFeatureStoreCluster(),
+  reduceState: (state, event, rng) => pureFeatureStoreTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new FeatureStoreInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const ModelRolloutDomainPlugin: DomainPlugin<ModelRolloutClusterState, ModelRolloutSimEvent> = {
+  metadata: {
+    id: 'model-rollout',
+    name: 'Model Deployment & Canary Rollout',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Model registry staging with shadow traffic (zero client impact), percentage canary with statistical split bounds, automatic metric-threshold rollback, and two-proportion z-test significance-gated promotion blocked by the eval gate.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Argo Rollouts / Flagger',
+    icon: '🚀',
+    color: '#ec4899',
+  },
+  createDefaultState: () => createDefaultModelRolloutCluster(),
+  reduceState: (state, event, rng) => pureModelRolloutTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new ModelRolloutInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const LlmEvalDomainPlugin: DomainPlugin<LlmEvalClusterState, LlmEvalSimEvent> = {
+  metadata: {
+    id: 'llm-eval',
+    name: 'LLM Evaluation & Guardrails Pipeline',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Offline eval suite scoring with deterministic scripted model profiles, red-team regression detection across versions, version-pinned guardrail policy re-scoring, and the deployment gate that blocks Critical-failing versions in /model-rollout.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'HELM / OpenAI Evals / NeMo',
+    icon: '🧪',
+    color: '#ef4444',
+  },
+  createDefaultState: () => createDefaultLlmEvalCluster(),
+  reduceState: (state, event, rng) => pureLlmEvalTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new LlmEvalInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const ConsistentHashingDomainPlugin: DomainPlugin<ConsistentHashingClusterState, ConsistentHashingSimEvent> = {
+  metadata: {
+    id: 'consistent-hashing',
+    name: 'Consistent Hashing (Ring, Jump, Rendezvous)',
+    version: '1.0.0',
+    category: 'ALGORITHMS',
+    description:
+      'Ring-based consistent hashing with virtual nodes (Karger et al. 1997), Jump Consistent Hash (Lamping & Veach 2014, growth-only monotonicity), and Rendezvous/HRW hashing — compared live against the naive hash % N baseline on identical add/remove events.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Karger STOC \'97 / Lamping-Veach / HRW',
+    icon: '🌀',
+    color: '#f59e0b',
+  },
+  createDefaultState: () => createDefaultConsistentHashingCluster(),
+  reduceState: (state, event, rng) => pureConsistentHashingTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new ConsistentHashingInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const ProbabilisticStructuresDomainPlugin: DomainPlugin<
+  ProbabilisticStructuresClusterState,
+  ProbabilisticStructuresSimEvent
+> = {
+  metadata: {
+    id: 'probabilistic-structures',
+    name: 'Bloom Filters & Probabilistic Structures',
+    version: '1.0.0',
+    category: 'ALGORITHMS',
+    description:
+      'Standard Bloom, Counting Bloom, Cuckoo (with full rollback kick chains), HyperLogLog (1.04/sqrt(m) standard error), and Count-Min Sketch fed an identical stream with live memory-vs-accuracy comparison and one-sided-error guarantees.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Bloom / Fan / Flajolet / Cormode',
+    icon: '🎲',
+    color: '#10b981',
+  },
+  createDefaultState: () => createDefaultProbabilisticStructuresCluster(),
+  reduceState: (state, event, rng) => pureProbabilisticStructuresTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new ProbabilisticStructuresInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const MerkleTreesDomainPlugin: DomainPlugin<MerkleTreesClusterState, MerkleTreesSimEvent> = {
+  metadata: {
+    id: 'merkle-trees',
+    name: 'Merkle Trees & Distributed Verification',
+    version: '1.0.0',
+    category: 'ALGORITHMS',
+    description:
+      'Bottom-up tree-hash construction with leaf proofs (verify/tamper both directions), instrumented anti-entropy divergence localization (O(divergence x depth) vs full scan), and a Merkle-Patricia trie with membership AND non-membership proofs.',
+    fidelityTag: 'PROTOCOL_COMPATIBLE',
+    fidelityDisplayName: 'Merkle 1979 / Dynamo / Ethereum MPT',
+    icon: '🌳',
+    color: '#06b6d4',
+  },
+  createDefaultState: () => createDefaultMerkleTreesCluster(),
+  reduceState: (state, event, rng) => pureMerkleTreesTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new MerkleTreesInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return {
+        passed: false,
+        violation: { name: violation.invariantName, description: violation.description },
+      };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
 export class DomainRegistry {
   private static readonly plugins = new Map<string, DomainPlugin>([
     ['kafka', KafkaDomainPlugin],
@@ -707,6 +1044,16 @@ export class DomainRegistry {
     ['llm-serving', LLMServingDomainPlugin],
     ['vectordb', VectorDBDomainPlugin],
     ['gpu-cluster', GPUClusterDomainPlugin],
+    ['load-balancer', LoadBalancerDomainPlugin],
+    ['search-index', SearchIndexDomainPlugin],
+    ['task-scheduler', TaskSchedulerDomainPlugin],
+    ['chat-presence', ChatPresenceDomainPlugin],
+    ['feature-store', FeatureStoreDomainPlugin],
+    ['model-rollout', ModelRolloutDomainPlugin],
+    ['llm-eval', LlmEvalDomainPlugin],
+    ['consistent-hashing', ConsistentHashingDomainPlugin],
+    ['probabilistic-structures', ProbabilisticStructuresDomainPlugin],
+    ['merkle-trees', MerkleTreesDomainPlugin],
   ]);
 
   public static register(plugin: DomainPlugin): void {

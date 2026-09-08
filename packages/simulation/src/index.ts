@@ -323,3 +323,53 @@ export * from './domains/llm-pipeline/llm-pipeline-types.js';
 export * from './domains/llm-pipeline/llm-pipeline-state-transitions.js';
 export * from './domains/llm-pipeline/llm-pipeline-invariants.js';
 
+
+// Domain: Load Balancer (L4/L7 Routing & Health Checks)
+export * from './domains/load-balancer/load-balancer-types.js';
+export * from './domains/load-balancer/load-balancer-state-transitions.js';
+export * from './domains/load-balancer/load-balancer-invariants.js';
+
+// Domain: Distributed Search & Inverted Index (BM25)
+export * from './domains/search-index/search-index-types.js';
+export * from './domains/search-index/search-index-state-transitions.js';
+export * from './domains/search-index/search-index-invariants.js';
+
+// Domain: Distributed Task Scheduler & Cron (DAG)
+export * from './domains/task-scheduler/task-scheduler-types.js';
+export * from './domains/task-scheduler/task-scheduler-state-transitions.js';
+export * from './domains/task-scheduler/task-scheduler-invariants.js';
+
+// Domain: Real-Time Chat & Presence (WebSocket)
+export * from './domains/chat-presence/chat-presence-types.js';
+export * from './domains/chat-presence/chat-presence-state-transitions.js';
+export * from './domains/chat-presence/chat-presence-invariants.js';
+
+// Domain: ML Feature Store (Offline/Online PIT Joins)
+export * from './domains/feature-store/feature-store-types.js';
+export * from './domains/feature-store/feature-store-state-transitions.js';
+export * from './domains/feature-store/feature-store-invariants.js';
+
+// Domain: Model Deployment & Canary Rollout
+export * from './domains/model-rollout/model-rollout-types.js';
+export * from './domains/model-rollout/model-rollout-state-transitions.js';
+export * from './domains/model-rollout/model-rollout-invariants.js';
+
+// Domain: LLM Evaluation & Guardrails Pipeline
+export * from './domains/llm-eval/llm-eval-types.js';
+export * from './domains/llm-eval/llm-eval-state-transitions.js';
+export * from './domains/llm-eval/llm-eval-invariants.js';
+
+// Domain: Consistent Hashing (Ring, Jump, Rendezvous)
+export * from './domains/consistent-hashing/consistent-hashing-types.js';
+export * from './domains/consistent-hashing/consistent-hashing-state-transitions.js';
+export * from './domains/consistent-hashing/consistent-hashing-invariants.js';
+
+// Domain: Bloom Filters & Probabilistic Structures
+export * from './domains/probabilistic-structures/probabilistic-structures-types.js';
+export * from './domains/probabilistic-structures/probabilistic-structures-state-transitions.js';
+export * from './domains/probabilistic-structures/probabilistic-structures-invariants.js';
+
+// Domain: Merkle Trees & Distributed Verification
+export * from './domains/merkle-trees/merkle-trees-types.js';
+export * from './domains/merkle-trees/merkle-trees-state-transitions.js';
+export * from './domains/merkle-trees/merkle-trees-invariants.js';
