@@ -55,11 +55,20 @@ export {
   type Keyframe,
   type ScenarioRecording,
 } from './timeline/scenario-studio.js';
+export {
+  exportScenarioJson,
+  importScenarioJson,
+  runScenarioScript,
+  scenarioContentHash,
+  type ScenarioRunResult,
+  type ScenarioRunTick,
+} from './timeline/scenario-runner.js';
 // Learning platform layer: permalinks, structural diff, session timelines.
 export {
   canonicalJson,
   decodePermalink,
   encodePermalink,
+  permalinkContentHash,
   replayPermalink,
   type PermalinkReplayResult,
 } from './learn/permalink-codec.js';
@@ -76,11 +85,25 @@ export {
   type ReviewOutcome,
 } from './learn/session-timeline.js';
 export {
+  assertPluginCompatible,
+  defineDomainPlugin,
   DomainPluginBuilder,
+  PLUGIN_API_VERSION,
   type InvariantCheckResult,
   type StateReducer,
   type InvariantValidator,
 } from './sdk/domain-builder.js';
+
+// Shared deterministic primitives (single source of truth for clamp/FNV/clone).
+export {
+  canonicalStringify,
+  clamp,
+  clamp01,
+  contentHash,
+  deepClone,
+  fnv1a32,
+  makeIdFactory,
+} from './shared/primitives.js';
 
 export {
   DomainRegistry,
