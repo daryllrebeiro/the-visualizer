@@ -8,6 +8,7 @@ import {
   wsActiveConnections,
   wsMessagesSentTotal,
 } from '@the-visualizer/logging';
+import { validateGatewayMessage } from '@the-visualizer/contracts';
 
 import { config } from '../config.js';
 import { sequenceReconciler } from './sequence-reconciler.js';
@@ -190,12 +191,22 @@ export class RoomManager {
   }
 
   /**
-   * Pushes client intents to a Redis List queue so they are consumed by the simulation worker.
+   * Appends a client intent to the room's Redis Stream. Streams (vs the old
+   * LIST) give atomic append + trim, stable message IDs for gap recovery, and
+   * a migration path to consumer groups.
    */
   public async publishIntent(roomId: string, intent: any): Promise<void> {
     this.recordActivity(roomId);
     if (this.pub.status === 'ready') {
-      await this.pub.lpush(`room:${roomId}:intents`, JSON.stringify(intent));
+      await this.pub.xadd(
+        `room:${roomId}:intents`,
+        'MAXLEN',
+        '~',
+        '1000',
+        '*',
+        'data',
+        JSON.stringify(intent),
+      );
     }
   }
 
@@ -218,6 +229,15 @@ export class RoomManager {
    * Broadcasts updates to Redis so all gateway nodes broadcast it to their local sockets.
    */
   public async publishRoomUpdate(roomId: string, update: any): Promise<void> {
+    if (process.env.NODE_ENV !== 'production') {
+      const result = validateGatewayMessage(update);
+      if (!result.ok) {
+        logger.error(
+          { roomId, type: update?.type, error: result.error },
+          'Room broadcast violated the server message contract',
+        );
+      }
+    }
     await this.pub.publish(`room:${roomId}`, JSON.stringify(update));
   }
 

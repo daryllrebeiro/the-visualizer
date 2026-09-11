@@ -73,12 +73,14 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
     });
     await redis.del(`room:${testRoomId}:intents`);
     await redis.del(`simulation:${testRoomId}:replays`);
+    await redis.del(`room:${testRoomId}:runner`);
   });
 
   afterAll(async () => {
     await simulationRunner.close();
     await redis.del(`room:${testRoomId}:intents`);
     await redis.del(`simulation:${testRoomId}:replays`);
+    await redis.del(`room:${testRoomId}:runner`);
     await redis.quit();
   });
 
@@ -97,7 +99,7 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
         partitions: 2,
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(createTopicIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(createTopicIntent));
 
     // 3. Push INTENT_ADD_BROKER to Redis intents queue
     const addBrokerIntent = {
@@ -108,7 +110,7 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
         rack: 'rack-c',
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(addBrokerIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(addBrokerIntent));
 
     // 4. Push INTENT_CONSUMER_JOIN to Redis intents queue
     const joinConsumerIntent = {
@@ -120,7 +122,7 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
         topics: ['orders'],
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(joinConsumerIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(joinConsumerIntent));
 
     // 5. Push INTENT_PRODUCE to Redis intents queue
     const produceIntent = {
@@ -134,7 +136,7 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
         acks: 1,
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(produceIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(produceIntent));
 
     // 6. Push INTENT_SET_AUTO_PRODUCE (0.5s interval -> 5 ticks)
     const autoProduceIntent = {
@@ -147,13 +149,13 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
         enabled: true,
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(autoProduceIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(autoProduceIntent));
 
     // Wait 600ms for runner tick loop (at 10Hz, ~6 ticks) to drain and process all intents
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     // Assert that the intents queue was completely drained
-    const remainingQueueLength = await redis.llen(`room:${testRoomId}:intents`);
+    const remainingQueueLength = await redis.xlen(`room:${testRoomId}:intents`);
     expect(remainingQueueLength).toBe(0);
 
     // Assert engine state was updated with topic, broker, and consumer group
@@ -172,7 +174,7 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
         brokerId: '1',
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(killBrokerIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(killBrokerIntent));
 
     // Wait 300ms for chaos transition
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -186,7 +188,7 @@ describe('Gateway-Level End-to-End Simulation Lifecycle Suite', () => {
         brokerId: '1',
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(recoverBrokerIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(recoverBrokerIntent));
 
     // Wait 300ms for recovery
     await new Promise((resolve) => setTimeout(resolve, 300));

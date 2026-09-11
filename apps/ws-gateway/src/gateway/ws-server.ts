@@ -1,11 +1,12 @@
 import * as crypto from 'crypto';
 import type * as http from 'http';
-import { pack, unpack } from 'msgpackr';
+import { unpack } from 'msgpackr';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 
 import {
   ClientIntentSchema,
+  domainActionPayloadSchema,
   IntentGapRecoverySchema,
   IntentJoinRoomSchema,
   type KafkaClusterState,
@@ -21,6 +22,7 @@ import {
 import { DomainRegistry } from '@the-visualizer/simulation';
 
 import { authenticateConnection } from './auth.js';
+import { packEgress } from './egress.js';
 import { roomManager } from './room-manager.js';
 import { simulationRunner } from './runner.js';
 import { sequenceReconciler } from './sequence-reconciler.js';
@@ -265,7 +267,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
           wsRateLimitedMessagesTotal.inc({ tier: 'system' });
           wsConnectionDropsTotal.inc({ reason: 'rate_limit_hard' });
           ws.send(
-            pack({
+            packEgress({
               type: 'SESSION_ERROR',
               payload: {
                 code: 'RATE_LIMIT_EXCEEDED',
@@ -282,7 +284,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
         if (!allowed) {
           wsRateLimitedMessagesTotal.inc({ tier: 'free' });
           ws.send(
-            pack({
+            packEgress({
               type: 'SESSION_ERROR',
               payload: {
                 code: 'RATE_LIMIT_EXCEEDED',
@@ -322,7 +324,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
             if (!result.success) {
               ws.send(
-                pack({
+                packEgress({
                   type: 'MSG_SESSION_ERROR',
                   payload: {
                     code: 'ERR_BAD_REQUEST',
@@ -347,7 +349,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
                 'Join room intent rejected',
               );
               ws.send(
-                pack({
+                packEgress({
                   type: 'MSG_SESSION_ERROR',
                   payload: { code, message: err.message, fatal: true },
                 }),
@@ -383,7 +385,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
             // Confirm join
             ws.send(
-              pack({
+              packEgress({
                 type: 'ROOM_JOINED',
                 payload: { roomId: targetRoomId },
               }),
@@ -392,7 +394,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
             // Send full initial state snapshot
             ws.send(
-              pack({
+              packEgress({
                 type: 'INIT_SNAPSHOT',
                 payload: {
                   roomId: targetRoomId,
@@ -418,7 +420,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
 
             if (!result.success) {
               ws.send(
-                pack({
+                packEgress({
                   type: 'MSG_SESSION_ERROR',
                   payload: {
                     code: 'ERR_BAD_REQUEST',
@@ -435,13 +437,13 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             if (recoveredPayloads) {
               // Send back buffered updates sequentially
               for (const recoveredPayload of recoveredPayloads) {
-                ws.send(pack(recoveredPayload));
+                ws.send(packEgress(recoveredPayload));
                 wsMessagesSentTotal.inc({ type: recoveredPayload.type });
               }
             } else {
               // Missing messages evicted -> notify client a full snapshot refresh is required
               ws.send(
-                pack({
+                packEgress({
                   type: 'INIT_SNAPSHOT_REQUIRED',
                   payload: { roomId },
                 }),
@@ -467,7 +469,7 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
           const parseResult = ClientIntentSchema.safeParse(flattenedIntent);
           if (!parseResult.success) {
             ws.send(
-              pack({
+              packEgress({
                 type: 'MSG_INTENT_ACK',
                 payload: {
                   intentId,
@@ -478,6 +480,28 @@ export function createWebSocketServer(server: http.Server): WebSocketServer {
             );
             wsMessagesSentTotal.inc({ type: 'MSG_INTENT_ACK' });
             return;
+          }
+
+          // Domain-scoped action payload validation: reject malformed
+          // INTENT_DOMAIN_ACTION payloads at the edge instead of letting them
+          // reach a reducer unvalidated.
+          if (parseResult.data.type === 'INTENT_DOMAIN_ACTION') {
+            const action = parseResult.data;
+            const payloadCheck = domainActionPayloadSchema(action.domainId).safeParse(action.payload);
+            if (!payloadCheck.success) {
+              ws.send(
+                packEgress({
+                  type: 'MSG_INTENT_ACK',
+                  payload: {
+                    intentId,
+                    status: 'REJECTED',
+                    reason: `Invalid payload for ${action.domainId}:${action.action}`,
+                  },
+                }),
+              );
+              wsMessagesSentTotal.inc({ type: 'MSG_INTENT_ACK' });
+              return;
+            }
           }
 
           // Publish normalized and validated ClientIntents to Redis streams for processing by session workers

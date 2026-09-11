@@ -2,6 +2,7 @@ import { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { KafkaClusterState } from '@the-visualizer/contracts';
+import { validateGatewayMessage } from '@the-visualizer/contracts';
 
 import { config } from '../config.js';
 import { simulationRunner } from './runner.js';
@@ -57,12 +58,14 @@ describe('Authoritative Simulation Runner Tests', () => {
     // Clear list
     await redis.del(`room:${testRoomId}:intents`);
     await redis.del(`simulation:${testRoomId}:replays`);
+    await redis.del(`room:${testRoomId}:runner`);
   });
 
   afterAll(async () => {
     await simulationRunner.close();
     await redis.del(`room:${testRoomId}:intents`);
     await redis.del(`simulation:${testRoomId}:replays`);
+    await redis.del(`room:${testRoomId}:runner`);
     await redis.quit();
   });
 
@@ -80,7 +83,7 @@ describe('Authoritative Simulation Runner Tests', () => {
   });
 
   it('should ingest actions from Redis list intents queue', async () => {
-    // LPUSH an intent
+    // Append an intent to the room's Redis Stream
     const intentPayload = {
       type: 'PRODUCE',
       payload: {
@@ -88,7 +91,7 @@ describe('Authoritative Simulation Runner Tests', () => {
         value: { orderId: 100 },
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(intentPayload));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(intentPayload));
 
     simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
     const session = simulationRunner.getSession(testRoomId);
@@ -98,7 +101,7 @@ describe('Authoritative Simulation Runner Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 250));
 
     // Drained from list
-    const length = await redis.llen(`room:${testRoomId}:intents`);
+    const length = await redis.xlen(`room:${testRoomId}:intents`);
     expect(length).toBe(0);
 
     simulationRunner.stopSession(testRoomId);
@@ -143,7 +146,7 @@ describe('Authoritative Simulation Runner Tests', () => {
         value: { orderId: 200 },
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(intentPayload));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(intentPayload));
 
     simulationRunner.startSession(testRoomId, 'kafka', brokenTopology);
     const session = simulationRunner.getSession(testRoomId);
@@ -198,7 +201,7 @@ describe('Authoritative Simulation Runner Tests', () => {
         enabled: true,
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(setAutoIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(setAutoIntent));
 
     // Wait 300ms for intent processing
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -213,7 +216,7 @@ describe('Authoritative Simulation Runner Tests', () => {
         producerId: 'producer-test',
       },
     };
-    await redis.lpush(`room:${testRoomId}:intents`, JSON.stringify(removeAutoIntent));
+    await redis.xadd(`room:${testRoomId}:intents`, '*', 'data', JSON.stringify(removeAutoIntent));
 
     // Wait 250ms for intent processing
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -228,8 +231,10 @@ describe('Authoritative Simulation Runner Tests', () => {
     expect(session).toBeDefined();
 
     // 1. Set long interval (20s = 200 ticks)
-    await redis.lpush(
+    await redis.xadd(
       `room:${testRoomId}:intents`,
+      '*',
+      'data',
       JSON.stringify({
         type: 'INTENT_SET_AUTO_PRODUCE',
         payload: { producerId: 'prod-live', topic: 'orders', intervalSeconds: 20.0, enabled: true },
@@ -240,8 +245,10 @@ describe('Authoritative Simulation Runner Tests', () => {
     expect(initialSchedule?.intervalTicks).toBe(200);
 
     // 2. While running, change frequency to short interval (1s = 10 ticks)
-    await redis.lpush(
+    await redis.xadd(
       `room:${testRoomId}:intents`,
+      '*',
+      'data',
       JSON.stringify({
         type: 'INTENT_SET_AUTO_PRODUCE',
         payload: { producerId: 'prod-live', topic: 'orders', intervalSeconds: 1.0, enabled: true },
@@ -307,8 +314,10 @@ describe('Authoritative Simulation Runner Tests', () => {
     await redis.set(`room:${testRoomId}:dummy`, 'stale');
 
     // Send INTENT_RESET
-    await redis.lpush(
+    await redis.xadd(
       `room:${testRoomId}:intents`,
+      '*',
+      'data',
       JSON.stringify({
         type: 'INTENT_RESET',
         id: 'reset-uuid-1',
@@ -323,5 +332,37 @@ describe('Authoritative Simulation Runner Tests', () => {
     expect(session?.tickCount).toBeLessThanOrEqual(5);
 
     simulationRunner.stopSession(testRoomId);
+  });
+
+  it('emits only contract-conformant gateway egress frames', async () => {
+    const subscriber = new Redis(config.REDIS_URL, { password: config.REDIS_PASSWORD });
+    subscriber.on('error', () => undefined);
+    const received: unknown[] = [];
+    await subscriber.subscribe(`room:${testRoomId}`);
+    subscriber.on('message', (_channel, message) => {
+      received.push(JSON.parse(message));
+    });
+
+    simulationRunner.startSession(testRoomId, 'kafka', mockTopology);
+    // INTENT_RESET deterministically emits MSG_INIT_SNAPSHOT + INTENT_ACK.
+    await redis.xadd(
+      `room:${testRoomId}:intents`,
+      '*',
+      'data',
+      JSON.stringify({ type: 'INTENT_RESET', id: 'egress-uuid-1' }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    simulationRunner.stopSession(testRoomId);
+    await subscriber.unsubscribe(`room:${testRoomId}`);
+    await subscriber.quit();
+
+    expect(received.length, 'expected at least one broadcast').toBeGreaterThan(0);
+    const failures: string[] = [];
+    for (const message of received) {
+      const result = validateGatewayMessage(message);
+      if (!result.ok) failures.push(`${JSON.stringify(message).slice(0, 120)} -> ${result.error ?? ''}`);
+    }
+    expect(failures, `drift frames: ${failures.join(' | ')}`).toEqual([]);
   });
 });

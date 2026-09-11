@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import jsonpatch from 'fast-json-patch';
 import { Redis } from 'ioredis';
-
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 import {
   captureException,
@@ -21,6 +20,7 @@ import {
 } from '@the-visualizer/simulation';
 
 import { config } from '../config.js';
+import { TickBudget } from './tick-budget.js';
 import { roomManager } from './room-manager.js';
 import { DEFAULT_TOPOLOGY } from './ws-server.js';
 
@@ -51,16 +51,22 @@ function deriveRoomSeed(roomId: string, domainId: string): number {
 }
 
 /**
- * Atomic intent drain: LRANGE + LTRIM + LLEN in a single Lua execution so two
- * gateway nodes can never drain (and double-apply) the same intent range.
+ * Atomic intent drain: XRANGE + XDEL in a single Lua execution so two
+ * gateway nodes can never drain (and double-apply) the same intent entries.
  * Returns [drainedItems, remainingLength].
  */
 const DRAIN_INTENTS_LUA = `
-local items = redis.call('LRANGE', KEYS[1], 0, 49)
-if #items > 0 then
-  redis.call('LTRIM', KEYS[1], #items, -1)
+local entries = redis.call('XRANGE', KEYS[1], '-', '+', 'COUNT', 50)
+local items = {}
+local ids = {}
+for i = 1, #entries do
+  ids[#ids + 1] = entries[i][1]
+  items[#items + 1] = entries[i][2][2]
 end
-local remaining = redis.call('LLEN', KEYS[1])
+if #ids > 0 then
+  redis.call('XDEL', KEYS[1], unpack(ids))
+end
+local remaining = redis.call('XLEN', KEYS[1])
 return {items, remaining}
 `;
 
@@ -104,6 +110,12 @@ export interface RoomSession {
   eventSeq: number;
   /** Serialized state bytes sampled at keyframe cadence (per-session memory guard). */
   lastStateBytes: number;
+  /** Rolling tick-duration budget; drives slow-tick shedding. */
+  budget: TickBudget;
+  /** When shedding, run the tick loop only every Nth invocation. */
+  shedEveryN: number;
+  /** Counter used by `shedEveryN`. */
+  shedCounter: number;
 }
 
 export class SimulationRunner {
@@ -185,6 +197,9 @@ export class SimulationRunner {
       consecutiveFailures: 0,
       eventSeq: 0,
       lastStateBytes: 0,
+      budget: new TickBudget(),
+      shedEveryN: 1,
+      shedCounter: 0,
     };
 
     this.activeSessions.set(roomId, session);
@@ -202,6 +217,15 @@ export class SimulationRunner {
   private async executeTick(session: RoomSession): Promise<void> {
     if (session.isHalted || session.isPaused) return;
 
+    // Slow-tick shedding: when this room is under sustained overrun, skip ticks
+    // so it cannot starve heartbeats and framing for every other room.
+    if (session.shedEveryN > 1) {
+      session.shedCounter = (session.shedCounter + 1) % session.shedEveryN;
+      if (session.shedCounter !== 0) {
+        return;
+      }
+    }
+
     const startTime = performance.now();
     try {
       const { roomId } = session;
@@ -218,8 +242,8 @@ export class SimulationRunner {
       )) as number;
       if (owned !== 1) return;
 
-      // 1. Drain pending intents from Redis List room:<roomId>:intents atomically
-      // (LRANGE + LTRIM + LLEN in one Lua op — no cross-node double-drain).
+      // 1. Drain pending intents from the Redis Stream room:<roomId>:intents
+      // atomically (XRANGE + XDEL + XLEN in one Lua op — no cross-node double-drain).
       const intentsKey = `room:${roomId}:intents`;
       const [intentsRaw, queueLen] = (await this.redis.eval(
         DRAIN_INTENTS_LUA,
@@ -370,10 +394,10 @@ export class SimulationRunner {
             timestamp: Date.now(),
           };
           const replaysKey = `simulation:${roomId}:replays`;
+          // Stream-backed keyframes: atomic append + bounded by MAXLEN ~ 500.
           await this.redis
             .pipeline()
-            .lpush(replaysKey, JSON.stringify(replayFrame))
-            .ltrim(replaysKey, 0, 499)
+            .xadd(replaysKey, 'MAXLEN', '~', '500', '*', 'frame', JSON.stringify(replayFrame))
             .expire(replaysKey, 86400)
             .exec();
 
@@ -385,6 +409,7 @@ export class SimulationRunner {
         simTicksProcessedTotal.inc();
         const durationSec = (performance.now() - startTime) / 1000;
         simTickDurationSeconds.observe(durationSec);
+        this.applyTickBudget(session, durationSec * 1000, roomId);
         return;
       }
 
@@ -697,8 +722,7 @@ export class SimulationRunner {
         const replaysKey = `simulation:${roomId}:replays`;
         await this.redis
           .pipeline()
-          .lpush(replaysKey, JSON.stringify(replayFrame))
-          .ltrim(replaysKey, 0, 499)
+          .xadd(replaysKey, 'MAXLEN', '~', '500', '*', 'frame', JSON.stringify(replayFrame))
           .expire(replaysKey, 86400)
           .exec();
 
@@ -711,6 +735,7 @@ export class SimulationRunner {
       simTickDurationSeconds.observe(durationSec);
       simTicksProcessedTotal.inc();
       session.consecutiveFailures = 0;
+      this.applyTickBudget(session, durationSec * 1000, roomId);
     } catch (err: any) {
       // Tick circuit breaker: a deterministically throwing reducer must halt
       // the session instead of error-looping at 10 Hz forever.
@@ -755,6 +780,39 @@ export class SimulationRunner {
         `Session state exceeded per-room cap (${(session.lastStateBytes / 1024 / 1024).toFixed(1)}MB). Halted to prevent crash.`,
       );
     }
+  }
+
+  /**
+   * Records a tick duration and applies the shedding policy for this session.
+   * `ok` restores full rate, `shed` runs every Nth tick, `halt` stops the room.
+   */
+  private applyTickBudget(session: RoomSession, durationMs: number, roomId: string): void {
+    session.budget.record(durationMs);
+    const decision = session.budget.decide();
+
+    if (decision === 'halt') {
+      simResourceLimitsExceededTotal.inc({ reason: 'slow_tick' });
+      logger.warn(
+        { roomId, avgTickMs: session.budget.averageMs() },
+        'Session exceeded the slow-tick ceiling; halting to protect the event loop',
+      );
+      void this.haltSession(roomId, 'Session halted: sustained slow ticks degraded the shared gateway event loop.');
+      return;
+    }
+
+    if (decision === 'shed') {
+      const previous = session.shedEveryN;
+      session.shedEveryN = TickBudget.shedEveryNthTick(session.budget.averageMs(), 40);
+      if (session.shedEveryN !== previous) {
+        logger.warn(
+          { roomId, avgTickMs: session.budget.averageMs(), shedEveryN: session.shedEveryN },
+          'Shedding ticks for a slow session',
+        );
+      }
+      return;
+    }
+
+    session.shedEveryN = 1;
   }
 
   /**

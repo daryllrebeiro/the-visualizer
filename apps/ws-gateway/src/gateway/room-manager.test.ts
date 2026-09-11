@@ -27,9 +27,9 @@ describe('RoomManager Lifecycle & Idle TTL Reaper Tests', () => {
     roomManager.recordActivity(testRoomId);
     expect(roomManager.getRoomState(testRoomId)).toBe('ACTIVE');
 
-    // 2. Publish an intent (creates Redis list entry)
+    // 2. Publish an intent (creates a Redis Stream entry)
     await roomManager.publishIntent(testRoomId, { type: 'TEST_INTENT', id: '123' });
-    const queueLen = await redis.llen(`room:${testRoomId}:intents`);
+    const queueLen = await redis.xlen(`room:${testRoomId}:intents`);
     expect(queueLen).toBe(1);
 
     // 3. Attempt reaping with a large TTL (30 min) -> Room should NOT be reaped because activity was recent
@@ -44,7 +44,7 @@ describe('RoomManager Lifecycle & Idle TTL Reaper Tests', () => {
     expect(roomManager.getRoomState(testRoomId)).toBe('RECLAIMED');
 
     // 5. Verify Redis keys were purged on eviction
-    const remainingQueueLen = await redis.llen(`room:${testRoomId}:intents`);
+    const remainingQueueLen = await redis.xlen(`room:${testRoomId}:intents`);
     expect(remainingQueueLen).toBe(0);
   });
 });
