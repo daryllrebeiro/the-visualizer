@@ -17,6 +17,7 @@ export * from './domain/index.js';
 
 // WebSocket protocol
 export * from './websocket/index.js';
+export * from './websocket/gateway-messages.js';
 
 // API contracts
 export * from './api/index.js';
@@ -27,4 +28,13 @@ export * from './auth/ws-ticket-store.js';
 
 // Learning & platform features (progress, timelines, quizzes, badges, challenges)
 export * from './learn/index.js';
+
+// Executable scenario scripts (Scenario Studio)
+export * from './scenario/index.js';
+
+// Multi-player classroom sessions
+export * from './classroom/index.js';
+
+// Topology definition bounds (DoS hardening)
+export * from './topology/definition.js';
 

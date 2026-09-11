@@ -73,4 +73,36 @@ describe('useSimulationStore', () => {
     expect(resetState.isPaused).toBe(false);
     expect(resetState.violation).toBeNull();
   });
+
+  it('loads a shipped scenario without throwing (regression: scenario.setup does not exist)', () => {
+    useSimulationStore.getState().setDomain('raft');
+    const plugin = DomainRegistry.get('raft')!;
+    const scenario = plugin.scenarioLibrary[0] as { id: string } | undefined;
+    expect(scenario, 'raft ships at least one scenario').toBeDefined();
+
+    expect(() => useSimulationStore.getState().loadScenario(scenario!.id)).not.toThrow();
+    expect(useSimulationStore.getState().state).toBeDefined();
+  });
+
+  it('applies an executable scenario event script deterministically', () => {
+    useSimulationStore.getState().setDomain('rate-limiter');
+    const plugin = DomainRegistry.get('rate-limiter')!;
+    plugin.scenarioLibrary.push({
+      id: 'test-executable-burst',
+      title: 'Test',
+      description: 'injected',
+      category: 'chaos',
+      invariants: [],
+      events: [
+        { tick: 9, type: 'RATE_LIMITER_BURST', payload: { clientId: 'client-1', count: 10 } },
+        { tick: 11, type: 'RATE_LIMITER_BURST', payload: { clientId: 'client-1', count: 10 } },
+      ],
+    } as never);
+
+    useSimulationStore.getState().loadScenario('test-executable-burst');
+    const state = useSimulationStore.getState().state as {
+      flawsDemonstrated: { fixedWindowBoundaryBurstDetected: boolean };
+    };
+    expect(state.flawsDemonstrated.fixedWindowBoundaryBurstDetected).toBe(true);
+  });
 });

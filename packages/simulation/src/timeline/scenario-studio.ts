@@ -1,5 +1,6 @@
 import { DeterministicRNG } from '../prng/deterministic-rng.js';
 import { DomainRegistry, type DomainPlugin } from '../domains/registry.js';
+import { canonicalStringify, contentHash, deepClone, makeIdFactory } from '../shared/primitives.js';
 
 export interface Keyframe<TState = unknown> {
   tick: number;
@@ -16,102 +17,96 @@ export interface ScenarioRecording<TState = unknown, TEvent = unknown> {
   keyframes: Keyframe<TState>[];
   totalTicks: number;
   createdAt: number;
+  /** Content address over the deterministic core (excludes timestamps). */
+  contentHash: string;
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Time-travel studio for a single domain.
+ *
+ * Correctness contract: `seek(t)` reconstructs the exact state at tick `t` by
+ * replaying recorded events in tick order from a fresh seed — it never trusts
+ * cached keyframes as an authoritative shortcut, because a keyframe captured
+ * without the event stream is not reproducible.
+ */
 export class ScenarioStudio<TState = any, TEvent = any> {
-  private keyframes: Map<number, TState> = new Map();
+  private readonly domainPlugin: DomainPlugin<TState, TEvent>;
+  private readonly seed: number;
+  private readonly keyframeInterval: number;
+  private readonly idFactory = makeIdFactory('scenario');
   private eventLog: Array<{ tick: number; event: TEvent }> = [];
-  private domainPlugin: DomainPlugin<TState, TEvent>;
-  private rng: DeterministicRNG;
-  private seed: number;
-  private keyframeInterval: number;
+  private keyframes: Map<number, TState> = new Map();
   private currentState: TState;
-  private currentTick: number = 0;
+  private currentTick = 0;
+  private rng: DeterministicRNG;
 
-  constructor(domainId: string, seed: number = 12345, keyframeInterval: number = 10) {
+  constructor(domainId: string, seed = 12345, keyframeInterval = 10) {
     const plugin = DomainRegistry.get(domainId);
     if (!plugin) throw new Error(`Domain not found: ${domainId}`);
-    this.domainPlugin = plugin;
+    this.domainPlugin = plugin as DomainPlugin<TState, TEvent>;
     this.seed = seed;
     this.rng = new DeterministicRNG(seed);
     this.keyframeInterval = Math.max(1, keyframeInterval);
-    this.currentState = plugin.createDefaultState();
-    this.keyframes.set(0, JSON.parse(JSON.stringify(this.currentState)));
+    this.currentState = this.domainPlugin.createDefaultState();
+    this.keyframes.set(0, deepClone(this.currentState));
+  }
+
+  private tickEvent(tick: number): TEvent {
+    return {
+      id: this.idFactory(),
+      tick,
+      type: `${this.domainPlugin.metadata.id.toUpperCase().replace(/-/g, '_')}_TICK`,
+      payload: {},
+    } as unknown as TEvent;
   }
 
   public recordEvent(tick: number, event: TEvent): void {
     this.eventLog.push({ tick, event });
+    this.eventLog.sort((a, b) => a.tick - b.tick);
   }
 
+  /** Advance one tick, optionally applying an explicit event (recorded). */
   public step(event?: TEvent): { state: TState; tick: number; violation: unknown } {
     this.currentTick++;
-    const simEvent =
-      event ??
-      ({
-        id: `${this.domainPlugin.metadata.id}-tick-${String(this.currentTick)}`,
-        tick: this.currentTick,
-        type: `${this.domainPlugin.metadata.id.toUpperCase().replace(/-/g, '_')}_TICK`,
-        payload: {},
-      } as unknown as TEvent);
+    if (event) this.recordEvent(this.currentTick, event);
+    const simEvent = event ?? this.tickEvent(this.currentTick);
 
     const result = this.domainPlugin.reduceState(this.currentState, simEvent, this.rng);
     this.currentState = result.nextState;
 
     if (this.currentTick % this.keyframeInterval === 0) {
-      this.keyframes.set(this.currentTick, JSON.parse(JSON.stringify(this.currentState)));
+      this.keyframes.set(this.currentTick, deepClone(this.currentState));
     }
 
-    const invariantCheck = this.domainPlugin.validateInvariants(this.currentState);
-    return {
-      state: this.currentState,
-      tick: this.currentTick,
-      violation: invariantCheck.passed ? null : invariantCheck.violation,
-    };
+    const check = this.domainPlugin.validateInvariants(this.currentState);
+    return { state: this.currentState, tick: this.currentTick, violation: check.passed ? null : check.violation };
+  }
+
+  private eventsAt(tick: number): TEvent[] {
+    return this.eventLog.filter((e) => e.tick === tick).map((e) => e.event);
+  }
+
+  /** Deterministic replay from tick 0 to `targetTick`. */
+  private replayTo(targetTick: number): TState {
+    this.rng = new DeterministicRNG(this.seed);
+    let state = this.domainPlugin.createDefaultState();
+    for (let t = 1; t <= targetTick; t++) {
+      const recorded = this.eventsAt(t);
+      const applied = recorded.length > 0 ? recorded : [this.tickEvent(t)];
+      for (const ev of applied) {
+        state = this.domainPlugin.reduceState(state, ev, this.rng).nextState;
+      }
+    }
+    return state;
   }
 
   public seek(targetTick: number): TState {
-    if (targetTick < 0) targetTick = 0;
-
-    // Find nearest keyframe <= targetTick
-    const availableKeyframes = Array.from(this.keyframes.keys()).sort((a, b) => a - b);
-    let bestKeyframeTick = 0;
-    for (const kfTick of availableKeyframes) {
-      if (kfTick <= targetTick) {
-        bestKeyframeTick = kfTick;
-      } else {
-        break;
-      }
-    }
-
-    // Fast-forward from nearest keyframe
-    let state = JSON.parse(JSON.stringify(this.keyframes.get(bestKeyframeTick)!));
-    const replayRng = new DeterministicRNG(this.seed);
-
-    // Fast-forward PRNG to state before step
-    for (let t = 1; t <= bestKeyframeTick; t++) {
-      const dummyEv = {
-        id: `seek-ff-${String(t)}`,
-        tick: t,
-        type: `${this.domainPlugin.metadata.id.toUpperCase().replace(/-/g, '_')}_TICK`,
-        payload: {},
-      } as unknown as TEvent;
-      this.domainPlugin.reduceState(state, dummyEv, replayRng);
-    }
-
-    for (let t = bestKeyframeTick + 1; t <= targetTick; t++) {
-      const tickEv = {
-        id: `${this.domainPlugin.metadata.id}-tick-${String(t)}`,
-        tick: t,
-        type: `${this.domainPlugin.metadata.id.toUpperCase().replace(/-/g, '_')}_TICK`,
-        payload: {},
-      } as unknown as TEvent;
-      const res = this.domainPlugin.reduceState(state, tickEv, replayRng);
-      state = res.nextState;
-    }
-
+    const tick = Math.max(0, targetTick);
+    const state = tick === 0 ? this.domainPlugin.createDefaultState() : this.replayTo(tick);
     this.currentState = state;
-    this.currentTick = targetTick;
+    this.currentTick = tick;
+    if (tick % this.keyframeInterval === 0) this.keyframes.set(tick, deepClone(state));
     return state;
   }
 
@@ -123,40 +118,62 @@ export class ScenarioStudio<TState = any, TEvent = any> {
     return this.currentTick;
   }
 
-  public exportBundle(): ScenarioRecording<TState, TEvent> {
+  public exportBundle(now = 0): ScenarioRecording<TState, TEvent> {
     const keyframesList: Keyframe<TState>[] = [];
     for (const [tick, state] of this.keyframes.entries()) {
-      keyframesList.push({ tick, state, timestamp: Date.now() });
+      keyframesList.push({ tick, state: deepClone(state), timestamp: now });
     }
     keyframesList.sort((a, b) => a.tick - b.tick);
 
-    return {
-      version: 1,
+    const core = {
+      version: 1 as const,
       domainId: this.domainPlugin.metadata.id,
       seed: this.seed,
-      initialState: this.domainPlugin.createDefaultState(),
-      events: [...this.eventLog],
-      keyframes: keyframesList,
+      events: this.eventLog,
       totalTicks: this.currentTick,
-      createdAt: Date.now(),
     };
+
+    return {
+      version: 1,
+      domainId: core.domainId,
+      seed: core.seed,
+      initialState: this.domainPlugin.createDefaultState(),
+      events: [...core.events],
+      keyframes: keyframesList,
+      totalTicks: core.totalTicks,
+      createdAt: now,
+      contentHash: contentHash(core),
+    };
+  }
+
+  /** Deterministic `.scenario.json` payload (sorted keys, stable hash). */
+  public exportJson(now = 0): string {
+    return canonicalStringify(this.exportBundle(now));
   }
 
   public static importBundle<TState = unknown, TEvent = unknown>(
     bundle: ScenarioRecording<TState, TEvent>,
   ): ScenarioStudio<TState, TEvent> {
     const studio = new ScenarioStudio<TState, TEvent>(bundle.domainId, bundle.seed);
-    studio.eventLog = [...bundle.events];
-    for (const kf of bundle.keyframes) {
-      studio.keyframes.set(kf.tick, JSON.parse(JSON.stringify(kf.state)));
-    }
-    studio.currentTick = bundle.totalTicks;
-    if (bundle.keyframes.length > 0) {
-      const lastKf = bundle.keyframes[bundle.keyframes.length - 1];
-      if (lastKf) {
-        studio.currentState = JSON.parse(JSON.stringify(lastKf.state)) as TState;
-      }
-    }
+    studio.eventLog = [...bundle.events].sort((a, b) => a.tick - b.tick);
+    // Rebuild authoritatively from the event log rather than trusting keyframes.
+    studio.seek(bundle.totalTicks);
     return studio;
+  }
+
+  public static importJson<TState = unknown, TEvent = unknown>(json: string): ScenarioStudio<TState, TEvent> {
+    if (typeof json !== 'string' || json.length === 0 || json.length > 2_000_000) {
+      throw new Error('Invalid scenario bundle: size');
+    }
+    const parsed = JSON.parse(json) as ScenarioRecording<TState, TEvent>;
+    if (parsed === null || typeof parsed !== 'object' || parsed.version !== 1 || typeof parsed.domainId !== 'string') {
+      throw new Error('Invalid scenario bundle');
+    }
+    if (!Array.isArray(parsed.events) || typeof parsed.seed !== 'number' || typeof parsed.totalTicks !== 'number') {
+      throw new Error('Invalid scenario bundle: missing seed/events/totalTicks');
+    }
+    if (parsed.events.length > 5000) throw new Error('Invalid scenario bundle: event log too large');
+    if (parsed.totalTicks < 0 || parsed.totalTicks > 1_000_000) throw new Error('Invalid scenario bundle: tick range');
+    return ScenarioStudio.importBundle(parsed);
   }
 }

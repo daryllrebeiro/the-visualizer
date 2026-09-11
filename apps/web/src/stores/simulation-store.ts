@@ -162,16 +162,41 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     },
 
     loadScenario: (scenarioId: string) => {
-      const { plugin } = get();
+      const { plugin, domainId } = get();
       if (!plugin) return;
       const scenario = plugin.scenarioLibrary?.find((s) => s.id === scenarioId);
       if (!scenario) return;
+
       const baseState = plugin.createDefaultState();
-      const scenarioState = scenario.setup(baseState);
+      const rng = new DeterministicRNG(12345);
+
+      // Shipped scenarios are executable event scripts (`events`), not
+      // `setup(state)` transforms. Apply the recorded events in tick order;
+      // fall back to the scenario's `initialState` when no events are defined.
+      const events = (scenario as { events?: Array<{ tick: number; type?: string; payload?: Record<string, unknown> }> })
+        .events;
+      let nextState = (scenario as { initialState?: unknown }).initialState ?? baseState;
+      if (Array.isArray(events) && events.length > 0) {
+        const ordered = [...events].sort((a, b) => a.tick - b.tick);
+        for (const [index, ev] of ordered.entries()) {
+          nextState = plugin.reduceState(
+            nextState,
+            {
+              id: `scenario-${String(index)}`,
+              tick: ev.tick,
+              type: ev.type ?? `${domainId.toUpperCase().replace(/-/g, '_')}_TICK`,
+              payload: ev.payload ?? {},
+            } as never,
+            rng,
+          ).nextState;
+        }
+      }
+
+      const check = plugin.validateInvariants(nextState);
       set({
-        state: scenarioState,
-        rng: new DeterministicRNG(12345),
-        violation: null,
+        state: nextState,
+        rng,
+        violation: check.passed ? null : (check.violation ?? null),
         isPaused: false,
       });
       emitLearnAction({
