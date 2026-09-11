@@ -6,7 +6,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import type { Server as HttpServer } from 'node:http';
 
 import { RESOURCE_LIMITS } from '@the-visualizer/config';
-import { tokenRevocationStore } from '@the-visualizer/contracts';
+import { tokenRevocationStore, wsTicketStore } from '@the-visualizer/contracts';
 import { captureException, initGlobalExceptionHandling, register } from '@the-visualizer/logging';
 
 import { config } from './config.js';
@@ -17,12 +17,16 @@ import { requestLogger } from './middleware/logging.middleware.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
 import './otel-init.js';
 import { authRouter } from './routes/auth.routes.js';
+import { learnRouter } from './routes/learn.routes.js';
 import { orgRouter } from './routes/org.routes.js';
 import { topologyRouter } from './routes/topology.routes.js';
 
 initGlobalExceptionHandling('api');
 
 tokenRevocationStore.setBackend(redis);
+// WS ticket exchange must work across processes: the API mints tickets here,
+// the gateway consumes them there — both sides share this Redis backend.
+wsTicketStore.setBackend(redis);
 
 const app = new Hono();
 
@@ -112,6 +116,16 @@ app.get('/health', (c) => {
   });
 });
 
+app.get('/ready', async (c) => {
+  try {
+    await pool.query('SELECT 1');
+    await redis.ping();
+    return c.json({ status: 'READY', service: 'api' });
+  } catch {
+    return c.json({ status: 'NOT_READY', service: 'api' }, 503);
+  }
+});
+
 app.get('/metrics', async (c) => {
   c.header('Content-Type', register.contentType);
   return c.text(await register.metrics());
@@ -120,6 +134,7 @@ app.get('/metrics', async (c) => {
 app.route('/auth', authRouter);
 app.route('/orgs', orgRouter);
 app.route('/topologies', topologyRouter);
+app.route('/learn', learnRouter);
 
 // 3. Port startup bindings when executed directly
 let server: ReturnType<typeof serve> | undefined;
