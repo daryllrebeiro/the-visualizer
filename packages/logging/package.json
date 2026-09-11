@@ -23,6 +23,7 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.54.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
     "@opentelemetry/sdk-node": "^0.57.2",
     "pino": "^9.6.0",
     "prom-client": "^15.1.3"

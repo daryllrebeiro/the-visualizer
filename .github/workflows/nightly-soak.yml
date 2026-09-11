@@ -51,9 +51,13 @@ jobs:
       - name: Launch WS Gateway Instance
         run: |
           node apps/ws-gateway/dist/index.js &
-          sleep 4
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:4001/ready > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:4001/ready > /dev/null
         env:
-          WS_GATEWAY_PORT: 4001
+          PORT: 4001
           REDIS_URL: redis://localhost:6379
           SESSION_SECRET: 01234567890123456789012345678901
           JWT_SECRET: 01234567890123456789012345678901

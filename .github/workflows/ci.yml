@@ -343,6 +343,16 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build workspace (Dockerfiles COPY prebuilt dist)
+        run: pnpm build
       - name: Build API Docker image
         run: docker build -f infrastructure/docker/api.Dockerfile -t the-visualizer-api:ci .
       - name: Run Trivy vulnerability scanner (API)
@@ -406,7 +416,12 @@ jobs:
         run: |
           PORT=3000 ENABLE_RATE_LIMITER=false node apps/api/dist/index.js &
           PORT=3001 node apps/ws-gateway/dist/index.js &
-          sleep 5
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/ready > /dev/null && curl -fsS http://localhost:3001/ready > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:3000/ready > /dev/null
+          curl -fsS http://localhost:3001/ready > /dev/null
         env:
           DATABASE_URL: postgresql://visualizer:visualizer_test@localhost:5432/visualizer_test
           REDIS_URL: redis://localhost:6379
@@ -483,7 +498,11 @@ jobs:
       - name: Start WS Gateway
         run: |
           node apps/ws-gateway/dist/index.js &
-          sleep 4
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:4001/ready > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:4001/ready > /dev/null
         env:
           PORT: 4001
           REDIS_URL: redis://localhost:6379
@@ -554,7 +573,11 @@ jobs:
       - name: Start Web Server in Background
         run: |
           pnpm --filter @the-visualizer/web start -- -p 3005 &
-          sleep 5
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3005/ > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:3005/ > /dev/null
       - name: Run axe-core Production Route Audit
         run: node scripts/run-axe-core-audit.mjs
 
@@ -582,14 +605,17 @@ jobs:
       - name: Start Web Server in Background
         run: |
           pnpm --filter @the-visualizer/web start -- -p 3005 &
-          sleep 5
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3005/ > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:3005/ > /dev/null
       - name: Run Headless Chrome Lighthouse Audit
         run: node scripts/run-lighthouse-audit.mjs
 
   # ─────────────────────────────────────────
   # Job 16: Live Token Revocation E2E Gate (API + WS Handshake)
-  # ─────────────────────────────────────────
-  token-revocation-gate:
+  # ─────────────────────────────────────────  token-revocation-gate:
     name: Token Revocation E2E Enforcement
     runs-on: ubuntu-latest
     needs: [build]
@@ -617,3 +643,43 @@ jobs:
           SESSION_SECRET: test_session_secret_at_least_32_characters_long_123456
           JWT_SECRET: test_jwt_secret_at_least_32_characters_long_123456
           NODE_ENV: test
+
+  # ─────────────────────────────────────────
+  # Job 17: Playwright End-to-End Suite (Web)
+  # ─────────────────────────────────────────
+  e2e-playwright:
+    name: Playwright E2E (Chromium)
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build workspace packages
+        run: pnpm turbo run build --filter=./packages/*
+      - name: Build Web App
+        run: pnpm --filter @the-visualizer/web build
+      - name: Install Playwright Chromium
+        run: pnpm --filter @the-visualizer/web exec playwright install --with-deps chromium
+      - name: Start Web Server in Background
+        run: |
+          pnpm --filter @the-visualizer/web start -- -p 3002 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3002/ > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:3002/ > /dev/null
+      - name: Run Playwright E2E Suite
+        run: node scripts/run-playwright-e2e.mjs
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
