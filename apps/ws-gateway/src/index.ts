@@ -1,7 +1,7 @@
 import * as http from 'http';
 import { Redis } from 'ioredis';
 
-import { tokenRevocationStore } from '@the-visualizer/contracts';
+import { tokenRevocationStore, wsTicketStore } from '@the-visualizer/contracts';
 import { initGlobalExceptionHandling, logger, register } from '@the-visualizer/logging';
 
 import { config } from './config.js';
@@ -21,8 +21,29 @@ revocationRedis.on('error', (err) =>
   logger.warn({ err: String(err) }, 'Revocation Redis connection error'),
 );
 tokenRevocationStore.setBackend(revocationRedis);
+// Consumer side of the cross-process ticket exchange (API mints via /ws-ticket).
+wsTicketStore.setBackend(revocationRedis);
 
 const server = http.createServer((req, res) => {
+  if (req.url === '/ready') {
+    revocationRedis.ping().then(
+      (pong) => {
+        if (pong === 'PONG') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end('{"status":"READY","service":"ws-gateway"}');
+        } else {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end('{"status":"NOT_READY","service":"ws-gateway"}');
+        }
+      },
+      () => {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end('{"status":"NOT_READY","service":"ws-gateway"}');
+      },
+    );
+    return;
+  }
+
   if (req.url === '/metrics') {
     res.writeHead(200, {
       'Content-Type': register.contentType,

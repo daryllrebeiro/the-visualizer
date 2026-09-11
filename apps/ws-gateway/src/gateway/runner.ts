@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import jsonpatch from 'fast-json-patch';
 import { Redis } from 'ioredis';
 
@@ -26,6 +27,56 @@ import { DEFAULT_TOPOLOGY } from './ws-server.js';
 const compare = (jsonpatch.compare ||
   (jsonpatch as any).default?.compare) as typeof jsonpatch.compare;
 
+// Unique per gateway process: used for single-owner session leases (ADR-002).
+const GATEWAY_NODE_ID = randomUUID();
+const RUNNER_LEASE_MS = 15_000;
+const MAX_CONSECUTIVE_TICK_FAILURES = 5;
+const MAX_TICKS = 100_000;
+const SESSION_STATE_WARN_BYTES = 32 * 1024 * 1024;
+const SESSION_STATE_MAX_BYTES = 128 * 1024 * 1024;
+
+/**
+ * Derives a per-room, per-domain RNG seed (FNV-1a over `domainId:roomId`).
+ * Replaces the former global `12345` seed so rooms never share an RNG stream
+ * and server-side replays are reproducible from (roomId, domainId, intents).
+ */
+function deriveRoomSeed(roomId: string, domainId: string): number {
+  let hash = 0x811c9dc5;
+  const input = `${domainId}:${roomId}`;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Atomic intent drain: LRANGE + LTRIM + LLEN in a single Lua execution so two
+ * gateway nodes can never drain (and double-apply) the same intent range.
+ * Returns [drainedItems, remainingLength].
+ */
+const DRAIN_INTENTS_LUA = `
+local items = redis.call('LRANGE', KEYS[1], 0, 49)
+if #items > 0 then
+  redis.call('LTRIM', KEYS[1], #items, -1)
+end
+local remaining = redis.call('LLEN', KEYS[1])
+return {items, remaining}
+`;
+
+/**
+ * Claim-or-refresh the single-owner runner lease for a room.
+ * Returns 1 when this node owns the room tick loop, 0 otherwise.
+ */
+const CLAIM_RUNNER_LUA = `
+local owner = redis.call('GET', KEYS[1])
+if (not owner) or (owner == ARGV[1]) then
+  redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
+  return 1
+end
+return 0
+`;
+
 export interface AutoProducerSchedule {
   producerId: string;
   topic: string;
@@ -47,6 +98,12 @@ export interface RoomSession {
   isHalted: boolean;
   isPaused?: boolean | undefined;
   autoProducers: Map<string, AutoProducerSchedule>;
+  /** Consecutive tick-loop failures; session halts at MAX_CONSECUTIVE_TICK_FAILURES. */
+  consecutiveFailures: number;
+  /** Monotonic per-session counter for synthetic event ids (no wall-clock ids). */
+  eventSeq: number;
+  /** Serialized state bytes sampled at keyframe cadence (per-session memory guard). */
+  lastStateBytes: number;
 }
 
 export class SimulationRunner {
@@ -77,7 +134,7 @@ export class SimulationRunner {
 
     if (domainId === 'kafka' || !domainPlugin) {
       const engineConfig = {
-        seed: 12345,
+        seed: deriveRoomSeed(roomId, domainId),
         maxTicks: 1_000_000,
         maxEvents: 5_000_000,
         maxMemoryMb: 128,
@@ -109,7 +166,7 @@ export class SimulationRunner {
       engine.initialize(initialTopology);
       rng = engine.rng;
     } else {
-      rng = new DeterministicRNG(12345);
+      rng = new DeterministicRNG(deriveRoomSeed(roomId, domainId));
       domainState = initialTopology ?? domainPlugin.createDefaultState();
     }
 
@@ -125,6 +182,9 @@ export class SimulationRunner {
       isHalted: false,
       isPaused: false,
       autoProducers: new Map(),
+      consecutiveFailures: 0,
+      eventSeq: 0,
+      lastStateBytes: 0,
     };
 
     this.activeSessions.set(roomId, session);
@@ -146,16 +206,28 @@ export class SimulationRunner {
     try {
       const { roomId } = session;
 
-      // 1. Drain pending intents from Redis List room:<roomId>:intents
+      // 0. Single-owner lease: only one gateway node ticks a room. Claim or
+      // heartbeat the lease atomically; otherwise another node owns this room.
+      const ownerKey = `room:${roomId}:runner`;
+      const owned = (await this.redis.eval(
+        CLAIM_RUNNER_LUA,
+        1,
+        ownerKey,
+        GATEWAY_NODE_ID,
+        String(RUNNER_LEASE_MS),
+      )) as number;
+      if (owned !== 1) return;
+
+      // 1. Drain pending intents from Redis List room:<roomId>:intents atomically
+      // (LRANGE + LTRIM + LLEN in one Lua op — no cross-node double-drain).
       const intentsKey = `room:${roomId}:intents`;
-      // Fetch up to 50 intents atomically
-      const intentsRaw = await this.redis.lrange(intentsKey, 0, 49);
-      if (intentsRaw.length > 0) {
-        await this.redis.ltrim(intentsKey, intentsRaw.length, -1);
-      }
+      const [intentsRaw, queueLen] = (await this.redis.eval(
+        DRAIN_INTENTS_LUA,
+        1,
+        intentsKey,
+      )) as [string[], number];
 
       // Record queue size metric
-      const queueLen = await this.redis.llen(intentsKey);
       simQueueSize.set({ domain: session.domainId }, queueLen);
 
       // Handle generic non-Kafka domain sessions
@@ -175,7 +247,7 @@ export class SimulationRunner {
                 const payload = actionPayload.payload || {};
                 const nextTick = session.tickCount + 1;
                 const ev = {
-                  id: intent.id || `${session.domainId}-action-${String(Date.now())}`,
+                  id: intent.id || `${session.domainId}-action-${String(nextTick)}-${String(session.eventSeq++)}`,
                   tick: nextTick,
                   type: action,
                   payload,
@@ -202,11 +274,18 @@ export class SimulationRunner {
                 session.tickCount = 0;
                 session.isHalted = false;
                 session.isPaused = false;
+                session.consecutiveFailures = 0;
+                session.eventSeq = 0;
+                session.lastStateBytes = 0;
 
                 if (this.redis.status === 'ready') {
-                  await this.redis.del(`room:${roomId}:intents`);
-                  await this.redis.del(`topology:${roomId}`);
-                  await this.redis.del(`simulation:${roomId}:replays`);
+                  await this.redis
+                    .pipeline()
+                    .del(`room:${roomId}:intents`)
+                    .del(`topology:${roomId}`)
+                    .del(`simulation:${roomId}:replays`)
+                    .del(`room:${roomId}:runner`)
+                    .exec();
                 }
 
                 await roomManager.publishRoomUpdate(roomId, {
@@ -257,6 +336,15 @@ export class SimulationRunner {
         session.domainState = res.nextState;
         session.tickCount++;
 
+        if (session.tickCount >= MAX_TICKS) {
+          simResourceLimitsExceededTotal.inc({ reason: 'max_ticks' });
+          await this.haltSession(
+            roomId,
+            'Maximum simulation tick bounds exceeded (100,000 ticks ceiling).',
+          );
+          return;
+        }
+
         const invCheck = session.domainPlugin.validateInvariants(session.domainState);
         if (!invCheck.passed && invCheck.violation) {
           simInvariantViolationsTotal.inc({ invariant: invCheck.violation.name });
@@ -282,11 +370,18 @@ export class SimulationRunner {
             timestamp: Date.now(),
           };
           const replaysKey = `simulation:${roomId}:replays`;
-          await this.redis.lpush(replaysKey, JSON.stringify(replayFrame));
-          await this.redis.ltrim(replaysKey, 0, 499);
-          await this.redis.expire(replaysKey, 86400);
+          await this.redis
+            .pipeline()
+            .lpush(replaysKey, JSON.stringify(replayFrame))
+            .ltrim(replaysKey, 0, 499)
+            .expire(replaysKey, 86400)
+            .exec();
+
+          await this.sampleSessionMemory(session);
+          if (session.isHalted) return;
         }
 
+        session.consecutiveFailures = 0;
         simTicksProcessedTotal.inc();
         const durationSec = (performance.now() - startTime) / 1000;
         simTickDurationSeconds.observe(durationSec);
@@ -400,12 +495,20 @@ export class SimulationRunner {
               session.tickCount = 0;
               session.isHalted = false;
               session.isPaused = false;
+              session.consecutiveFailures = 0;
+              session.eventSeq = 0;
+              session.lastStateBytes = 0;
 
-              // Clear Redis cached room keys and replay history
+              // Clear Redis cached room keys and replay history (pipelined),
+              // including the runner lease so post-reset ticks can re-claim.
               if (this.redis.status === 'ready') {
-                await this.redis.del(`room:${roomId}:intents`);
-                await this.redis.del(`topology:${roomId}`);
-                await this.redis.del(`simulation:${roomId}:replays`);
+                await this.redis
+                  .pipeline()
+                  .del(`room:${roomId}:intents`)
+                  .del(`topology:${roomId}`)
+                  .del(`simulation:${roomId}:replays`)
+                  .del(`room:${roomId}:runner`)
+                  .exec();
               }
 
               // Broadcast fresh snapshot to all room clients
@@ -455,7 +558,7 @@ export class SimulationRunner {
             if (engineEventType) {
               engine.scheduleEvent(
                 engine.currentTick,
-                intent.id || Math.random().toString(36).substring(7),
+                intent.id || `evt-${String(session.tickCount)}-${String(session.eventSeq++)}`,
                 engineEventType as any,
                 engineEventPayload as Record<string, unknown>,
               );
@@ -557,32 +660,13 @@ export class SimulationRunner {
       session.tickCount++;
 
       // Guard: Halt session if tick count exceeds hard ceiling (100,000 ticks)
-      if (session.tickCount >= 100_000) {
+      if (session.tickCount >= MAX_TICKS) {
         simResourceLimitsExceededTotal.inc({ reason: 'max_ticks' });
         await this.haltSession(
           roomId,
           'Maximum simulation tick bounds exceeded (100,000 ticks ceiling).',
         );
         return;
-      }
-
-      // Guard: Check heap memory usage to prevent OOM
-      const heapUsedMb = process.memoryUsage().heapUsed / 1024 / 1024;
-      if (heapUsedMb > 256) {
-        logger.warn(
-          { roomId, heapUsedMb },
-          'Simulation session memory threshold warning. Purging historical checkpoints.',
-        );
-        engine.clearHistory();
-
-        if (heapUsedMb > 512) {
-          simResourceLimitsExceededTotal.inc({ reason: 'max_memory' });
-          await this.haltSession(
-            roomId,
-            `Worker memory usage critical (${heapUsedMb.toFixed(1)}MB). Halted to prevent crash.`,
-          );
-          return;
-        }
       }
 
       // 4. Compute delta patch
@@ -611,18 +695,65 @@ export class SimulationRunner {
           timestamp: Date.now(),
         };
         const replaysKey = `simulation:${roomId}:replays`;
-        await this.redis.lpush(replaysKey, JSON.stringify(replayFrame));
-        await this.redis.ltrim(replaysKey, 0, 499);
-        await this.redis.expire(replaysKey, 86400);
+        await this.redis
+          .pipeline()
+          .lpush(replaysKey, JSON.stringify(replayFrame))
+          .ltrim(replaysKey, 0, 499)
+          .expire(replaysKey, 86400)
+          .exec();
+
+        await this.sampleSessionMemory(session);
+        if (session.isHalted) return;
       }
 
       // Record tick execution metrics
       const durationSec = (performance.now() - startTime) / 1000;
       simTickDurationSeconds.observe(durationSec);
       simTicksProcessedTotal.inc();
+      session.consecutiveFailures = 0;
     } catch (err: any) {
-      // Catch exceptions in tick loop execution
-      logger.error({ err, roomId: session.roomId }, 'Error executing simulation tick');
+      // Tick circuit breaker: a deterministically throwing reducer must halt
+      // the session instead of error-looping at 10 Hz forever.
+      session.consecutiveFailures += 1;
+      captureException(err, { service: 'ws-gateway', roomId: session.roomId });
+      logger.error(
+        { err, roomId: session.roomId, consecutiveFailures: session.consecutiveFailures },
+        'Error executing simulation tick',
+      );
+      if (session.consecutiveFailures >= MAX_CONSECUTIVE_TICK_FAILURES) {
+        simResourceLimitsExceededTotal.inc({ reason: 'tick_failures' });
+        await this.haltSession(
+          session.roomId,
+          `Tick execution failed ${String(session.consecutiveFailures)}x consecutively; session halted.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Per-session memory guard (replaces the former process-global heap check,
+   * which halted whichever room happened to tick while the process was hot).
+   * Samples serialized state bytes at keyframe cadence; warns and purges
+   * engine history past the warn threshold, halts past the max threshold.
+   */
+  private async sampleSessionMemory(session: RoomSession): Promise<void> {
+    const state = session.domainState ?? session.engine?.state;
+    if (!state) return;
+    session.lastStateBytes = Buffer.byteLength(JSON.stringify(state));
+    if (session.lastStateBytes < SESSION_STATE_WARN_BYTES) return;
+
+    logger.warn(
+      { roomId: session.roomId, stateBytes: session.lastStateBytes },
+      'Session state exceeded per-room warn threshold. Purging historical checkpoints.',
+    );
+    session.engine?.clearHistory();
+
+    if (session.lastStateBytes > SESSION_STATE_MAX_BYTES) {
+      simResourceLimitsExceededTotal.inc({ reason: 'max_memory' });
+      await this.haltSession(
+        session.roomId,
+        `Session state exceeded per-room cap (${(session.lastStateBytes / 1024 / 1024).toFixed(1)}MB). Halted to prevent crash.`,
+      );
     }
   }
 
@@ -637,6 +768,12 @@ export class SimulationRunner {
     if (session.timer) {
       clearInterval(session.timer);
     }
+
+    // Tombstone the runner lease so no other node resumes ticking a halted
+    // room. INTENT_RESET deletes the key, allowing post-reset ticks to re-claim.
+    void this.redis
+      .set(`room:${roomId}:runner`, 'halted', 'PX', 86400_000)
+      .catch(() => undefined);
 
     // Broadcast safety violation halt frame to room nodes
     await roomManager.publishRoomUpdate(roomId, {
@@ -659,6 +796,8 @@ export class SimulationRunner {
       clearInterval(session.timer);
     }
     this.activeSessions.delete(roomId);
+    // Release the runner lease so a future session can claim immediately.
+    void this.redis.del(`room:${roomId}:runner`).catch(() => undefined);
     simActiveSessions.set(this.activeSessions.size);
   }
 
