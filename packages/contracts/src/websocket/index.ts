@@ -144,13 +144,24 @@ export type ClientIntent = z.infer<typeof ClientIntentSchema>;
 
 // ─── Server → Client Messages ─────────────────────────────────────────────────
 
+/**
+ * Per-session resource limits.
+ *
+ * Generic fields apply to every domain; the broker/partition/producer/consumer
+ * fields are Kafka-specific and optional so non-streaming domains (all 29
+ * others) can publish limits without inventing meaningless values.
+ */
 export const SessionLimitsSchema = z.object({
   maxTicks: z.number().positive(),
-  maxBrokers: z.number().positive(),
-  maxPartitions: z.number().positive(),
-  maxProducers: z.number().positive(),
-  maxConsumers: z.number().positive(),
   maxMsgRatePerSec: z.number().positive(),
+  /** Generic entity budget — the primary cap for non-streaming domains. */
+  maxEntities: z.number().positive().optional(),
+  maxEventsPerTick: z.number().positive().optional(),
+  // Kafka-shaped limits (optional for non-Kafka domains).
+  maxBrokers: z.number().positive().optional(),
+  maxPartitions: z.number().positive().optional(),
+  maxProducers: z.number().positive().optional(),
+  maxConsumers: z.number().positive().optional(),
 });
 export type SessionLimits = z.infer<typeof SessionLimitsSchema>;
 
