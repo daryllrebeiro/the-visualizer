@@ -25,3 +25,6 @@ export * from './api/index.js';
 export * from './auth/token-revocation.js';
 export * from './auth/ws-ticket-store.js';
 
+// Learning & platform features (progress, timelines, quizzes, badges, challenges)
+export * from './learn/index.js';
+

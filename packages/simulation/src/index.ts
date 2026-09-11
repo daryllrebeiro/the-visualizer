@@ -55,6 +55,26 @@ export {
   type Keyframe,
   type ScenarioRecording,
 } from './timeline/scenario-studio.js';
+// Learning platform layer: permalinks, structural diff, session timelines.
+export {
+  canonicalJson,
+  decodePermalink,
+  encodePermalink,
+  replayPermalink,
+  type PermalinkReplayResult,
+} from './learn/permalink-codec.js';
+export {
+  divergenceTicks,
+  structuralDiff,
+  type StateDiff,
+} from './learn/structural-diff.js';
+export {
+  LEITNER_INTERVALS_MS,
+  SessionTimelineBuilder,
+  dueCards,
+  reviewCard,
+  type ReviewOutcome,
+} from './learn/session-timeline.js';
 export {
   DomainPluginBuilder,
   type InvariantCheckResult,
