@@ -362,7 +362,6 @@ export function pureLBTransition(
       completeExpiredConnections(nextState);
       runHealthChecks(nextState);
       advanceDrains(nextState);
-      void rng.nextFloat();
       break;
     }
   }

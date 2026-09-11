@@ -224,7 +224,6 @@ export function pureMerkleTreesTransition(
 
     case 'TICK' as any:
     case 'MERKLE_TICK': {
-      void rng.nextFloat();
       break;
     }
   }

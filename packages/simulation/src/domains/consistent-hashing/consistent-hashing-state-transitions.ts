@@ -275,16 +275,12 @@ export function pureConsistentHashingTransition(
         jump: assignments.jump,
         hrw: assignments.hrw,
       };
-      // Consume one RNG draw so lookup events are part of the seeded stream.
-      void rng.nextFloat();
       break;
     }
 
     case 'TICK' as any:
     case 'CHASH_TICK': {
-      // Heartbeat: assignments are event-driven; consume one RNG draw so
-      // tick sequences are part of the seeded stream.
-      void rng.nextFloat();
+      // Heartbeat: assignments are event-driven; ticks advance counters only.
       break;
     }
   }

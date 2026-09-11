@@ -156,7 +156,6 @@ export function pureFeatureStoreTransition(
       history.splice(insertAt, 0, entry);
       nextState.offlineStore[entity]![feature] = history;
       nextState.stats.offlineIngests++;
-      void rng.nextFloat();
       break;
     }
 
@@ -199,7 +198,6 @@ export function pureFeatureStoreTransition(
       nextState.trainingSets[setId] = set;
       nextState.trainingSetOrder.push(setId);
       nextState.stats.trainingSetJoins++;
-      void rng.nextFloat();
       break;
     }
 
@@ -225,7 +223,6 @@ export function pureFeatureStoreTransition(
       }
       nextState.lastServing = { entity, results, tick: nextState.tick };
       nextState.stats.servingRequests++;
-      void rng.nextFloat();
       break;
     }
 
@@ -256,7 +253,6 @@ export function pureFeatureStoreTransition(
       if (nextState.tick - nextState.lastSyncTick >= nextState.syncInterval) {
         syncOnline(nextState);
       }
-      void rng.nextFloat();
       break;
     }
   }

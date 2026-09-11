@@ -243,7 +243,6 @@ export function pureChatPresenceTransition(
       }
       conversation.nextSeq = seq + 1;
       nextState.stats.messagesSent++;
-      void rng.nextFloat();
       break;
     }
 
@@ -297,7 +296,6 @@ export function pureChatPresenceTransition(
           message.perRecipient[user.id] = 'READ';
         }
       }
-      void rng.nextFloat();
       break;
     }
 
@@ -306,7 +304,6 @@ export function pureChatPresenceTransition(
       const user = nextState.users[event.payload.userId];
       if (!conversation || !user) break;
       nextState.typing[`${conversation.id}::${user.id}`] = event.tick + CHAT_CAPS.typingTtl;
-      void rng.nextFloat();
       break;
     }
 
@@ -319,7 +316,6 @@ export function pureChatPresenceTransition(
         queue[0] = queue[1] as WireDelivery;
         queue[1] = a;
       }
-      void rng.nextFloat();
       break;
     }
 
@@ -339,7 +335,6 @@ export function pureChatPresenceTransition(
           messageId: delivered.id,
         });
       }
-      void rng.nextFloat();
       break;
     }
 
@@ -349,7 +344,6 @@ export function pureChatPresenceTransition(
       updatePresence(nextState);
       drainWireQueues(nextState);
       expireTyping(nextState);
-      void rng.nextFloat();
       break;
     }
   }

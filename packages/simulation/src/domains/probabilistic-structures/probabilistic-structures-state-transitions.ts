@@ -181,7 +181,6 @@ export function pureProbabilisticStructuresTransition(
         cuckoo: cuckooLookup(nextState.cuckoo, element),
         note: countingOk || cuckooOk ? undefined : 'delete on absent element rejected',
       });
-      void rng.nextFloat();
       break;
     }
 
@@ -212,7 +211,6 @@ export function pureProbabilisticStructuresTransition(
         hllEstimate: hllEstimate(nextState.hll),
         cmsEstimate: cmsEstimate(nextState.cms, element),
       });
-      void rng.nextFloat();
       break;
     }
 
@@ -237,7 +235,6 @@ export function pureProbabilisticStructuresTransition(
         tick: event.tick,
         note: `bloom params reset to m=${m} k=${k}; stream cleared`,
       });
-      void rng.nextFloat();
       break;
     }
 
@@ -252,13 +249,11 @@ export function pureProbabilisticStructuresTransition(
         tick: event.tick,
         note: `HLL m reset to ${m}; registers cleared`,
       });
-      void rng.nextFloat();
       break;
     }
 
     case 'TICK' as any:
     case 'PROB_TICK': {
-      void rng.nextFloat();
       break;
     }
   }

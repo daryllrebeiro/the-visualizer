@@ -22,6 +22,7 @@
     "smoke:replit": "node scripts/replit-smoke-test.mjs",
     "replit:start": "node scripts/replit-supervisor.mjs",
     "sim": "node scripts/sim-cli.mjs",
+    "sim:golden:update": "node scripts/run-golden-update.mjs",
     "create:domain": "node scripts/create-domain.mjs",
     "lint": "pnpm --recursive lint",
     "lint:fix": "pnpm --recursive lint:fix",

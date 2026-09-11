@@ -429,7 +429,6 @@ export function pureTaskSchedulerTransition(
       expireAndElect(nextState);
       fireCronJobs(nextState);
       stepDagRuns(nextState, rng);
-      void rng.nextFloat();
       break;
     }
   }

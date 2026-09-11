@@ -1,38 +1,41 @@
 /**
  * Golden Determinism Test Suite
  *
- * For each of the 8 domains, seeds the RNG, applies a fixed event sequence,
+ * For each of the 28 domains, seeds the RNG, applies a fixed event sequence,
  * and asserts the resulting state hash matches a locked-in golden value.
  *
  * If this test breaks, it means a simulation reducer changed its output
  * for the same inputs — which is a determinism regression that MUST be
- * investigated before merging.
+ * investigated before merging. Regenerate vectors explicitly with
+ * `pnpm sim:golden:update` and review the diff like a snapshot update.
  *
  * Run: pnpm test:determinism
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { DomainRegistry } from './domains/registry.js';
 import type { DomainPlugin } from './domains/registry.js';
 import { DeterministicRNG } from './prng/deterministic-rng.js';
 
-// Stable JSON hash: sort keys, strip undefined, hash to 32-bit integer
-function stableHash(obj: unknown): number {
+// Stable state hash: deterministic JSON serialization, SHA-256 digest.
+// 32-bit hashes (djb2/FNV) are NOT sufficient here — golden vectors must be
+// collision-resistant across versions and platforms.
+function stableHash(obj: unknown): string {
   const json = JSON.stringify(obj, (_key, value) => (value === undefined ? null : value));
-  // djb2 hash
-  let hash = 5381;
-  for (let i = 0; i < json.length; i++) {
-    hash = ((hash << 5) + hash + json.charCodeAt(i)) | 0;
-  }
-  return hash >>> 0; // unsigned 32-bit
+  return createHash('sha256').update(json).digest('hex');
 }
 
 /**
  * Generic golden-state runner.
  * Creates default state, applies N reduce cycles with synthetic events,
  * and returns a deterministic hash of the final state.
+ *
+ * Reducer exceptions propagate: a domain that throws on a bare TICK event
+ * has a bug (unknown event types must no-op), and the suite must fail loudly
+ * rather than silently pass a frozen state.
  */
-function runGoldenSequence(plugin: DomainPlugin, seed: number, ticks: number): number {
+function runGoldenSequence(plugin: DomainPlugin, seed: number, ticks: number): string {
   const rng = new DeterministicRNG(seed);
   let state = plugin.createDefaultState();
 
@@ -47,13 +50,8 @@ function runGoldenSequence(plugin: DomainPlugin, seed: number, ticks: number): n
       payload: {},
     };
 
-    try {
-      const result = plugin.reduceState(state, tickEvent, rng);
-      state = result.nextState;
-    } catch {
-      // Some domains may not handle bare TICK events — that's fine,
-      // state stays unchanged for that tick
-    }
+    const result = plugin.reduceState(state, tickEvent, rng);
+    state = result.nextState;
   }
 
   return stableHash(state);
@@ -61,6 +59,77 @@ function runGoldenSequence(plugin: DomainPlugin, seed: number, ticks: number): n
 
 const GOLDEN_SEED = 12345;
 const GOLDEN_TICKS = 10;
+
+/**
+ * Domains whose bare-TICK path consumes no randomness: fixed initial state
+ * plus timers/counters that do not sample the RNG. Membership here is
+ * empirical (observed equal hashes across seeds after RNG-burn removal) and
+ * must be re-verified if a reducer starts sampling randomness on TICK.
+ */
+const SEED_INDIFFERENT_DOMAINS: ReadonlySet<string> = new Set([
+  // Populated empirically — see triage note in the divergence test above.
+]);
+
+/**
+ * Committed golden vectors.
+ *
+ * Each value is the SHA-256 hex digest of the canonical JSON end-state after
+ * GOLDEN_TICKS bare-TICK reductions from a fresh default state with
+ * GOLDEN_SEED (see runGoldenSequence). Generated 2026-09-09 after RNG-burn
+ * removal and the djb2 -> SHA-256 migration.
+ *
+ * NEVER edit these by hand to make the suite green. Regenerate with
+ * `pnpm sim:golden:update` and review the digest diff like a snapshot update:
+ * every changed digest is a changed reducer semantic.
+ */
+const GOLDEN_VECTORS: Record<string, string> = {
+  kafka: 'b27a5bc2211fc33d8e502364c2ce9389d668cd34312705c9518ecb1fab75ee76',
+  raft: '6f496ea5af52aaddb076d3e94cb902e184d7c4c01d08e79977dbbe96a0e9a2fa',
+  database: '861e6e21928236381dc6b102a608d66c7a5ff848d1808aaca8b45f580f9016c8',
+  redis: '80f4c118eae4474141b74ab53f5c4d241ee2e10d026eb5a54c114b8c077d2a95',
+  kubernetes: '4521b4ebe8b8d071c6141ae5549c603ff5e25edc6795541929559040b9e62100',
+  rabbitmq: '539488a3c5854f7ec2b262b86a0e35782c82e254ccc17e06b83b89f4a6ebaba3',
+  storage: 'f7e3acfe22bd132a7e5770f8db42fe4e773a4e1c4e9e1f86cadb3fffccbf2097',
+  networking:
+    'fff70e3cb26143a5ba3b966fb942312f5c6cba2d4d8ad2d79470d7edc18def40',
+  'rate-limiter':
+    '0e3109dac56920c7d553adf43a0bb02fbf1bddc02612e55bc10cb3c2d0c14e42',
+  'distributed-lock':
+    '19a84b4c7aa6f69dd02375af783b258fe71e90b5693ac049a3fb904e56f62b88',
+  'cdn-cache':
+    '8b166d3ecef06e02a9ed6c7bc5c2fc5d3d871dae30b30119ab416be3808ad080',
+  'id-gen': 'e0e5a272b4b3cec440893b635047b2899d1c433bc378118f8d7afd7796272c1e',
+  transactions:
+    'b43af42da694e1763c23f922554fd187bd123ea3579e224b0ee191be08faa633',
+  'llm-pipeline':
+    '8db8cf7c5fa16cefa0c3824c84a35473b7d54a3fa3ecff17974970549ddeee68',
+  'llm-gateway':
+    '6c65e8f04c8abf825c404383b4427059bf489bb30f0e8635f74db83aec5326cc',
+  'llm-serving':
+    'e654eca76a231c9d7d0807ea8aa42005d5088effdd7bbd60dd1ed236aea21ed5',
+  vectordb: 'af67fae23b35e202352107c1a9ee5a0f3d1241c3fc6acc4ada36f7e7b2a906d3',
+  'gpu-cluster':
+    '7fad1f4d9b8b9201fd9c861e0bcf6ff8505f14326dbcc0d14fd571e541799dc4',
+  'load-balancer':
+    '3dafdf7b1c21d990182359eddeaaa813252d4bc99b34c2bc953c95be3df30f6a',
+  'search-index':
+    '4dce37b6ff67e5b5c678903a6f911ee5fa6e4e37c0e3910f86c6315975956cb2',
+  'task-scheduler':
+    '6052069f15df456a456476cd99fc586fc963c4e703f46ee67a05beb7ebd8b3b9',
+  'chat-presence':
+    '870413439aae69f9b71aeab884ff04da5e2e33b8ec0b7063188d8687ebc842ee',
+  'feature-store':
+    '293f081b66685e06122751a66c7f4a0e4bc14beb97fb1a6c2b2b9030076bd8c5',
+  'model-rollout':
+    'b858e96fb72a29d275fddbfc8615d6ad919b6b19c51bd3dabd88611269a62c9a',
+  'llm-eval': '538a3b01604bc19e9ac19333577eaaf5389fbe141f7310b2938ce330d86dcac8',
+  'consistent-hashing':
+    '6cadbf7007cb710aa37c72bc6588d2048ce6ba8c13c73d8073eba6b8f48e729e',
+  'probabilistic-structures':
+    '4a5d7aa7b428b8b2b78d6dd93e8e10469480b9785fd45851b64e518c6e973e0b',
+  'merkle-trees':
+    '7db0129d4ce33e7230f641b152475aac7885c8750d165923d3fe252d29b60140',
+};
 
 describe('Golden Determinism Suite', () => {
   const domains = DomainRegistry.list();
@@ -116,7 +185,12 @@ describe('Golden Determinism Suite', () => {
   }
 
   // Verify different seeds produce different hashes (sanity check that
-  // the RNG is actually being consumed, not ignored)
+  // the RNG is actually being consumed, not ignored).
+  //
+  // Domains whose bare-TICK path is a pure fixed point (no timers, no
+  // sampling, no stamped RNG state) are listed in SEED_INDIFFERENT_DOMAINS
+  // and assert stability explicitly instead of faking divergence.
+  // Reducers MUST NOT burn RNG (`void rng.nextFloat()`) to satisfy this.
   for (const meta of domains) {
     it(`[${meta.id}] produces different state hashes for different seeds`, () => {
       const plugin = DomainRegistry.get(meta.id)!;
@@ -124,22 +198,33 @@ describe('Golden Determinism Suite', () => {
       const hashA = runGoldenSequence(plugin, 1, GOLDEN_TICKS);
       const hashB = runGoldenSequence(plugin, 99999, GOLDEN_TICKS);
 
-      // Not a strict guarantee (hash collision possible), but with
-      // 32-bit hashes and meaningfully different RNG streams this
-      // should hold in practice
+      if (SEED_INDIFFERENT_DOMAINS.has(meta.id)) {
+        expect(hashA).toBe(hashB);
+        return;
+      }
       expect(hashA).not.toBe(hashB);
     });
   }
 
-  // Lock in the golden hashes — these values are computed once and then
-  // committed. If a reducer changes, the test fails and forces review.
+  // Committed golden vectors: SHA-256 digests locked in below. A reducer
+  // change alters these digests and fails loudly, forcing review.
+  // Regenerate explicitly via `pnpm sim:golden:update` and review the diff.
+  it('matches committed golden vectors (cross-version regression tripwire)', () => {
+    for (const meta of domains) {
+      const plugin = DomainRegistry.get(meta.id)!;
+      const expected = GOLDEN_VECTORS[meta.id];
+      expect(expected, `missing golden vector for ${meta.id}`).toBeDefined();
+      expect(runGoldenSequence(plugin, GOLDEN_SEED, GOLDEN_TICKS)).toBe(expected);
+    }
+  });
+
   it('creates reproducible default states', () => {
     for (const meta of domains) {
       const plugin = DomainRegistry.get(meta.id)!;
       const state = plugin.createDefaultState();
       const hash = stableHash(state);
-      expect(hash).toBeGreaterThan(0);
-      expect(typeof hash).toBe('number');
+      expect(hash).toHaveLength(64);
+      expect(typeof hash).toBe('string');
     }
   });
 
@@ -167,7 +252,7 @@ describe('Golden Determinism Suite', () => {
     const hash1 = runStoragePipeline();
     const hash2 = runStoragePipeline();
     expect(hash1).toBe(hash2);
-    expect(hash1).toBeGreaterThan(0);
+    expect(hash1).toHaveLength(64);
   });
 
   // Deep state-mutation determinism test for RabbitMQ (publishing, queue routing, DLQ)
@@ -198,7 +283,7 @@ describe('Golden Determinism Suite', () => {
     const hash1 = runRabbitPipeline();
     const hash2 = runRabbitPipeline();
     expect(hash1).toBe(hash2);
-    expect(hash1).toBeGreaterThan(0);
+    expect(hash1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: TCP CUBIC & SACK
@@ -231,7 +316,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runNetworkingCubic();
     const h2 = runNetworkingCubic();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Raft PreVote & Snapshots
@@ -264,7 +349,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runRaftFidelity();
     const h2 = runRaftFidelity();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Redis candidate pool eviction & redirects
@@ -289,7 +374,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runRedisFidelity();
     const h2 = runRedisFidelity();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Database Hinted Handoffs & Read Repair
@@ -324,7 +409,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runDbFidelity();
     const h2 = runDbFidelity();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Kubernetes QoS & PDB
@@ -359,7 +444,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runK8sFidelity();
     const h2 = runK8sFidelity();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Rate Limiter (Token Bucket & Sliding Window)
@@ -385,7 +470,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runRateLimiterPipeline();
     const h2 = runRateLimiterPipeline();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Distributed Lock (Redlock Quorum & Fencing)
@@ -437,7 +522,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runLockPipeline();
     const h2 = runLockPipeline();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: CDN & Multi-Tier Caching
@@ -481,7 +566,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runCdnPipeline();
     const h2 = runCdnPipeline();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Distributed ID Generation
@@ -521,7 +606,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runIdGenPipeline();
     const h2 = runIdGenPipeline();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Fidelity-specific golden pipeline: Distributed Transactions
@@ -618,7 +703,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runTxnPipeline();
     const h2 = runTxnPipeline();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated Cross-Domain Golden Fixture 1: Distributed Lock + Raft Lease Authority
@@ -674,7 +759,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runRaftLock();
     const h2 = runRaftLock();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated Cross-Domain Golden Fixture 2: ID-Gen + Raft Worker Registry
@@ -728,7 +813,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runRaftIdGen();
     const h2 = runRaftIdGen();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated Cross-Domain Golden Fixture 3: Rate Limiter + Redis Cluster Storage
@@ -772,7 +857,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runRedisRateLimiter();
     const h2 = runRedisRateLimiter();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated Cross-Domain Golden Fixture 4: RabbitMQ + Raft Quorum Replication
@@ -834,7 +919,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runRabbitQuorum();
     const h2 = runRabbitQuorum();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated High-Risk Chaos Fixture 1: Distributed Lock Kleppmann Corruption (Fencing Disabled)
@@ -927,7 +1012,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runCorruption();
     const h2 = runCorruption();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated High-Risk Chaos Fixture 2: Transactions 2PC Coordinator Crash After PREPARE
@@ -992,7 +1077,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runCrash();
     const h2 = runCrash();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated High-Risk Chaos Fixture 3: Rate Limiter Fixed Window Boundary Burst
@@ -1041,7 +1126,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runBoundaryBurst();
     const h2 = runBoundaryBurst();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 1: Consolidated LLM Pipeline (ETL, RAG, Tool DAG & W3C Lineage)
@@ -1147,7 +1232,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runPipeline();
     const h2 = runPipeline();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 3: LLM Serving PagedAttention Continuous Batching
@@ -1184,7 +1269,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runServing();
     const h2 = runServing();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 3b: LLM Serving OOM Eviction Chaos & Speculative Draft Rejection
@@ -1237,7 +1322,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runChaos();
     const h2 = runChaos();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 4: VectorDB HNSW Multi-Layer Traversal
@@ -1285,7 +1370,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runVectorDB();
     const h2 = runVectorDB();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 4b: VectorDB Node Deletion Chaos & Subsumption Integrity
@@ -1337,7 +1422,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runDeleteChaos();
     const h2 = runDeleteChaos();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 5: GPU Cluster 1F1B Schedule & ZeRO
@@ -1380,7 +1465,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runGPU();
     const h2 = runGPU();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 5b: GPU Cluster Straggler Drag & NVLink Fallback Chaos
@@ -1433,7 +1518,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runGPUChaos();
     const h2 = runGPUChaos();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 6: LLM Pipeline Steady-State & Flagship PIPE-8 Passing
@@ -1550,7 +1635,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runPipeline();
     const h2 = runPipeline();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 7: LLM Pipeline Lineage-Severing Chaos & Flagship PIPE-8 Failing
@@ -1595,7 +1680,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runSevered();
     const h2 = runSevered();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 8: LLM Gateway Steady Cached & Multi-Provider Route
@@ -1647,7 +1732,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runGateway();
     const h2 = runGateway();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 
   // Dedicated AI Infrastructure Golden Fixture 9: LLM Gateway Circuit Breaker Trip & Fallback Routing Chaos
@@ -1700,7 +1785,7 @@ describe('Golden Determinism Suite', () => {
     const h1 = runOutage();
     const h2 = runOutage();
     expect(h1).toBe(h2);
-    expect(h1).toBeGreaterThan(0);
+    expect(h1).toHaveLength(64);
   });
 });
 

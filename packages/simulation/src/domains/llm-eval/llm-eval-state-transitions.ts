@@ -210,7 +210,6 @@ export function pureLlmEvalTransition(
       nextState.evalRunOrder.push(runId);
       nextState.stats.runsExecuted++;
       nextState.stats.regressionsDetected += regressions.length;
-      void rng.nextFloat();
       break;
     }
 
@@ -241,7 +240,6 @@ export function pureLlmEvalTransition(
       };
       nextState.rescoreRecords[key] = record;
       nextState.stats.rescoresExecuted++;
-      void rng.nextFloat();
       break;
     }
 
@@ -289,13 +287,11 @@ export function pureLlmEvalTransition(
       if (gate.blocked) {
         nextState.stats.gatesBlocked++;
       }
-      void rng.nextFloat();
       break;
     }
 
     case 'TICK' as any:
     case 'EVAL_TICK': {
-      void rng.nextFloat();
       break;
     }
   }

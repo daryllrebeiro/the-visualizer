@@ -203,7 +203,6 @@ export function pureSearchIndexTransition(
         merged,
       };
       nextState.stats.queryCount++;
-      void rng.nextFloat();
       break;
     }
 
@@ -253,7 +252,6 @@ export function pureSearchIndexTransition(
     case 'TICK' as any:
     case 'SEARCH_TICK': {
       syncReplicas(nextState);
-      void rng.nextFloat();
       break;
     }
   }

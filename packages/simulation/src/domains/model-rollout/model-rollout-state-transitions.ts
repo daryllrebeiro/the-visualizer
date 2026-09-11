@@ -286,7 +286,6 @@ export function pureModelRolloutTransition(
       } else {
         nextState.stats.promotionsBlocked++;
       }
-      void rng.nextFloat();
       break;
     }
 
@@ -344,7 +343,6 @@ export function pureModelRolloutTransition(
           resetWindow(nextState);
         }
       }
-      void rng.nextFloat();
       break;
     }
   }
