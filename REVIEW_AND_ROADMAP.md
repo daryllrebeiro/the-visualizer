@@ -27,6 +27,17 @@
 > waits; throughput bench converted to report-only after 2.8k–10.7k/sec variance
 > on identical code. NOT started: canvas strangler cutover (Phase 2),
 > wire-contract validation, Streams migration, worker-thread pool.
+>
+> Phase 2/3 update (2026-09-11, completed same day): see
+> `docs/architecture/PHASE_2_3_COMPLETION.md`. Landed on top of the above —
+> Phase 2: canonical gateway egress contract + non-prod validation and
+> egress-integration test; `SessionLimitsSchema` generalized; per-domain intent
+> action schemas enforced; intents + replay keyframes on Redis Streams; worker
+> tick pool + slow-tick shedding wired; canvas routing helper + generic
+> fallback. Phase 3: content-addressed replay persistence (`simulation_replays`,
+> dedupe, membership-gated); presenter/student classroom with assessments;
+> WASM-ready portable kernel with VM-sandbox proof. Only remaining: the full
+> `VisualizerApp` monolith cutover (first step done).
 
 ## 1. Executive Summary & Health Assessment
 
