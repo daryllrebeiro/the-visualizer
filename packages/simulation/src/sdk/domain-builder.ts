@@ -21,6 +21,31 @@ export type StateReducer<TState, TEvent> = (
 
 export type InvariantValidator<TState> = (state: TState) => InvariantCheckResult;
 
+/**
+ * Plugin API version. Bump on any breaking change to `DomainPlugin` /
+ * `DomainPluginBuilder`. Third-party domains declare the version they target;
+ * `assertPluginCompatible` rejects mismatches at registration time.
+ */
+export const PLUGIN_API_VERSION = 1;
+
+export function assertPluginCompatible(declared: number, domainId: string): void {
+  if (declared !== PLUGIN_API_VERSION) {
+    throw new Error(
+      `Domain "${domainId}" targets plugin API v${String(declared)} but this runtime provides v${String(PLUGIN_API_VERSION)}`,
+    );
+  }
+}
+
+/** Convenience constructor for third-party domains. */
+export function defineDomainPlugin(
+  id: string,
+  name: string,
+  description: string,
+  category: DomainPluginMetadata['category'] = 'SYSTEM_DESIGN',
+): DomainPluginBuilder {
+  return new DomainPluginBuilder(id, name, description, category);
+}
+
 export class DomainPluginBuilder<TState = unknown, TEvent = unknown> {
   private metadata: DomainPluginMetadata;
   private defaultStateFactory?: () => TState;

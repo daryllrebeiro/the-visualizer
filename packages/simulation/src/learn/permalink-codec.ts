@@ -2,6 +2,7 @@ import { PermalinkPayloadV2Schema, type PermalinkPayloadV2 } from '@the-visualiz
 
 import { DomainRegistry } from '../domains/registry.js';
 import { DeterministicRNG } from '../prng/deterministic-rng.js';
+import { canonicalStringify, contentHash } from '../shared/primitives.js';
 
 export interface PermalinkReplayResult {
   domainId: string;
@@ -11,31 +12,67 @@ export interface PermalinkReplayResult {
   violations: Array<{ name: string; description: string; tick: number }>;
 }
 
-function base64UrlEncode(json: string): string {
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(json, 'utf8')
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/** Builds the inverse lookup table for base64 decoding. */
+function b64Inverse(): number[] {
+  const table = new Array<number>(128).fill(-1);
+  for (let i = 0; i < B64_ALPHABET.length; i++) table[B64_ALPHABET.charCodeAt(i)] = i;
+  return table;
+}
+
+const B64_INV = b64Inverse();
+
+/**
+ * Portable base64url codec: `TextEncoder`/`TextDecoder` plus a lookup table.
+ * No `Buffer`, no `btoa`/`atob` — identical output on Node, browsers, workers,
+ * and any future WASM host.
+ */
+function base64EncodeBytes(bytes: Uint8Array): string {
+  let out = '';
+  let i = 0;
+  for (; i + 2 < bytes.length; i += 3) {
+    const n = ((bytes[i] ?? 0) << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
+    out += B64_ALPHABET[(n >>> 18) & 63]! + B64_ALPHABET[(n >>> 12) & 63]! + B64_ALPHABET[(n >>> 6) & 63]! + B64_ALPHABET[n & 63]!;
   }
+  const remaining = bytes.length - i;
+  if (remaining === 1) {
+    const n = (bytes[i] ?? 0) << 16;
+    out += B64_ALPHABET[(n >>> 18) & 63]! + B64_ALPHABET[(n >>> 12) & 63]! + '==';
+  } else if (remaining === 2) {
+    const n = ((bytes[i] ?? 0) << 16) | ((bytes[i + 1] ?? 0) << 8);
+    out += B64_ALPHABET[(n >>> 18) & 63]! + B64_ALPHABET[(n >>> 12) & 63]! + B64_ALPHABET[(n >>> 6) & 63]! + '=';
+  }
+  return out;
+}
+
+function base64DecodeToBytes(base64: string): Uint8Array {
+  const clean = base64.replace(/[^A-Za-z0-9+/=]/g, '');
+  const out: number[] = [];
+  for (let i = 0; i + 3 < clean.length + 1; i += 4) {
+    const a = B64_INV[clean.charCodeAt(i)] ?? -1;
+    const b = B64_INV[clean.charCodeAt(i + 1)] ?? -1;
+    const c = clean[i + 2] === '=' ? 0 : (B64_INV[clean.charCodeAt(i + 2)] ?? -1);
+    const d = clean[i + 3] === '=' ? 0 : (B64_INV[clean.charCodeAt(i + 3)] ?? -1);
+    if (a < 0 || b < 0 || c < 0 || d < 0) throw new Error('Invalid base64');
+    const n = (a << 18) | (b << 12) | (c << 6) | d;
+    out.push((n >>> 16) & 255);
+    if (clean[i + 2] !== '=') out.push((n >>> 8) & 255);
+    if (clean[i + 3] !== '=') out.push(n & 255);
+  }
+  return Uint8Array.from(out);
+}
+
+function base64UrlEncode(json: string): string {
   const bytes = new TextEncoder().encode(json);
-  let binary = '';
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return base64EncodeBytes(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function base64UrlDecode(encoded: string): string {
   const padded = encoded.replace(/-/g, '+').replace(/_/g, '/');
   const padLen = (4 - (padded.length % 4)) % 4;
   const base64 = padded + '='.repeat(padLen);
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(base64, 'base64').toString('utf8');
-  }
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
+  return new TextDecoder().decode(base64DecodeToBytes(base64));
 }
 
 /** Encodes a validated permalink payload to a URL-safe string. */
@@ -100,17 +137,14 @@ export function replayPermalink(payload: PermalinkPayloadV2): PermalinkReplayRes
 
 /** Canonical JSON with sorted keys — byte-stable across replays. */
 export function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortValue(value));
+  return canonicalStringify(value);
 }
 
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortValue);
-  if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value).sort()) {
-      out[key] = sortValue((value as Record<string, unknown>)[key]);
-    }
-    return out;
-  }
-  return value;
+/**
+ * Content address for a permalink payload. Two payloads that replay to the
+ * same state share a key, which is what backs server-side replay de-duplication
+ * (Phase 3 replay persistence).
+ */
+export function permalinkContentHash(payload: PermalinkPayloadV2): string {
+  return contentHash(PermalinkPayloadV2Schema.parse(payload));
 }

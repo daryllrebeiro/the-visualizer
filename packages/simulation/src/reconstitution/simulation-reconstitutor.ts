@@ -1,4 +1,12 @@
-import { type Operation, applyPatch, compare } from 'fast-json-patch';
+import jsonpatch from 'fast-json-patch';
+import type { Operation } from 'fast-json-patch';
+
+// fast-json-patch is CJS: named ESM imports break under native Node ESM
+// (worker threads, edge runtimes). Resolve through the default export with
+// the same fallback pattern used by the ws-gateway runner.
+const { applyPatch, compare } = (jsonpatch as unknown as {
+  default?: { applyPatch: typeof import('fast-json-patch').applyPatch; compare: typeof import('fast-json-patch').compare };
+} & typeof import('fast-json-patch')).default ?? (jsonpatch as unknown as typeof import('fast-json-patch'));
 
 import { pureStateTransition } from '../engine/state-transitions.js';
 import type {
