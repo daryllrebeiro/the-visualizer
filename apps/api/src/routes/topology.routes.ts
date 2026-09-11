@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
+import { BoundedDefinitionSchema } from '@the-visualizer/contracts';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -16,7 +17,7 @@ const createTopologyBodySchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional(),
   visibility: z.enum(['PRIVATE', 'UNLISTED', 'PUBLIC']).optional().default('PRIVATE'),
-  definition: z.record(z.string(), z.unknown()),
+  definition: BoundedDefinitionSchema,
 });
 
 const updateTopologyBodySchema = createTopologyBodySchema.omit({ orgId: true }).partial();

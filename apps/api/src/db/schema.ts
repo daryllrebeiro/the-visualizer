@@ -89,11 +89,14 @@ export const simulationReplays = pgTable(
     durationTicks: integer('duration_ticks').notNull(),
     totalEvents: integer('total_events').notNull(),
     artifactStorageUrl: text('artifact_storage_url').notNull(),
+    /** Deterministic content address of the replay artifact (dedupe key). */
+    contentHash: text('content_hash'),
     metadata: jsonb('metadata').default({}).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('idx_simulation_replays_topology_id').on(table.topologyId),
     index('idx_simulation_replays_created_by').on(table.createdBy),
+    index('idx_simulation_replays_content_hash').on(table.contentHash),
   ],
 );

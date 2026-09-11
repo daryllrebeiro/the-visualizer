@@ -17,8 +17,10 @@ import { requestLogger } from './middleware/logging.middleware.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
 import './otel-init.js';
 import { authRouter } from './routes/auth.routes.js';
+import { classroomRouter } from './routes/classroom.routes.js';
 import { learnRouter } from './routes/learn.routes.js';
 import { orgRouter } from './routes/org.routes.js';
+import { replayRouter } from './routes/replay.routes.js';
 import { topologyRouter } from './routes/topology.routes.js';
 
 initGlobalExceptionHandling('api');
@@ -135,6 +137,8 @@ app.route('/auth', authRouter);
 app.route('/orgs', orgRouter);
 app.route('/topologies', topologyRouter);
 app.route('/learn', learnRouter);
+app.route('/classroom', classroomRouter);
+app.route('/replays', replayRouter);
 
 // 3. Port startup bindings when executed directly
 let server: ReturnType<typeof serve> | undefined;
