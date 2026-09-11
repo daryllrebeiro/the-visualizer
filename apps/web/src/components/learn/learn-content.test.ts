@@ -33,7 +33,7 @@ describe('learn content banks', () => {
     // Bonus banks may exist for unregistered engine modules (rag, agents);
     // coverage is asserted against the registry as source of truth.
     const registered = new Set(DomainRegistry.list().map((m) => m.id));
-    expect(registered.size).toBe(28);
+    expect(registered.size).toBe(30);
     const byDomain = new Map<string, number>();
     for (const q of QUIZ_BANK) byDomain.set(q.domainId, (byDomain.get(q.domainId) ?? 0) + 1);
     for (const domainId of registered) {

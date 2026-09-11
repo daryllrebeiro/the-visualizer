@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+import type { DomainKey } from '../../app/domain-options';
+
 export interface DomainCardInfo {
   id:
     | 'kafka'
@@ -553,8 +555,8 @@ export const DOMAIN_CATALOG: DomainCardInfo[] = [
 
 interface DomainDirectoryModalProps {
   isOpen: boolean;
-  activeDomain: DomainCardInfo['id'];
-  onSelectDomain: (id: DomainCardInfo['id']) => void;
+  activeDomain: DomainKey;
+  onSelectDomain: (id: DomainKey) => void;
   onClose: () => void;
 }
 

@@ -27,7 +27,9 @@ export type DomainKey =
   | 'llm-eval'
   | 'consistent-hashing'
   | 'probabilistic-structures'
-  | 'merkle-trees';
+  | 'merkle-trees'
+  | 'rag'
+  | 'agents';
 
 export const DOMAIN_OPTIONS: ReadonlyArray<{
   id: DomainKey;
@@ -260,5 +262,21 @@ export const DOMAIN_OPTIONS: ReadonlyArray<{
     category: 'Proofs & Anti-Entropy Repair',
     path: '/merkle-trees',
     color: '#06b6d4',
+  },
+  {
+    id: 'rag',
+    name: 'RAG Pipeline',
+    icon: '📚',
+    category: 'Hybrid Retrieval & RRF',
+    path: '/rag',
+    color: '#ec4899',
+  },
+  {
+    id: 'agents',
+    name: 'Multi-Agent Orchestration',
+    icon: '🤖',
+    category: 'MCP Tool Use & Step Budgets',
+    path: '/agents',
+    color: '#f59e0b',
   },
 ];

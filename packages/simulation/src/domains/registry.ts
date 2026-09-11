@@ -145,6 +145,14 @@ import { MerkleTreesInvariantChecker } from './merkle-trees/merkle-trees-invaria
 import { createDefaultMerkleTreesCluster, pureMerkleTreesTransition } from './merkle-trees/merkle-trees-state-transitions.js';
 import type { MerkleTreesClusterState, MerkleTreesSimEvent } from './merkle-trees/merkle-trees-types.js';
 
+import { RAGInvariantChecker } from './rag/rag-invariants.js';
+import { createDefaultRAGCluster, pureRAGTransition } from './rag/rag-state-transitions.js';
+import type { RAGClusterState, RAGSimEvent } from './rag/rag-types.js';
+
+import { AgentsInvariantChecker } from './agents/agents-invariants.js';
+import { createDefaultAgentsCluster, pureAgentsTransition } from './agents/agents-state-transitions.js';
+import type { AgentsClusterState, AgentsSimEvent } from './agents/agents-types.js';
+
 export interface DomainPluginMetadata {
   id: string;
   name: string;
@@ -995,6 +1003,58 @@ export const ProbabilisticStructuresDomainPlugin: DomainPlugin<
   scenarioLibrary: [],
 };
 
+export const RAGDomainPlugin: DomainPlugin<RAGClusterState, RAGSimEvent> = {
+  metadata: {
+    id: 'rag',
+    name: 'RAG Retrieval Pipeline',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Retrieval-augmented generation pipeline: chunking, dense + BM25 hybrid retrieval with Reciprocal Rank Fusion, context packing under a token budget, and recall/faithfulness evaluation.',
+    fidelityTag: 'BEHAVIORAL',
+    fidelityDisplayName: 'RAG / RRF hybrid retrieval',
+    icon: '📚',
+    color: '#ec4899',
+  },
+  createDefaultState: () => createDefaultRAGCluster(),
+  reduceState: (state, event, rng) => pureRAGTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new RAGInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return { passed: false, violation: { name: violation.invariantName, description: violation.description } };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
+export const AgentsDomainPlugin: DomainPlugin<AgentsClusterState, AgentsSimEvent> = {
+  metadata: {
+    id: 'agents',
+    name: 'Multi-Agent Orchestration',
+    version: '1.0.0',
+    category: 'AI_INFRA',
+    description:
+      'Multi-agent plan-act orchestration with role assignment, MCP tool-schema validation, capability-scoped tool access, and bounded step loops.',
+    fidelityTag: 'BEHAVIORAL',
+    fidelityDisplayName: 'MCP / tool-using agents',
+    icon: '🤖',
+    color: '#f59e0b',
+  },
+  createDefaultState: () => createDefaultAgentsCluster(),
+  reduceState: (state, event, rng) => pureAgentsTransition(state, event, rng),
+  validateInvariants: (state) => {
+    const checker = new AgentsInvariantChecker();
+    const violation = checker.check(state);
+    if (violation) {
+      return { passed: false, violation: { name: violation.invariantName, description: violation.description } };
+    }
+    return { passed: true };
+  },
+  scenarioLibrary: [],
+};
+
 export const MerkleTreesDomainPlugin: DomainPlugin<MerkleTreesClusterState, MerkleTreesSimEvent> = {
   metadata: {
     id: 'merkle-trees',
@@ -1054,6 +1114,8 @@ export class DomainRegistry {
     ['consistent-hashing', ConsistentHashingDomainPlugin],
     ['probabilistic-structures', ProbabilisticStructuresDomainPlugin],
     ['merkle-trees', MerkleTreesDomainPlugin],
+    ['rag', RAGDomainPlugin],
+    ['agents', AgentsDomainPlugin],
   ]);
 
   public static register(plugin: DomainPlugin): void {

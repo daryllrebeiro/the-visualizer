@@ -13,7 +13,7 @@ import { LlmGatewayVisualizer } from '../llm-gateway/LlmGatewayVisualizer';
 import { LlmPipelineVisualizer } from '../llm-pipeline/LlmPipelineVisualizer';
 import { LlmServingVisualizer } from '../llm-serving/LlmServingVisualizer';
 import { NetworkingVisualizer } from '../networking/NetworkingVisualizer';
-import { NewDomainsPanel, type NewDomainId } from '../new-domains/NewDomainsPanel';
+import type { NewDomainId } from '../new-domains/NewDomainsPanel';
 import { RabbitMQVisualizer } from '../rabbitmq/RabbitMQVisualizer';
 import { RaftVisualizer } from '../raft/RaftVisualizer';
 import { RateLimiterVisualizer } from '../rate-limiter/RateLimiterVisualizer';
@@ -21,6 +21,8 @@ import { RedisClusterVisualizer } from '../redis/RedisClusterVisualizer';
 import { StorageEngineVisualizer } from '../storage/StorageEngineVisualizer';
 import { TransactionsVisualizer } from '../transactions/TransactionsVisualizer';
 import { VectordbVisualizer } from '../vectordb/VectordbVisualizer';
+import { GenericDomainCanvas } from './GenericDomainCanvas';
+import { NewDomainsPanel } from '../new-domains/NewDomainsPanel';
 
 export interface DomainCanvasAdapterProps {
   selectedDomain: DomainKey;
@@ -102,6 +104,9 @@ export function DomainCanvasAdapter(props: DomainCanvasAdapterProps): React.JSX.
     case 'merkle-trees':
       return <NewDomainsPanel {...props.newDomain} />;
     default:
-      return null;
+      // Any registered domain without a bespoke visualizer (rag, agents, and
+      // future Plugin-SDK domains) renders through the store-driven generic
+      // canvas instead of dead-ending on null.
+      return <GenericDomainCanvas domainId={selectedDomain} />;
   }
 }

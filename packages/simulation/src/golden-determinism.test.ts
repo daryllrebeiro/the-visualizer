@@ -1,7 +1,7 @@
 /**
  * Golden Determinism Test Suite
  *
- * For each of the 28 domains, seeds the RNG, applies a fixed event sequence,
+ * For each of the 30 domains, seeds the RNG, applies a fixed event sequence,
  * and asserts the resulting state hash matches a locked-in golden value.
  *
  * If this test breaks, it means a simulation reducer changed its output
@@ -129,6 +129,8 @@ const GOLDEN_VECTORS: Record<string, string> = {
     '4a5d7aa7b428b8b2b78d6dd93e8e10469480b9785fd45851b64e518c6e973e0b',
   'merkle-trees':
     '7db0129d4ce33e7230f641b152475aac7885c8750d165923d3fe252d29b60140',
+  rag: '9ee1bb7be7d49438272479b02b4d315d49c3a415199bf7a18ed4a41e14f325b8',
+  agents: 'dcb8d3c8c48a902e2a20e4d8ed69fa002cc01b63c04aed80b45c865bc42fdfbc',
 };
 
 describe('Golden Determinism Suite', () => {
@@ -136,9 +138,10 @@ describe('Golden Determinism Suite', () => {
 
   // Verify all registered domains
   it('should have all domains registered', () => {
-    expect(domains.length).toBe(28);
+    expect(domains.length).toBe(30);
     const ids = domains.map((d) => d.id).sort();
     expect(ids).toEqual([
+      'agents',
       'cdn-cache',
       'chat-presence',
       'consistent-hashing',
@@ -160,6 +163,7 @@ describe('Golden Determinism Suite', () => {
       'probabilistic-structures',
       'rabbitmq',
       'raft',
+      'rag',
       'rate-limiter',
       'redis',
       'search-index',

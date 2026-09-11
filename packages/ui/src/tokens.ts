@@ -60,6 +60,43 @@ export const DOMAIN_COLORS: Record<string, DomainColorTheme> = {
   },
 };
 
+/**
+ * Palette used for domains without an explicit theme. Kept in sync with the
+ * web `DOMAIN_OPTIONS` accent colors so catalog and canvas agree.
+ */
+const DOMAIN_PALETTE = [
+  '#6366f1',
+  '#eab308',
+  '#ec4899',
+  '#ef4444',
+  '#3b82f6',
+  '#f97316',
+  '#14b8a6',
+  '#8b5cf6',
+  '#10b981',
+  '#06b6d4',
+  '#f59e0b',
+  '#a855f7',
+] as const;
+
+/**
+ * Deterministic accent color for any domain id.
+ *
+ * Uses the explicit `DOMAIN_COLORS` theme when present, otherwise derives a
+ * stable color from the id so third-party Plugin-SDK domains render
+ * consistently without requiring a hand-maintained table.
+ */
+export function getDomainColor(domainId: string): string {
+  const explicit = DOMAIN_COLORS[domainId];
+  if (explicit) return explicit.primary;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < domainId.length; i++) {
+    hash ^= domainId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return DOMAIN_PALETTE[(hash >>> 0) % DOMAIN_PALETTE.length]!;
+}
+
 export const SPACING = {
   xs: '4px',
   sm: '8px',
