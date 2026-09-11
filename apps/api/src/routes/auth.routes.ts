@@ -1,7 +1,9 @@
+import type { MiddlewareHandler } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sign, verify } from 'hono/jwt';
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { tokenRevocationStore, wsTicketStore } from '@the-visualizer/contracts';
@@ -9,10 +11,21 @@ import { logger } from '@the-visualizer/logging';
 
 import { JWT_SECRET } from '../config.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { rateLimiter } from '../middleware/rate-limiter.js';
 import { userRepository } from '../repositories/user.repository.js';
+import { ConflictError, isPostgresConflict } from '../utils/errors.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 
 const authRouter = new Hono();
+
+// Stricter per-route bucket for credential endpoints (brute-force defense).
+// Bypassed in tests so auth flows stay deterministic under the suite.
+const authAttemptLimiter: MiddlewareHandler =
+  process.env.NODE_ENV === 'test'
+    ? async (_c, next) => {
+        await next();
+      }
+    : rateLimiter({ limit: 10, refillRate: 0.5 });
 
 // Constant salt and key format matching scrypt output to neutralize user enumeration timing attacks
 const DUMMY_PASSWORD_HASH =
@@ -36,6 +49,8 @@ const devLoginSchema = z.object({
 
 /**
  * Helper to generate short-lived access token (15 mins) and refresh token (7 days).
+ * Each token carries a unique `jti` so rapid rotation never mints a
+ * byte-identical token (which would instantly match its own revocation entry).
  */
 async function generateTokens(user: { id: string; email: string; name: string | null }) {
   const now = Math.floor(Date.now() / 1000);
@@ -44,6 +59,7 @@ async function generateTokens(user: { id: string; email: string; name: string | 
     email: user.email,
     name: user.name ?? '',
     type: 'access',
+    jti: nanoid(21),
     exp: now + 15 * 60, // 15 minutes
   };
 
@@ -52,6 +68,7 @@ async function generateTokens(user: { id: string; email: string; name: string | 
     email: user.email,
     name: user.name ?? '',
     type: 'refresh',
+    jti: nanoid(21),
     exp: now + 7 * 24 * 60 * 60, // 7 days
   };
 
@@ -89,7 +106,29 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
   }
 
   const passwordHash = await hashPassword(password);
-  const user = await userRepository.createUser(email, name, passwordHash);
+  let user;
+  try {
+    user = await userRepository.createUser(email, name, passwordHash);
+  } catch (err: unknown) {
+    // Concurrent duplicate registration race: the pre-check above passed for
+    // both requests, the unique constraint caught the loser.
+    if (err instanceof ConflictError || isPostgresConflict(err)) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'USER_EXISTS',
+            message:
+              process.env.NODE_ENV === 'production'
+                ? 'Unable to complete registration. Please check your credentials or log in.'
+                : 'Email already registered',
+          },
+        },
+        409,
+      );
+    }
+    throw err;
+  }
 
   const { accessToken, refreshToken } = await generateTokens(user);
 
@@ -126,7 +165,7 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
 });
 
 // ─── 2. Login with Email + Password ───────────────────────────────────────────
-authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
+authRouter.post('/login', authAttemptLimiter, zValidator('json', loginSchema), async (c) => {
   const { email, password } = c.req.valid('json');
 
   const user = await userRepository.getUserByEmail(email);
@@ -211,6 +250,19 @@ authRouter.post('/refresh', async (c) => {
       );
     }
 
+    // Rotation-reuse detection: a presented refresh token that is already
+    // revoked was either rotated (normal client bug) or stolen and replayed
+    // (attack) — either way it must not mint new tokens.
+    if (await tokenRevocationStore.isRevoked(refreshToken)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'INVALID_TOKEN', message: 'Refresh token already used or revoked' },
+        },
+        401,
+      );
+    }
+
     const user = await userRepository.getUserById(payload.id);
     if (!user) {
       return c.json(
@@ -220,6 +272,13 @@ authRouter.post('/refresh', async (c) => {
     }
 
     const tokens = await generateTokens(user);
+
+    // Rotate: revoke the presented refresh token for its remaining lifetime so
+    // it can never be replayed.
+    const nowSec = Math.floor(Date.now() / 1000);
+    const remainingTtl =
+      typeof payload.exp === 'number' ? Math.max(1, payload.exp - nowSec) : 7 * 24 * 3600;
+    await tokenRevocationStore.revoke(refreshToken, remainingTtl);
 
     setCookie(c, 'session_token', tokens.accessToken, {
       httpOnly: true,

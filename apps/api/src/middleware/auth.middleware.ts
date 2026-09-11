@@ -54,10 +54,12 @@ export const authenticate: MiddlewareHandler = async (c, next) => {
 
       if (payload && typeof payload.id === 'string') {
         let user: { id: string; email: string; name?: string | null } | undefined;
+        let lookupFailed = false;
         try {
           user = await userRepository.getUserById(payload.id);
         } catch {
-          // DB lookup failed or offline
+          // DB lookup failed or offline — degraded mode below
+          lookupFailed = true;
         }
 
         if (user) {
@@ -66,7 +68,14 @@ export const authenticate: MiddlewareHandler = async (c, next) => {
             email: user.email,
             name: user.name || '',
           });
-        } else if (payload.email && typeof payload.email === 'string') {
+        } else if (
+          lookupFailed &&
+          payload.email &&
+          typeof payload.email === 'string'
+        ) {
+          // Degraded mode: DB unreachable, trust verified JWT claims so a
+          // database blip does not log out every user. A deleted user
+          // (lookup succeeded, no row) intentionally gets NO session.
           c.set('user', {
             id: payload.id,
             email: payload.email,

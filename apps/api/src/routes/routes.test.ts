@@ -218,7 +218,7 @@ describe('Hono REST API Routing & Auth Integration Tests', () => {
       }),
     });
 
-    expect(createRes.status).toBe(200);
+    expect(createRes.status).toBe(201);
     const createBody = (await createRes.json()) as any;
     expect(createBody.success).toBe(true);
     expect(createBody.org.slug).toBe('hono-org');
@@ -284,7 +284,7 @@ describe('Hono REST API Routing & Auth Integration Tests', () => {
       }),
     });
 
-    expect(topoARes.status).toBe(200);
+    expect(topoARes.status).toBe(201);
     const { topology: topoA } = (await topoARes.json()) as any;
     expect(topoA.name).toBe('Private Cluster A');
 
@@ -319,5 +319,106 @@ describe('Hono REST API Routing & Auth Integration Tests', () => {
     const shareBody = (await shareRes.json()) as any;
     expect(shareBody.success).toBe(true);
     expect(shareBody.topology.name).toBe('Private Cluster A');
+  });
+
+  it('should paginate topology listings with cursors and enforce membership', async () => {
+    const loginRes = await app.request('/auth/dev-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'pager@hono.com', name: 'Pager' }),
+    });
+    const { token } = (await loginRes.json()) as any;
+    const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+    const orgRes = await app.request('/orgs', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ slug: 'page-org', name: 'Page Org' }),
+    });
+    const { org } = (await orgRes.json()) as any;
+
+    for (let i = 1; i <= 3; i++) {
+      const res = await app.request('/topologies', {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({
+          orgId: org.id,
+          name: `Paged Cluster ${i}`,
+          visibility: 'PRIVATE',
+          definition: mockKafkaState,
+        }),
+      });
+      expect(res.status).toBe(201);
+    }
+
+    const page1Res = await app.request(`/topologies?orgId=${org.id}&limit=2`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(page1Res.status).toBe(200);
+    const page1 = (await page1Res.json()) as any;
+    expect(page1.success).toBe(true);
+    expect(page1.topologies).toHaveLength(2);
+    expect(page1.nextCursor).toBeTruthy();
+
+    const page2Res = await app.request(
+      `/topologies?orgId=${org.id}&limit=2&cursor=${encodeURIComponent(page1.nextCursor)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    expect(page2Res.status).toBe(200);
+    const page2 = (await page2Res.json()) as any;
+    expect(page2.topologies).toHaveLength(1);
+    expect(page2.nextCursor).toBeNull();
+
+    const names = [...page1.topologies, ...page2.topologies].map((t: any) => t.name).sort();
+    expect(names).toEqual(['Paged Cluster 1', 'Paged Cluster 2', 'Paged Cluster 3']);
+
+    const badCursorRes = await app.request(`/topologies?orgId=${org.id}&cursor=nope`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(badCursorRes.status).toBe(400);
+
+    // Non-member cannot list
+    const outsiderRes = await app.request('/auth/dev-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'outsider@hono.com', name: 'Outsider' }),
+    });
+    const { token: outsiderToken } = (await outsiderRes.json()) as any;
+    const forbiddenRes = await app.request(`/topologies?orgId=${org.id}`, {
+      headers: { Authorization: `Bearer ${outsiderToken}` },
+    });
+    expect(forbiddenRes.status).toBe(403);
+  });
+
+  it('should reject refresh token reuse after rotation', async () => {
+    const regRes = await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'rotator@hono.com', name: 'Rotator', password: 's3cret-pass' }),
+    });
+    expect(regRes.status).toBe(201);
+    const { refreshToken } = (await regRes.json()) as any;
+
+    const first = await app.request('/auth/refresh', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    });
+    expect(first.status).toBe(200);
+    const { refreshToken: rotated } = (await first.json()) as any;
+    expect(rotated).toBeTruthy();
+
+    // Replaying the-rotated out token must fail
+    const replay = await app.request('/auth/refresh', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    });
+    expect(replay.status).toBe(401);
+
+    // The rotated token still works
+    const second = await app.request('/auth/refresh', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${rotated}` },
+    });
+    expect(second.status).toBe(200);
   });
 });

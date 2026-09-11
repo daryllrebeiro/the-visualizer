@@ -15,6 +15,13 @@
       "when": 1788780913687,
       "tag": "0001_huge_roxanne_simpson",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788941057293,
+      "tag": "0002_memberships_org_idx",
+      "breakpoints": true
     }
   ]
 }

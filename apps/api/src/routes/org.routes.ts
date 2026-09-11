@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { orgRepository } from '../repositories/org.repository.js';
+import { isPostgresConflict } from '../utils/errors.js';
 
 const orgRouter = new Hono();
 
@@ -32,12 +33,15 @@ orgRouter.post('/', zValidator('json', createOrgSchema), async (c) => {
       return newOrg;
     });
 
-    return c.json({
-      success: true,
-      org,
-    });
-  } catch (err: any) {
-    if (err.message?.includes('duplicate key')) {
+    return c.json(
+      {
+        success: true,
+        org,
+      },
+      201,
+    );
+  } catch (err: unknown) {
+    if (isPostgresConflict(err)) {
       return c.json(
         {
           success: false,

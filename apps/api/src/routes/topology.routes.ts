@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireOrgRole } from '../middleware/role.middleware.js';
 import { topologyRepository } from '../repositories/topology.repository.js';
+import { toErrorResponse } from '../utils/errors.js';
 
 const topologyRouter = new Hono();
 
@@ -46,21 +47,63 @@ topologyRouter.post(
         domainId || 'kafka',
       );
 
-      return c.json({
-        success: true,
-        topology,
-      });
-    } catch (err: any) {
       return c.json(
         {
-          success: false,
-          error: {
-            code: 'INTERNAL_ERROR',
-            message: err.message || 'Failed to create topology',
-          },
+          success: true,
+          topology,
         },
-        500,
+        201,
       );
+    } catch (err: unknown) {
+      const { status, body } = toErrorResponse(err, 'Failed to create topology');
+      return c.json(body, status as 403 | 404 | 409 | 500);
+    }
+  },
+);
+
+// 1b. List topologies for an organization (cursor-paginated, newest first)
+const listTopologiesQuerySchema = z.object({
+  orgId: z.string().uuid(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().max(100).optional(),
+});
+
+topologyRouter.get(
+  '/',
+  requireAuth,
+  zValidator('query', listTopologiesQuerySchema),
+  async (c) => {
+    const { orgId, limit, cursor } = c.req.valid('query');
+    const user = c.get('user')!;
+
+    try {
+      let parsedCursor: { createdAt: Date; id: string } | undefined;
+      if (cursor) {
+        const sep = cursor.indexOf('|');
+        const createdAt = sep === -1 ? NaN : Date.parse(cursor.slice(0, sep));
+        const id = sep === -1 ? '' : cursor.slice(sep + 1);
+        if (Number.isNaN(createdAt) || !/^[0-9a-f-]{36}$/i.test(id)) {
+          return c.json(
+            {
+              success: false,
+              error: { code: 'BAD_REQUEST', message: 'Invalid pagination cursor' },
+            },
+            400,
+          );
+        }
+        parsedCursor = { createdAt: new Date(createdAt), id };
+      }
+
+      const page = await topologyRepository.listTopologiesForOrgPaginated(
+        orgId,
+        user.id,
+        limit,
+        parsedCursor,
+      );
+      return c.json({ success: true, ...page });
+    } catch (err: unknown) {
+      const { status, body } = toErrorResponse(err, 'Failed to list topologies');
+      return c.json(body, status as 403 | 404 | 409 | 500);
     }
   },
 );
@@ -158,29 +201,9 @@ topologyRouter.put(
         success: true,
         topology,
       });
-    } catch (err: any) {
-      if (err.message?.includes('Unauthorized') || err.message?.includes('rights')) {
-        return c.json(
-          {
-            success: false,
-            error: {
-              code: 'FORBIDDEN',
-              message: err.message,
-            },
-          },
-          403,
-        );
-      }
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: 'INTERNAL_ERROR',
-            message: err.message || 'Failed to update topology',
-          },
-        },
-        500,
-      );
+    } catch (err: unknown) {
+      const { status, body } = toErrorResponse(err, 'Failed to update topology');
+      return c.json(body, status as 403 | 404 | 409 | 500);
     }
   },
 );
@@ -206,29 +229,9 @@ topologyRouter.delete(
         success: true,
         message: 'Topology deleted successfully',
       });
-    } catch (err: any) {
-      if (err.message?.includes('Unauthorized') || err.message?.includes('rights')) {
-        return c.json(
-          {
-            success: false,
-            error: {
-              code: 'FORBIDDEN',
-              message: err.message,
-            },
-          },
-          403,
-        );
-      }
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: 'INTERNAL_ERROR',
-            message: err.message || 'Failed to delete topology',
-          },
-        },
-        500,
-      );
+    } catch (err: unknown) {
+      const { status, body } = toErrorResponse(err, 'Failed to delete topology');
+      return c.json(body, status as 403 | 404 | 409 | 500);
     }
   },
 );

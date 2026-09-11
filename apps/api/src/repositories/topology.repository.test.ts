@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { KafkaClusterState } from '@the-visualizer/contracts';
 
 import { db } from '../db/index.js';
+import { ForbiddenError } from '../utils/errors.js';
 import { orgRepository } from './org.repository.js';
 import { topologyRepository } from './topology.repository.js';
 import { userRepository } from './user.repository.js';
@@ -139,14 +140,14 @@ describe('TopologyRepository Multi-Tenant Integration Tests', () => {
       'PRIVATE',
     );
 
-    // User B attempts to delete Org A's topology -> Should throw auth error
+    // User B attempts to delete Org A's topology -> Should throw typed auth error
     await expect(topologyRepository.deleteTopology(topo.id, userB.id)).rejects.toThrow(
-      'Unauthorized: User does not have modification rights in this organization',
+      ForbiddenError,
     );
 
-    // User B attempts to update Org A's topology -> Should throw auth error
+    // User B attempts to update Org A's topology -> Should throw typed auth error
     await expect(
       topologyRepository.updateTopology(topo.id, userB.id, { name: 'Hacked name' }),
-    ).rejects.toThrow('Unauthorized: User does not have modification rights in this organization');
+    ).rejects.toThrow(ForbiddenError);
   });
 });

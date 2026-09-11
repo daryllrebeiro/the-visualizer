@@ -42,7 +42,10 @@ export const memberships = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.orgId] }),
-    index('idx_memberships_user_id').on(table.userId),
+    // NOTE: no separate (user_id) index — the PK prefix already serves
+    // user_id lookups. org_id is the second PK column and needs its own
+    // index for org-member scans (getMembers, listTopologiesForOrg).
+    index('idx_memberships_org_id').on(table.orgId),
   ],
 );
 
