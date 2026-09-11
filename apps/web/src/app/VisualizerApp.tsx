@@ -120,6 +120,7 @@ import { CommandPaletteModal } from '../components/palette/CommandPaletteModal';
 import { InterviewPrepModal } from '../components/interview/InterviewPrepModal';
 import { CompositePipelineModal } from '../components/composite/CompositePipelineModal';
 import { FpsMonitor, type RenderPerfMetrics } from '../components/perf/FpsMonitor';
+import { useLearnStore } from '../components/learn/learn-store';
 import {
   copyPermalinkToClipboard,
   decodeScenarioPermalink,
@@ -1508,6 +1509,20 @@ export default function VisualizerApp({
     }
   }, []);
 
+  // Learn layer: record domain visits + session timeline entries (features 1-2).
+  // Chaos/step capture lives in the zustand simulation store bridge; the shell
+  // records switches and scenario loads here at its choke points.
+  useEffect(() => {
+    const store = useLearnStore.getState();
+    store.recordVisit(selectedDomain);
+    store.recordTimeline({
+      domainId: selectedDomain,
+      frameRef: 0,
+      actionKind: 'DOMAIN_SWITCH',
+      label: `Switched to ${selectedDomain}`,
+    });
+  }, [selectedDomain]);
+
   const handleSharePermalink = async (): Promise<void> => {
     let currentTick = 0;
     if (selectedDomain === 'kafka') currentTick = liveState?.tick ?? 0;
@@ -1547,6 +1562,13 @@ export default function VisualizerApp({
     if (dom !== selectedDomain) {
       setSelectedDomain(dom);
     }
+    useLearnStore.getState().recordScenario(dom, scenarioId);
+    useLearnStore.getState().recordTimeline({
+      domainId: dom,
+      frameRef: 0,
+      actionKind: 'SCENARIO_LOAD',
+      label: `Loaded scenario ${scenarioId}`,
+    });
     if (dom === 'kafka') {
       handleRunScenario(scenarioId);
     } else {
@@ -3800,6 +3822,20 @@ export default function VisualizerApp({
                   >
                     🌐 Explore Catalog
                   </button>
+
+                  <a
+                    href="/progress"
+                    className="btn btn--ghost"
+                    style={{
+                      padding: '5px 10px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                    }}
+                    title="Progress dashboard, quizzes, interview prep, compare and challenges"
+                  >
+                    🎓 Learn
+                  </a>
                 </div>
 
                 {showDomainDropdown && (

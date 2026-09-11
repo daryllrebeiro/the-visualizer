@@ -11,6 +11,41 @@ export interface InvariantViolationState {
   description: string;
 }
 
+// Monotonic counter for synthetic client-side event ids (no Date.now — ids
+// must be reproducible for a given action sequence).
+let eventSeqCounter = 0;
+
+export interface LearnActionEvent {
+  kind: 'DOMAIN_SWITCH' | 'STEP' | 'ACTION' | 'SCENARIO_LOAD' | 'RESET';
+  domainId: string;
+  label: string;
+}
+
+type LearnActionListener = (event: LearnActionEvent) => void;
+
+const learnActionListeners = new Set<LearnActionListener>();
+
+/**
+ * Subscribes to simulation-store actions for the session timeline (feature 2).
+ * Additive observability only — never affects simulation state or reducers.
+ */
+export function subscribeLearnActions(listener: LearnActionListener): () => void {
+  learnActionListeners.add(listener);
+  return () => {
+    learnActionListeners.delete(listener);
+  };
+}
+
+function emitLearnAction(event: LearnActionEvent): void {
+  for (const listener of learnActionListeners) {
+    try {
+      listener(event);
+    } catch {
+      // Timeline capture must never break simulation stepping.
+    }
+  }
+}
+
 export interface SimulationStore {
   domainId: string;
   plugin: DomainPlugin;
@@ -61,6 +96,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         rng: new DeterministicRNG(12345),
         violation: null,
       });
+      emitLearnAction({ kind: 'DOMAIN_SWITCH', domainId, label: `Switched to ${plugin.metadata.name}` });
     },
 
     step: (ticks = 1) => {
@@ -71,7 +107,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       let lastViolation: InvariantViolationState | null = null;
 
       for (let i = 0; i < ticks; i++) {
-        const nextTick = (currentState.tick ?? 0) + 1;
+        const nextTick = Number(currentState.tick ?? 0) + 1;
         const tickEvent = {
           id: `${plugin.metadata.id}-tick-${String(nextTick)}`,
           tick: nextTick,
@@ -94,6 +130,11 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         violation: lastViolation,
         isPaused: lastViolation ? true : isPaused,
       });
+      emitLearnAction({
+        kind: 'STEP',
+        domainId: get().domainId,
+        label: `Stepped ${String(ticks)} tick${ticks === 1 ? '' : 's'}`,
+      });
     },
 
     togglePause: () => set((s) => ({ isPaused: !s.isPaused })),
@@ -103,9 +144,9 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
     dispatchAction: (actionType: string, payload: Record<string, unknown> = {}) => {
       const { plugin, state, rng, isPaused } = get();
       if (!plugin || !state) return;
-      const nextTick = (state.tick ?? 0) + 1;
+      const nextTick = Number(state.tick ?? 0) + 1;
       const event = {
-        id: `${plugin.metadata.id}-action-${String(Date.now())}`,
+        id: `${plugin.metadata.id}-action-${String(nextTick)}-${String(eventSeqCounter++)}`,
         tick: nextTick,
         type: actionType,
         payload,
@@ -117,6 +158,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         violation: check.passed ? null : check.violation ?? null,
         isPaused: !check.passed ? true : isPaused,
       });
+      emitLearnAction({ kind: 'ACTION', domainId: get().domainId, label: `Dispatched ${actionType}` });
     },
 
     loadScenario: (scenarioId: string) => {
@@ -132,6 +174,11 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         violation: null,
         isPaused: false,
       });
+      emitLearnAction({
+        kind: 'SCENARIO_LOAD',
+        domainId: get().domainId,
+        label: `Loaded scenario ${scenarioId}`,
+      });
     },
 
     setTickRateMs: (tickRateMs: number) => set({ tickRateMs }),
@@ -144,6 +191,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         violation: null,
         isPaused: false,
       });
+      emitLearnAction({ kind: 'RESET', domainId: get().domainId, label: 'Reset to default state' });
     },
   };
 });

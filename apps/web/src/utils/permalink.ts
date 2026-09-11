@@ -123,3 +123,22 @@ export async function copyPermalinkToClipboard(payload: ScenarioPermalinkPayload
   }
   return url;
 }
+
+// ─── v2: deterministic event-sequence permalinks (feature 4) ─────────────────
+// Re-exports of the engine codec plus URL helpers. The payload encodes
+// domainId + seed + ordered events; receivers replay it through the same pure
+// reducer, so no computed state travels in the URL.
+
+export { decodePermalink as decodePermalinkV2, encodePermalink as encodePermalinkV2 } from '@the-visualizer/simulation';
+export type { PermalinkPayloadV2 } from '@the-visualizer/contracts';
+
+/**
+ * Builds a shareable URL carrying a v2 permalink. Small payloads stay fully
+ * self-contained in `?p=`; oversized payloads should use a short link instead.
+ */
+export function generatePermalinkV2Url(encoded: string, domainId: string, origin?: string): string {
+  const base =
+    origin ||
+    (typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'http://localhost:3000');
+  return `${base}/${domainId}?p=${encoded}`;
+}
