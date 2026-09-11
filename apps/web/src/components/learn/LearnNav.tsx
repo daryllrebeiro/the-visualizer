@@ -11,6 +11,8 @@ const LINKS: Array<{ href: string; label: string }> = [
   { href: '/compare', label: 'Compare' },
   { href: '/composer', label: 'Composer' },
   { href: '/challenges', label: 'Challenges' },
+  { href: '/classroom', label: 'Classroom' },
+  { href: '/analytics', label: 'Analytics' },
 ];
 
 export function LearnNav({ active }: { active?: string }): React.JSX.Element {

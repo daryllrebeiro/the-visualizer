@@ -22,6 +22,8 @@ const ROUTES = [
   '/compare',
   '/composer',
   '/challenges',
+  '/analytics',
+  '/classroom',
 ];
 const AXE_SOURCE = readFileSync(resolve(HERE, '../../node_modules/axe-core/axe.min.js'), 'utf8');
 
