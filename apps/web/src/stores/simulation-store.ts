@@ -48,25 +48,38 @@ function emitLearnAction(event: LearnActionEvent): void {
 
 export interface SimulationStore {
   domainId: string;
-  plugin: DomainPlugin;
-  state: any;
+  plugin: DomainPlugin<unknown, unknown>;
+  state: unknown;
   rng: DeterministicRNG;
+  seed: number;
   isPaused: boolean;
   tickRateMs: number;
   violation: InvariantViolationState | null;
 
   // Actions
-  setDomain: (domainId: string) => void;
+  setDomain: (domainId: string, seed?: number) => void;
   step: (ticks?: number) => void;
   dispatchAction: (actionType: string, payload?: Record<string, unknown>) => void;
-  loadScenario: (scenarioId: string) => void;
+  loadScenario: (scenarioId: string, seed?: number) => void;
   togglePause: () => void;
   setPaused: (paused: boolean) => void;
   setTickRateMs: (rateMs: number) => void;
-  reset: () => void;
+  reset: (seed?: number) => void;
 }
 
 const DEFAULT_DOMAIN = 'kafka';
+const DEFAULT_SEED = 12345;
+
+/** Deterministic seed derivation: hash(roomId, domainId) — no wall-clock, no Math.random. */
+export function deriveSeed(roomId: string, domainId: string): number {
+  let h = 0x811c9dc5;
+  const s = `${roomId}:${domainId}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
 
 export const useSimulationStore = create<SimulationStore>((set, get) => {
   const initialPlugin = DomainRegistry.get(DEFAULT_DOMAIN);
@@ -76,14 +89,15 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
   return {
     domainId: DEFAULT_DOMAIN,
-    plugin: initialPlugin,
-    state: initialPlugin.createDefaultState(),
-    rng: new DeterministicRNG(12345),
+    plugin: initialPlugin as DomainPlugin<unknown, unknown>,
+    state: initialPlugin.createDefaultState() as unknown,
+    rng: new DeterministicRNG(DEFAULT_SEED),
+    seed: DEFAULT_SEED,
     isPaused: false,
     tickRateMs: 500,
     violation: null,
 
-    setDomain: (domainId: string) => {
+    setDomain: (domainId: string, seed: number = DEFAULT_SEED) => {
       const plugin = DomainRegistry.get(domainId);
       if (!plugin) {
         throw new Error(`Domain plugin not found in registry: ${domainId}`);
@@ -91,9 +105,10 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
       set({
         domainId,
-        plugin,
-        state: plugin.createDefaultState(),
-        rng: new DeterministicRNG(12345),
+        plugin: plugin as DomainPlugin<unknown, unknown>,
+        state: plugin.createDefaultState() as unknown,
+        rng: new DeterministicRNG(seed),
+        seed,
         violation: null,
       });
       emitLearnAction({ kind: 'DOMAIN_SWITCH', domainId, label: `Switched to ${plugin.metadata.name}` });
@@ -101,24 +116,30 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     step: (ticks = 1) => {
       const { plugin, state, rng, isPaused } = get();
-      if (!plugin || !state) return;
+      if (!plugin || state === null || state === undefined) return;
 
-      let currentState = state;
+      let currentState: unknown = state;
       let lastViolation: InvariantViolationState | null = null;
 
       for (let i = 0; i < ticks; i++) {
-        const nextTick = Number(currentState.tick ?? 0) + 1;
+        const tickNum = Number((currentState as { tick?: unknown }).tick ?? 0) + 1;
         const tickEvent = {
-          id: `${plugin.metadata.id}-tick-${String(nextTick)}`,
-          tick: nextTick,
+          id: `${plugin.metadata.id}-tick-${String(tickNum)}`,
+          tick: tickNum,
           type: `${plugin.metadata.id.toUpperCase().replace(/-/g, '_')}_TICK`,
           payload: {},
         };
 
-        const result = plugin.reduceState(currentState, tickEvent, rng);
+        const result = (plugin as DomainPlugin<unknown, unknown>).reduceState(
+          currentState,
+          tickEvent as never,
+          rng,
+        );
         currentState = result.nextState;
 
-        const check = plugin.validateInvariants(currentState);
+        const check = (plugin as DomainPlugin<unknown, unknown>).validateInvariants(
+          currentState as never,
+        );
         if (!check.passed && check.violation) {
           lastViolation = check.violation;
           break;
@@ -143,16 +164,17 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     dispatchAction: (actionType: string, payload: Record<string, unknown> = {}) => {
       const { plugin, state, rng, isPaused } = get();
-      if (!plugin || !state) return;
-      const nextTick = Number(state.tick ?? 0) + 1;
+      if (!plugin || state === null || state === undefined) return;
+      const nextTick = Number((state as { tick?: unknown }).tick ?? 0) + 1;
       const event = {
         id: `${plugin.metadata.id}-action-${String(nextTick)}-${String(eventSeqCounter++)}`,
         tick: nextTick,
         type: actionType,
         payload,
       };
-      const result = plugin.reduceState(state, event, rng);
-      const check = plugin.validateInvariants(result.nextState);
+      const typed = plugin as DomainPlugin<unknown, unknown>;
+      const result = typed.reduceState(state, event as never, rng);
+      const check = typed.validateInvariants(result.nextState as never);
       set({
         state: result.nextState,
         violation: check.passed ? null : check.violation ?? null,
@@ -161,14 +183,16 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
       emitLearnAction({ kind: 'ACTION', domainId: get().domainId, label: `Dispatched ${actionType}` });
     },
 
-    loadScenario: (scenarioId: string) => {
+    loadScenario: (scenarioId: string, seed: number = DEFAULT_SEED) => {
       const { plugin, domainId } = get();
       if (!plugin) return;
-      const scenario = plugin.scenarioLibrary?.find((s) => s.id === scenarioId);
+      const scenario = (plugin.scenarioLibrary as Array<{ id: string }> | undefined)?.find(
+        (s) => s.id === scenarioId,
+      );
       if (!scenario) return;
 
-      const baseState = plugin.createDefaultState();
-      const rng = new DeterministicRNG(12345);
+      const baseState = plugin.createDefaultState() as unknown;
+      const rng = new DeterministicRNG(seed);
 
       // Shipped scenarios are executable event scripts (`events`), not
       // `setup(state)` transforms. Apply the recorded events in tick order;
@@ -192,10 +216,11 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
         }
       }
 
-      const check = plugin.validateInvariants(nextState);
+      const check = plugin.validateInvariants(nextState as never);
       set({
         state: nextState,
         rng,
+        seed,
         violation: check.passed ? null : (check.violation ?? null),
         isPaused: false,
       });
@@ -208,11 +233,13 @@ export const useSimulationStore = create<SimulationStore>((set, get) => {
 
     setTickRateMs: (tickRateMs: number) => set({ tickRateMs }),
 
-    reset: () => {
-      const { plugin } = get();
+    reset: (seed?: number) => {
+      const { plugin, seed: currentSeed } = get();
+      const nextSeed = seed ?? currentSeed;
       set({
-        state: plugin.createDefaultState(),
-        rng: new DeterministicRNG(12345),
+        state: plugin.createDefaultState() as unknown,
+        rng: new DeterministicRNG(nextSeed),
+        seed: nextSeed,
         violation: null,
         isPaused: false,
       });

@@ -64,7 +64,7 @@ export function GenericDomainCanvas({ domainId }: { domainId: string }): React.J
             {isPaused ? '▶ Resume' : '⏸ Pause'}
           </button>
           <button
-            onClick={reset}
+            onClick={() => reset()}
             style={{ backgroundColor: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '0.8rem' }}
           >
             Reset
