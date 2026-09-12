@@ -38,3 +38,6 @@ export * from './classroom/index.js';
 // Topology definition bounds (DoS hardening)
 export * from './topology/definition.js';
 
+// Composite systems (System Lab): definitions, events, failures, challenges
+export * from './systems/index.js';
+
