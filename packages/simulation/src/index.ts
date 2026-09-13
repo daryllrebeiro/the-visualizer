@@ -94,6 +94,9 @@ export {
   type InvariantValidator,
 } from './sdk/domain-builder.js';
 
+// Composite systems (System Lab): orchestrates DomainPlugins deterministically.
+export * from './systems/index.js';
+
 // Shared deterministic primitives (single source of truth for clamp/FNV/clone).
 export {
   canonicalStringify,
